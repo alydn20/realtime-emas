@@ -1897,7 +1897,7 @@ const app = express()
 app.use(express.json())
 
 app.get('/', (_req, res) => {
-  res.redirect('/install-pwa')
+  res.redirect('/install')
 })
 
 app.get('/health', (_req, res) => {
@@ -3720,7 +3720,7 @@ app.get('/login', (_req, res) => {
 })
 
 // ==================== INSTALL PWA PAGE ====================
-app.get('/install-pwa', (_req, res) => {
+app.get('/install', (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
   const html = `<!DOCTYPE html>
 <html>
