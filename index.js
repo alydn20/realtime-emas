@@ -1670,160 +1670,111 @@ app.get('/monitoring', async (_req, res) => {
       margin-top: 4px;
     }
 
-    /* Price Cards - Redesigned for 3 cards */
-    .price-section {
+    /* Compact Stats Row - Semua dalam satu baris */
+    .stats-row {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-bottom: 24px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
     }
-    .price-card {
-      background: linear-gradient(145deg, #1a1f26, #151920);
-      padding: 24px;
-      border-radius: 16px;
+    .stat-card {
+      background: #1a1f26;
+      padding: 12px 14px;
+      border-radius: 10px;
       border: 1px solid #2f3640;
       position: relative;
       overflow: hidden;
     }
-    .price-card::before {
+    .stat-card::before {
       content: '';
       position: absolute;
       top: 0;
       left: 0;
       right: 0;
-      height: 3px;
+      height: 2px;
       background: linear-gradient(90deg, #f7931a, #ffd700);
       opacity: 0;
       transition: opacity 0.3s;
     }
-    .price-card.highlight::before {
-      opacity: 1;
-    }
-    .price-card .label {
-      font-size: 0.8em;
+    .stat-card .stat-label {
+      font-size: 0.65em;
       color: #71767b;
       text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 12px;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
       display: flex;
       align-items: center;
     }
-    .price-card .value {
-      font-size: 2em;
+    .stat-card .stat-label svg {
+      width: 12px;
+      height: 12px;
+      margin-right: 4px;
+    }
+    .stat-card .stat-value {
+      font-size: 1.1em;
       font-weight: 700;
       color: #e7e9ea;
-      margin-bottom: 8px;
     }
-    .price-card .change {
-      font-size: 0.9em;
-      padding: 4px 10px;
-      border-radius: 6px;
+    .stat-card .stat-change {
+      font-size: 0.7em;
+      padding: 2px 6px;
+      border-radius: 4px;
       display: inline-block;
+      margin-top: 4px;
     }
-    .price-card .change.up {
+    .stat-card .stat-change.up {
       color: #00c853;
       background: rgba(0, 200, 83, 0.15);
     }
-    .price-card .change.down {
+    .stat-card .stat-change.down {
       color: #ff5252;
       background: rgba(255, 82, 82, 0.15);
     }
-    .price-card.highlight { border-color: #2f3640; }
-    .price-card.highlight .value { color: #e7e9ea; }
 
     /* Warna card berdasarkan arah harga terakhir */
-    .price-card.price-up { border-color: #00c853; }
-    .price-card.price-up .value { color: #00c853; }
-    .price-card.price-up::before { background: linear-gradient(90deg, #00c853, #4caf50); opacity: 1; }
+    .stat-card.price-up { border-color: #00c853; }
+    .stat-card.price-up .stat-value { color: #00c853; }
+    .stat-card.price-up::before { background: linear-gradient(90deg, #00c853, #4caf50); opacity: 1; }
 
-    .price-card.price-down { border-color: #ff5252; }
-    .price-card.price-down .value { color: #ff5252; }
-    .price-card.price-down::before { background: linear-gradient(90deg, #ff5252, #f44336); opacity: 1; }
+    .stat-card.price-down { border-color: #ff5252; }
+    .stat-card.price-down .stat-value { color: #ff5252; }
+    .stat-card.price-down::before { background: linear-gradient(90deg, #ff5252, #f44336); opacity: 1; }
 
-    /* Info row - Spread % dan USD/IDR */
-    .info-row {
+    .stat-card .stat-value.green { color: #00c853; }
+    .stat-card .stat-value.blue { color: #2196f3; }
+
+    /* Compact Investment Row */
+    .invest-row-compact {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
-      margin-bottom: 24px;
+      gap: 10px;
+      margin-bottom: 16px;
     }
-    .info-card {
+    .invest-compact {
       background: #1a1f26;
-      padding: 16px 20px;
-      border-radius: 12px;
+      padding: 10px 14px;
+      border-radius: 10px;
       border: 1px solid #2f3640;
-      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
-    .info-card .info-label {
-      font-size: 0.7em;
-      color: #71767b;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 6px;
+    .invest-compact .invest-left {
+      display: flex;
+      flex-direction: column;
     }
-    .info-card .info-value {
-      font-size: 1.2em;
-      font-weight: 600;
-      color: #e7e9ea;
-    }
-    .info-card .info-value.gold { color: #f7931a; }
-    .info-card .info-value.green { color: #00c853; }
-    .info-card .info-value.blue { color: #2196f3; }
-
-    /* Investment Section */
-    .investment-section {
-      background: #1a1f26;
-      border-radius: 12px;
-      border: 1px solid #2f3640;
-      overflow: hidden;
-      margin-bottom: 24px;
-    }
-    .investment-header {
-      padding: 16px 20px;
-      border-bottom: 1px solid #2f3640;
-    }
-    .investment-header h2 {
-      font-size: 1em;
-      font-weight: 600;
-      color: #e7e9ea;
-    }
-    .investment-cards {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      padding: 20px;
-    }
-    .invest-card {
-      background: linear-gradient(145deg, #151920, #1a1f26);
-      border: 1px solid #2f3640;
-      border-radius: 12px;
-      padding: 20px;
-    }
-    .invest-amount {
-      font-size: 1.1em;
+    .invest-compact .invest-title {
+      font-size: 0.9em;
       font-weight: 700;
       color: #f7931a;
-      margin-bottom: 16px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid #2f3640;
     }
-    .invest-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-    .invest-row:last-child { margin-bottom: 0; }
-    .invest-label {
-      font-size: 0.85em;
+    .invest-compact .invest-gram {
+      font-size: 0.7em;
       color: #71767b;
     }
-    .invest-value {
-      font-size: 1em;
+    .invest-compact .invest-profit {
+      font-size: 0.85em;
       font-weight: 600;
-      color: #e7e9ea;
-    }
-    .invest-value.profit {
       color: #00c853;
     }
 
@@ -1977,17 +1928,15 @@ app.get('/monitoring', async (_req, res) => {
     }
 
     /* Responsive */
-    @media (max-width: 768px) {
-      .price-section { grid-template-columns: 1fr; }
-      .info-row { grid-template-columns: 1fr; }
-      .investment-cards { grid-template-columns: 1fr; }
-      .header { flex-direction: column; text-align: center; gap: 16px; }
+    @media (max-width: 600px) {
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .invest-row-compact { grid-template-columns: 1fr; }
+      .header { flex-direction: column; text-align: center; gap: 12px; }
       .header-right { text-align: center; }
-      .price-card .value { font-size: 1.6em; }
+      .stat-card .stat-value { font-size: 0.95em; }
     }
-    @media (min-width: 769px) and (max-width: 1024px) {
-      .price-section { grid-template-columns: 1fr 1fr; }
-      .info-row { grid-template-columns: repeat(3, 1fr); }
+    @media (max-width: 400px) {
+      .stats-row { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -2004,67 +1953,49 @@ app.get('/monitoring', async (_req, res) => {
       </div>
     </div>
 
-    <div class="price-section">
-      <div class="price-card highlight" id="buyCard">
-        <div class="label">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00c853" stroke-width="2" style="margin-right:8px;"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+    <!-- Stats Row - 4 compact cards -->
+    <div class="stats-row">
+      <div class="stat-card" id="buyCard">
+        <div class="stat-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#00c853" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
           Harga Beli
         </div>
-        <div class="value" id="buyPrice">-</div>
-        <div class="change" id="buyChange"></div>
+        <div class="stat-value" id="buyPrice">-</div>
+        <div class="stat-change" id="buyChange"></div>
       </div>
-      <div class="price-card highlight" id="sellCard">
-        <div class="label">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff5252" stroke-width="2" style="margin-right:8px;"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+      <div class="stat-card" id="sellCard">
+        <div class="stat-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#ff5252" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
           Harga Jual
         </div>
-        <div class="value" id="sellPrice">-</div>
-        <div class="change" id="sellChange"></div>
+        <div class="stat-value" id="sellPrice">-</div>
+        <div class="stat-change" id="sellChange"></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Spread %</div>
+        <div class="stat-value green" id="spreadPercent">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">USD/IDR</div>
+        <div class="stat-value blue" id="usdIdr">-</div>
       </div>
     </div>
 
-    <div class="info-row">
-      <div class="info-card">
-        <div class="info-label">Spread %</div>
-        <div class="info-value green" id="spreadPercent">-</div>
-      </div>
-      <div class="info-card">
-        <div class="info-label">USD/IDR</div>
-        <div class="info-value blue" id="usdIdr">-</div>
-      </div>
-    </div>
-
-    <div class="investment-section">
-      <div class="investment-header">
-        <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Simulasi Investasi</h2>
-      </div>
-      <div class="investment-cards">
-        <div class="invest-card">
-          <div class="invest-amount">Rp 20.000.000</div>
-          <div class="invest-details">
-            <div class="invest-row">
-              <span class="invest-label">Dapat Emas</span>
-              <span class="invest-value" id="gram20">-</span>
-            </div>
-            <div class="invest-row">
-              <span class="invest-label">Potensi Profit</span>
-              <span class="invest-value profit" id="profit20">-</span>
-            </div>
-          </div>
+    <!-- Compact Investment Row -->
+    <div class="invest-row-compact">
+      <div class="invest-compact">
+        <div class="invest-left">
+          <span class="invest-title">Rp 20jt</span>
+          <span class="invest-gram" id="gram20">-</span>
         </div>
-        <div class="invest-card">
-          <div class="invest-amount">Rp 30.000.000</div>
-          <div class="invest-details">
-            <div class="invest-row">
-              <span class="invest-label">Dapat Emas</span>
-              <span class="invest-value" id="gram30">-</span>
-            </div>
-            <div class="invest-row">
-              <span class="invest-label">Potensi Profit</span>
-              <span class="invest-value profit" id="profit30">-</span>
-            </div>
-          </div>
+        <span class="invest-profit" id="profit20">-</span>
+      </div>
+      <div class="invest-compact">
+        <div class="invest-left">
+          <span class="invest-title">Rp 30jt</span>
+          <span class="invest-gram" id="gram30">-</span>
         </div>
+        <span class="invest-profit" id="profit30">-</span>
       </div>
     </div>
 
@@ -2440,7 +2371,7 @@ app.get('/monitoring', async (_req, res) => {
               const animCls = change > 0 ? 'updated-up' : 'updated-down';
               const priceCls = change > 0 ? 'price-up' : 'price-down';
               document.getElementById('buyChange').textContent = sign + change.toLocaleString('id-ID');
-              document.getElementById('buyChange').className = 'change ' + cls;
+              document.getElementById('buyChange').className = 'stat-change ' + cls;
 
               const buyCard = document.getElementById('buyCard');
               // Reset dan tambahkan class warna permanen + animasi
@@ -2528,7 +2459,7 @@ app.get('/monitoring', async (_req, res) => {
               const animCls = change > 0 ? 'updated-up' : 'updated-down';
               const priceCls = change > 0 ? 'price-up' : 'price-down';
               document.getElementById('sellChange').textContent = sign + change.toLocaleString('id-ID');
-              document.getElementById('sellChange').className = 'change ' + cls;
+              document.getElementById('sellChange').className = 'stat-change ' + cls;
 
               const sellCard = document.getElementById('sellCard');
               // Reset dan tambahkan class warna permanen + animasi
