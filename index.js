@@ -140,6 +140,12 @@ const REDIS_KEYS = {
 // Admin password untuk akses admin panel
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'
 
+// Super Admin credentials untuk akses /qr dan /admin
+const SUPER_ADMIN = {
+  username: 'aliyudin62',
+  password: 'Februari20'
+}
+
 // ID Grup WhatsApp yang membernya otomatis terdaftar (di-set via admin panel)
 let monitoredGroupId = null
 
@@ -1896,12 +1902,209 @@ console.log(`[GOLD] Bot started | Price check: ${PRICE_CHECK_INTERVAL/1000}s | S
 const app = express()
 app.use(express.json())
 
+// ==================== SUPER ADMIN LOGIN ====================
+// Login page untuk akses /qr dan /admin
+app.get('/login', (req, res) => {
+  const { redirect } = req.query
+  res.send(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Login</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #0f1419 0%, #1a1f26 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: #1a1f26;
+      border-radius: 16px;
+      padding: 40px 30px;
+      width: 100%;
+      max-width: 380px;
+      border: 1px solid #2f3640;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    h1 {
+      color: #f7931a;
+      text-align: center;
+      margin-bottom: 10px;
+      font-size: 1.5em;
+    }
+    .subtitle {
+      color: #71767b;
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 0.9em;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      color: #71767b;
+      margin-bottom: 8px;
+      font-size: 0.9em;
+    }
+    input {
+      width: 100%;
+      padding: 14px;
+      border: 1px solid #2f3640;
+      border-radius: 10px;
+      background: #0f1419;
+      color: #e7e9ea;
+      font-size: 1em;
+    }
+    input:focus {
+      outline: none;
+      border-color: #f7931a;
+    }
+    .btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #f7931a 0%, #ff6b00 100%);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 1em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+    }
+    .error {
+      background: rgba(255,68,68,0.1);
+      border: 1px solid #ff4444;
+      color: #ff4444;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      text-align: center;
+      display: none;
+    }
+    .error.show { display: block; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Admin Login</h1>
+    <p class="subtitle">Masuk untuk mengakses panel admin</p>
+    <div class="error" id="error">Username atau password salah</div>
+    <form id="loginForm">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="username" placeholder="Masukkan username" required>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="password" placeholder="Masukkan password" required>
+      </div>
+      <button type="submit" class="btn">Login</button>
+    </form>
+  </div>
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      const error = document.getElementById('error');
+
+      try {
+        const res = await fetch('/api/admin-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          localStorage.setItem('super_admin_token', data.token);
+          window.location.href = '${redirect || '/admin/users'}';
+        } else {
+          error.classList.add('show');
+        }
+      } catch (err) {
+        error.textContent = 'Terjadi kesalahan';
+        error.classList.add('show');
+      }
+    });
+  </script>
+</body>
+</html>`)
+})
+
+// API untuk login
+app.post('/api/admin-login', (req, res) => {
+  const { username, password } = req.body
+  if (username === SUPER_ADMIN.username && password === SUPER_ADMIN.password) {
+    // Generate simple token
+    const token = Buffer.from(username + ':' + password + ':' + Date.now()).toString('base64')
+    res.json({ success: true, token })
+  } else {
+    res.json({ success: false, error: 'Invalid credentials' })
+  }
+})
+
+// API untuk verify token
+app.post('/api/verify-admin', (req, res) => {
+  const { token } = req.body
+  try {
+    const decoded = Buffer.from(token, 'base64').toString()
+    const [username, password] = decoded.split(':')
+    if (username === SUPER_ADMIN.username && password === SUPER_ADMIN.password) {
+      res.json({ success: true })
+    } else {
+      res.json({ success: false })
+    }
+  } catch (e) {
+    res.json({ success: false })
+  }
+})
+
+// Helper function untuk generate auth check script
+function getAuthCheckScript(redirectTo) {
+  return `
+  <script>
+    (async function() {
+      const token = localStorage.getItem('super_admin_token');
+      if (!token) {
+        window.location.href = '/login?redirect=${encodeURIComponent(redirectTo)}';
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/verify-admin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token })
+        });
+        const data = await res.json();
+        if (!data.success) {
+          localStorage.removeItem('super_admin_token');
+          window.location.href = '/login?redirect=${encodeURIComponent(redirectTo)}';
+        }
+      } catch (e) {
+        window.location.href = '/login?redirect=${encodeURIComponent(redirectTo)}';
+      }
+    })();
+  </script>`
+}
+
 app.get('/', (_req, res) => {
   res.redirect('/install')
 })
 
 app.get('/health', (_req, res) => {
-  res.status(200).json({ 
+  res.status(200).json({
     status: 'ok',
     timestamp: Date.now(),
     uptime: Math.floor(process.uptime()),
@@ -1912,12 +2115,15 @@ app.get('/health', (_req, res) => {
 })
 
 app.get('/qr', async (_req, res) => {
+  // Auth check akan di-inject di halaman
+  const authScript = getAuthCheckScript('/qr')
   if (!lastQr) {
     const statusMsg = isReady
       ? '<span style="color:#00ff88;">✓ WhatsApp sudah terhubung!</span><br><small style="color:#71767b;">Bot aktif dan siap digunakan.</small>'
       : '<span style="color:#ffaa00;">⏳ Menunggu QR Code...</span><br><small style="color:#71767b;">Jika tidak muncul dalam 30 detik, coba Reset.</small>'
 
-    return res.send(`
+    return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>WhatsApp Status</title></head><body>
+    ${authScript}
     <div style="text-align:center;padding:20px;font-family:sans-serif;background:#0f1419;color:#e7e9ea;min-height:100vh;">
       <h2 style="color:#f7931a;">WhatsApp Bot Status</h2>
       <div style="margin:30px 0;padding:20px;background:#1a1f26;border-radius:12px;border:1px solid #2f3640;">
@@ -1950,14 +2156,15 @@ app.get('/qr', async (_req, res) => {
       <p style="margin-top:20px;color:#555;font-size:0.8em;">Auto-refresh dalam 10 detik...</p>
       <script>setTimeout(() => window.location.reload(), 10000);</script>
     </div>
-  `)
+  </body></html>`)
   }
 
   try {
     const mod = await import('qrcode').catch(() => null)
     if (mod?.toDataURL) {
       const dataUrl = await mod.toDataURL(lastQr, { margin: 1 })
-      return res.send(`
+      return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Scan QR WhatsApp</title></head><body>
+        ${authScript}
         <div style="text-align:center;padding:20px;font-family:sans-serif;background:#0f1419;color:#e7e9ea;min-height:100vh;">
           <h2 style="color:#f7931a;">Scan QR dengan WhatsApp</h2>
           <div style="background:white;padding:15px;border-radius:15px;display:inline-block;margin:20px 0;">
@@ -1977,7 +2184,7 @@ app.get('/qr', async (_req, res) => {
           <p style="margin-top:10px;color:#555;font-size:0.8em;">QR expires dalam 60 detik, refresh jika perlu</p>
           <script>setTimeout(() => window.location.reload(), 30000);</script>
         </div>
-      `)
+      </body></html>`)
     }
   } catch (_) {}
   res.send(lastQr)
@@ -1986,9 +2193,11 @@ app.get('/qr', async (_req, res) => {
 // Reset QR - Hapus session dan restart koneksi WA
 app.get('/qr-reset', async (req, res) => {
   const { confirm } = req.query
+  const authScript = getAuthCheckScript('/qr-reset')
 
   if (confirm !== 'yes') {
-    return res.send(`
+    return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Reset WhatsApp</title></head><body>
+      ${authScript}
       <div style="text-align:center;padding:40px;font-family:sans-serif;background:#0f1419;color:#e7e9ea;min-height:100vh;">
         <h2 style="color:#ff4444;">Reset WhatsApp Session</h2>
         <p style="margin:20px 0;color:#71767b;">Ini akan menghapus sesi WhatsApp dan memerlukan scan QR ulang.</p>
@@ -1996,7 +2205,7 @@ app.get('/qr-reset', async (req, res) => {
         <a href="/qr-reset?confirm=yes" style="display:inline-block;margin:10px;padding:15px 30px;background:#ff4444;color:white;text-decoration:none;border-radius:10px;font-weight:bold;">Ya, Reset Sekarang</a>
         <a href="/qr" style="display:inline-block;margin:10px;padding:15px 30px;background:#2f3640;color:white;text-decoration:none;border-radius:10px;">Batal</a>
       </div>
-    `)
+    </body></html>`)
   }
 
   try {
@@ -2390,12 +2599,14 @@ app.get('/sw.js', (_req, res) => {
 // ADMIN PAGE - Broadcast Notifications
 app.get('/admin/monitoring', (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+  const authScript = getAuthCheckScript('/admin/monitoring')
   const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin - Gold Price Monitor</title>
+${authScript}
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -4165,12 +4376,14 @@ app.get('/install', (_req, res) => {
 // ==================== ADMIN PANEL - USER MANAGEMENT ====================
 app.get('/admin/users', (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+  const authScript = getAuthCheckScript('/admin/users')
   const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin - Kelola User</title>
+${authScript}
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -6622,6 +6835,12 @@ app.get('/monitoring/api', async (_req, res) => {
     message: currentMessage,
     logs: logs.slice(-10)
   })
+})
+
+// ==================== CATCH-ALL ROUTE ====================
+// Semua route yang tidak terdaftar akan redirect ke /install
+app.get('*', (_req, res) => {
+  res.redirect('/install')
 })
 
 app.listen(PORT, () => {
