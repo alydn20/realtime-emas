@@ -226,36 +226,51 @@ function formatDailyStats(stats) {
 }
 
 // Add price history ke Redis
+let isAddingHistory = false // Lock untuk mencegah race condition
+let lastAddedMinute = -1 // Track menit terakhir yang sudah ditambahkan
+
 async function addPriceHistory(buy, sell, prevBuy, prevSell, updatedAt) {
+  // Cek lock untuk mencegah race condition
+  if (isAddingHistory) return
+  isAddingHistory = true
+
   const now = new Date()
-  const entry = {
-    time: now.toISOString(),
-    buy: buy,
-    sell: sell,
-    buyChange: buy - prevBuy,
-    sellChange: sell - prevSell,
-    updatedAt: updatedAt
-  }
+  const currentMinute = now.getHours() * 60 + now.getMinutes()
+  const currentDay = now.toDateString()
 
   try {
-    // Cek entry terakhir untuk menghindari duplikasi di menit yang sama
+    // Cek apakah sudah ada entry di menit yang sama hari ini
     const lastEntry = priceHistoryCache[priceHistoryCache.length - 1]
     if (lastEntry) {
       const lastTime = new Date(lastEntry.time)
       const lastMinute = lastTime.getHours() * 60 + lastTime.getMinutes()
-      const nowMinute = now.getHours() * 60 + now.getMinutes()
 
-      if (lastMinute === nowMinute && lastTime.toDateString() === now.toDateString()) {
-        // Update entry terakhir
-        priceHistoryCache[priceHistoryCache.length - 1] = entry
-        await redis.lset(REDIS_KEYS.PRICE_HISTORY, -1, entry)
+      if (lastMinute === currentMinute && lastTime.toDateString() === currentDay) {
+        // Skip - sudah ada entry di menit ini
+        isAddingHistory = false
         return
       }
+    }
+
+    // Double check dengan lastAddedMinute
+    if (lastAddedMinute === currentMinute) {
+      isAddingHistory = false
+      return
+    }
+
+    const entry = {
+      time: now.toISOString(),
+      buy: buy,
+      sell: sell,
+      buyChange: buy - prevBuy,
+      sellChange: sell - prevSell,
+      updatedAt: updatedAt
     }
 
     // Tambah entry baru
     await redis.rpush(REDIS_KEYS.PRICE_HISTORY, entry)
     priceHistoryCache.push(entry)
+    lastAddedMinute = currentMinute
 
     // Limit max 1440 entries (24 jam)
     const len = await redis.llen(REDIS_KEYS.PRICE_HISTORY)
@@ -265,6 +280,8 @@ async function addPriceHistory(buy, sell, prevBuy, prevSell, updatedAt) {
     }
   } catch (e) {
     pushLog('REDIS | Add history error: ' + e.message)
+  } finally {
+    isAddingHistory = false
   }
 }
 
