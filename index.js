@@ -5951,48 +5951,7 @@ app.get('/monitoring', async (_req, res) => {
       }, 3000);
     }
 
-    // ==================== AUTH CHECK ====================
-    (async function checkAuth() {
-      const session = localStorage.getItem('goldmonitor_session');
-      if (!session) {
-        window.location.href = '/login';
-        return;
-      }
-
-      try {
-        const res = await fetch('/api/verify-session?session=' + session);
-        const data = await res.json();
-        if (!data.valid) {
-          localStorage.removeItem('goldmonitor_session');
-          localStorage.removeItem('goldmonitor_user');
-          window.location.href = '/login';
-          return;
-        }
-        // Display user name if available
-        if (data.user && data.user.name) {
-          const header = document.querySelector('.header-left .subtitle');
-          if (header) header.textContent = 'Welcome, ' + data.user.name;
-        }
-      } catch (e) {
-        // Allow offline access
-        console.log('Auth check failed, allowing offline access');
-      }
-    })();
-
-    // Logout function
-    window.logout = async function() {
-      const session = localStorage.getItem('goldmonitor_session');
-      if (session) {
-        await fetch('/api/logout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session })
-        });
-      }
-      localStorage.removeItem('goldmonitor_session');
-      localStorage.removeItem('goldmonitor_user');
-      window.location.href = '/login';
-    };
+    // Auth removed - direct access to monitoring without login
 
     // ==================== PUSH NOTIFICATION SUBSCRIPTION ====================
     async function subscribeToPush() {
