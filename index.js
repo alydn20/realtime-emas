@@ -1076,11 +1076,26 @@ async function checkPriceUpdate() {
     const prevPrice = { ...lastKnownPrice }
     lastKnownPrice = currentPrice
 
+    // 🚀 INSTANT SSE PUSH ke frontend monitoring
+    if (buyChanged || sellChanged) {
+      broadcastSSE({
+        type: 'price',
+        buy: currentPrice.buy,
+        sell: currentPrice.sell,
+        prevBuy: prevPrice.buy,
+        prevSell: prevPrice.sell,
+        updatedAt: currentPrice.updated_at,
+        usdIdr: cachedMarketData.usdIdr?.rate,
+        xauUsd: cachedMarketData.xauUsd,
+        serverTime: new Date().toISOString()
+      })
+    }
+
     if (!buyChanged && !sellChanged) {
       return
     }
 
-    // Skip broadcast jika tidak ada subscriber
+    // Skip WA broadcast jika tidak ada subscriber
     if (!isReady || subscriptions.size === 0) {
       return
     }
@@ -1302,6 +1317,49 @@ app.get('/xau', async (_req, res) => {
     res.json({ price: cachedXAUUSD, timestamp: lastXAUUSDFetch, cached: true })
   }
 })
+
+// SSE (Server-Sent Events) untuk real-time push ke frontend
+const sseClients = new Set()
+
+app.get('/sse', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.flushHeaders()
+
+  // Kirim data awal
+  if (lastKnownPrice) {
+    res.write(`data: ${JSON.stringify({
+      type: 'price',
+      buy: lastKnownPrice.buy,
+      sell: lastKnownPrice.sell,
+      updatedAt: lastKnownPrice.updated_at,
+      usdIdr: cachedMarketData.usdIdr?.rate,
+      xauUsd: cachedMarketData.xauUsd
+    })}\n\n`)
+  }
+
+  sseClients.add(res)
+  console.log(`SSE | Client connected (total: ${sseClients.size})`)
+
+  req.on('close', () => {
+    sseClients.delete(res)
+    console.log(`SSE | Client disconnected (total: ${sseClients.size})`)
+  })
+})
+
+// Fungsi untuk broadcast ke semua SSE clients
+function broadcastSSE(data) {
+  const message = `data: ${JSON.stringify(data)}\n\n`
+  sseClients.forEach(client => {
+    try {
+      client.write(message)
+    } catch (e) {
+      sseClients.delete(client)
+    }
+  })
+}
 
 // MONITORING PAGE - Professional Gold Price Dashboard
 app.get('/monitoring', async (_req, res) => {
@@ -1922,8 +1980,87 @@ app.get('/monitoring', async (_req, res) => {
     setInterval(updateClock, 100);
     updateClock();
 
-    // Fetch Treasury setiap 300ms untuk lebih responsif
-    setInterval(fetchPrices, 300);
+    // 🚀 SSE (Server-Sent Events) untuk real-time INSTANT update
+    const evtSource = new EventSource('/sse');
+
+    evtSource.onmessage = function(event) {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'price') {
+          const now = new Date();
+          const timeStr = now.toTimeString().substring(0, 8);
+          const apiTime = data.updatedAt ? new Date(data.updatedAt).toTimeString().substring(0, 8) : '-';
+          const apiTimestamp = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+          const delay = data.updatedAt ? Math.round((Date.now() - apiTimestamp) / 1000) : '-';
+
+          // Update harga beli
+          if (data.buy) {
+            document.getElementById('buyPrice').textContent = formatRupiah(data.buy);
+            if (data.prevBuy && data.buy !== data.prevBuy) {
+              const change = data.buy - data.prevBuy;
+              const sign = change > 0 ? '+' : '';
+              const cls = change > 0 ? 'up' : 'down';
+              document.getElementById('buyChange').textContent = sign + change.toLocaleString('id-ID');
+              document.getElementById('buyChange').className = 'change ' + cls;
+
+              const buyCard = document.getElementById('buyCard');
+              buyCard.classList.remove('updated');
+              void buyCard.offsetWidth;
+              buyCard.classList.add('updated');
+
+              // Console log
+              console.log(
+                '%c🚀 SSE INSTANT UPDATE',
+                'background: #00ff00; color: #000; padding: 2px 6px; border-radius: 3px; font-weight: bold;',
+                '\\n📅 Browser:', timeStr,
+                '\\n📡 API Time:', apiTime,
+                '\\n⏱️ Delay:', delay + 's',
+                '\\n💵 Beli:', formatRupiah(data.buy), '(' + sign + change.toLocaleString('id-ID') + ')',
+                '\\n💵 Jual:', formatRupiah(data.sell)
+              );
+
+              // Update history
+              updateHistory(data.buy, data.sell, data.prevBuy, data.prevSell, data.updatedAt);
+            }
+            lastBuy = data.buy;
+          }
+
+          // Update harga jual
+          if (data.sell) {
+            document.getElementById('sellPrice').textContent = formatRupiah(data.sell);
+            if (data.prevSell && data.sell !== data.prevSell) {
+              const change = data.sell - data.prevSell;
+              const sign = change > 0 ? '+' : '';
+              const cls = change > 0 ? 'up' : 'down';
+              document.getElementById('sellChange').textContent = sign + change.toLocaleString('id-ID');
+              document.getElementById('sellChange').className = 'change ' + cls;
+
+              const sellCard = document.getElementById('sellCard');
+              sellCard.classList.remove('updated');
+              void sellCard.offsetWidth;
+              sellCard.classList.add('updated');
+            }
+            lastSell = data.sell;
+          }
+
+          // Update USD/IDR dan XAU/USD
+          if (data.usdIdr) {
+            document.getElementById('usdIdr').textContent = 'Rp ' + Math.round(data.usdIdr).toLocaleString('id-ID');
+          }
+          if (data.xauUsd) {
+            document.getElementById('xauUsd').textContent = '$' + data.xauUsd.toFixed(2);
+          }
+        }
+      } catch (e) {
+        console.error('SSE parse error:', e);
+      }
+    };
+
+    evtSource.onerror = function() {
+      console.warn('SSE connection error, akan reconnect...');
+    };
+
+    // Fallback: Fetch sekali saat load untuk data awal
     fetchPrices();
 
     // Fetch XAU/USD setiap 2 detik (real-time dari TradingView)
