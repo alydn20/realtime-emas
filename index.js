@@ -2883,7 +2883,7 @@ app.post('/api/admin/wa-groups/set', express.json(), async (req, res) => {
   }
 })
 
-// Admin: Sync all members from monitored group
+// Admin: Sync all members from monitored group (optimized batch)
 app.post('/api/admin/wa-groups/sync', express.json(), async (req, res) => {
   const { password } = req.body
   if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
@@ -2900,34 +2900,42 @@ app.post('/api/admin/wa-groups/sync', express.json(), async (req, res) => {
     const groupMeta = await sock.groupMetadata(monitoredGroupId)
     const participants = groupMeta.participants || []
 
+    // Get all existing users in one call (faster)
+    const existingUsers = await redis.hgetall(REDIS_KEYS.USERS) || {}
+
     let added = 0
     let skipped = 0
+    const newUsers = {}
 
     for (const p of participants) {
       const phone = extractPhoneFromJid(p.id)
       if (!phone) continue
 
       // Check if already exists
-      const existing = await redis.hget(REDIS_KEYS.USERS, phone)
-      if (existing) {
+      if (existingUsers[phone]) {
         skipped++
         continue
       }
 
-      // Add new user
-      const userData = {
+      // Prepare new user for batch insert
+      newUsers[phone] = JSON.stringify({
         name: p.notify || 'Member ' + phone,
         createdAt: Date.now(),
         expired: null,
         source: 'whatsapp_group'
-      }
-      await redis.hset(REDIS_KEYS.USERS, phone, JSON.stringify(userData))
+      })
       added++
+    }
+
+    // Batch insert all new users at once
+    if (Object.keys(newUsers).length > 0) {
+      await redis.hset(REDIS_KEYS.USERS, newUsers)
     }
 
     pushLog(`WA | Sync completed: ${added} added, ${skipped} skipped`)
     res.json({ success: true, added, skipped, total: participants.length })
   } catch (e) {
+    pushLog(`WA | Sync error: ${e.message}`)
     res.json({ success: false, error: e.message })
   }
 })
