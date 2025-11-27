@@ -3000,7 +3000,7 @@ app.post('/api/admin/wa-groups/set', express.json(), async (req, res) => {
   }
 })
 
-// Admin: Sync all members from monitored group (optimized batch)
+// Admin: Sync all members from monitored group
 app.post('/api/admin/wa-groups/sync', express.json(), async (req, res) => {
   const { password } = req.body
   if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
@@ -3017,12 +3017,12 @@ app.post('/api/admin/wa-groups/sync', express.json(), async (req, res) => {
     const groupMeta = await sock.groupMetadata(monitoredGroupId)
     const participants = groupMeta.participants || []
 
-    // Get all existing users in one call (faster)
+    // Get all existing users in one call
     const existingUsers = await redis.hgetall(REDIS_KEYS.USERS) || {}
 
     let added = 0
     let skipped = 0
-    const newUsersToAdd = []
+    let errors = 0
 
     for (const p of participants) {
       const phone = extractPhoneFromJid(p.id)
@@ -3034,28 +3034,25 @@ app.post('/api/admin/wa-groups/sync', express.json(), async (req, res) => {
         continue
       }
 
-      // Collect new users
-      newUsersToAdd.push({
-        phone,
-        data: JSON.stringify({
+      // Add user one by one (more reliable with Upstash)
+      try {
+        const userData = JSON.stringify({
           name: p.notify || 'Member ' + phone,
           createdAt: Date.now(),
           expired: null,
           source: 'whatsapp_group'
         })
-      })
-      added++
+        // Use object format for Upstash Redis hset
+        await redis.hset(REDIS_KEYS.USERS, { [phone]: userData })
+        added++
+      } catch (err) {
+        errors++
+        pushLog(`WA | Sync error for ${phone}: ${err.message}`)
+      }
     }
 
-    // Insert new users in parallel batches of 20
-    const BATCH_SIZE = 20
-    for (let i = 0; i < newUsersToAdd.length; i += BATCH_SIZE) {
-      const batch = newUsersToAdd.slice(i, i + BATCH_SIZE)
-      await Promise.all(batch.map(u => redis.hset(REDIS_KEYS.USERS, u.phone, u.data)))
-    }
-
-    pushLog(`WA | Sync completed: ${added} added, ${skipped} skipped`)
-    res.json({ success: true, added, skipped, total: participants.length })
+    pushLog(`WA | Sync completed: ${added} added, ${skipped} skipped, ${errors} errors`)
+    res.json({ success: true, added, skipped, errors, total: participants.length })
   } catch (e) {
     pushLog(`WA | Sync error: ${e.message}`)
     res.json({ success: false, error: e.message })
