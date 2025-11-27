@@ -1378,26 +1378,28 @@ app.get('/monitoring', async (_req, res) => {
 
     <div class="chart-box">
       <!-- TradingView Widget BEGIN -->
-      <div class="tradingview-widget-container" style="height:500px;width:100%">
-        <div class="tradingview-widget-container__widget" style="height:calc(100% - 32px);width:100%"></div>
-        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
-        {
-          "autosize": true,
+      <div class="tradingview-widget-container">
+        <div id="tradingview_chart"></div>
+        <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+        <script type="text/javascript">
+        new TradingView.widget({
+          "width": "100%",
+          "height": 500,
           "symbol": "OANDA:XAUUSD",
           "interval": "1",
           "timezone": "Asia/Jakarta",
           "theme": "dark",
           "style": "1",
           "locale": "id",
+          "toolbar_bg": "#0d1421",
           "enable_publishing": false,
           "hide_top_toolbar": false,
           "hide_legend": false,
           "save_image": false,
           "hide_volume": true,
-          "support_host": "https://www.tradingview.com",
-          "backgroundColor": "rgba(13, 20, 33, 1)",
-          "gridColor": "rgba(42, 63, 95, 0.3)"
-        }
+          "container_id": "tradingview_chart",
+          "backgroundColor": "#0d1421"
+        });
         </script>
       </div>
       <!-- TradingView Widget END -->
