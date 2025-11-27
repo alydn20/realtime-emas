@@ -1471,11 +1471,11 @@ app.get('/monitoring', async (_req, res) => {
     .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .page-info { color: #71767b; font-size: 0.85em; }
 
-    /* Animations */
-    .updated { animation: highlight 0.6s ease; }
+    /* Animations - single flash only */
+    .updated { animation: highlight 0.3s ease-out 1; }
     @keyframes highlight {
-      0%, 100% { background: transparent; }
-      50% { background: rgba(247, 147, 26, 0.1); }
+      0% { background: rgba(247, 147, 26, 0.3); }
+      100% { background: transparent; }
     }
 
     /* Responsive */
@@ -1750,8 +1750,12 @@ app.get('/monitoring', async (_req, res) => {
             const cls = change > 0 ? 'up' : 'down';
             document.getElementById('buyChange').textContent = sign + change.toLocaleString('id-ID');
             document.getElementById('buyChange').className = 'change ' + cls;
-            document.getElementById('buyCard').classList.add('updated');
-            setTimeout(() => document.getElementById('buyCard').classList.remove('updated'), 600);
+
+            // Flash animation - remove and re-add class to trigger
+            const buyCard = document.getElementById('buyCard');
+            buyCard.classList.remove('updated');
+            void buyCard.offsetWidth; // Force reflow
+            buyCard.classList.add('updated');
 
             updateHistory(data.buy, data.sell, lastBuy, lastSell, data.updatedAt);
           }
@@ -1766,8 +1770,12 @@ app.get('/monitoring', async (_req, res) => {
             const cls = change > 0 ? 'up' : 'down';
             document.getElementById('sellChange').textContent = sign + change.toLocaleString('id-ID');
             document.getElementById('sellChange').className = 'change ' + cls;
-            document.getElementById('sellCard').classList.add('updated');
-            setTimeout(() => document.getElementById('sellCard').classList.remove('updated'), 600);
+
+            // Flash animation - remove and re-add class to trigger
+            const sellCard = document.getElementById('sellCard');
+            sellCard.classList.remove('updated');
+            void sellCard.offsetWidth; // Force reflow
+            sellCard.classList.add('updated');
           }
           lastSell = data.sell;
         }
