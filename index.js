@@ -4311,13 +4311,66 @@ app.get('/install', (_req, res) => {
       browserInfo.innerHTML = 'Browser: <strong>' + browserName + '</strong>' + (isMobile ? ' (Mobile)' : ' (Desktop)');
 
       if (pwaIsInstalled) {
-        // PWA sudah terinstall - tampilkan pesan untuk buka dari Home Screen
+        // PWA sudah terinstall - tampilkan panah besar berkedip
         browserInfo.innerHTML += '<br><span style="color:#00ff88;">✓ Aplikasi sudah terinstall!</span>';
-        installBtn.textContent = 'Buka dari Home Screen';
-        installBtn.onclick = () => {
-          alert('Aplikasi sudah terinstall!\\n\\nBuka aplikasi Gold Monitor dari Home Screen atau App Drawer Anda.');
-        };
-        notice.innerHTML = 'Buka aplikasi <strong>Gold Monitor</strong> dari Home Screen untuk mengakses monitoring.';
+
+        // CSS untuk animasi panah berkedip
+        const arrowStyle = '<style>' +
+          '@keyframes blink { 0%,100%{opacity:1;transform:translateY(0)} 50%{opacity:0.3;transform:translateY(-10px)} }' +
+          '@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.1)} }' +
+          '.blink-arrow { animation: blink 1s ease-in-out infinite; }' +
+          '.pulse-text { animation: pulse 1.5s ease-in-out infinite; }' +
+          '</style>';
+
+        // Petunjuk berbeda untuk setiap browser dengan PANAH BESAR BERKEDIP
+        let openPwaGuide = arrowStyle;
+
+        if (isChrome && !isMobile) {
+          openPwaGuide += '<div style="position:fixed;top:10px;right:80px;z-index:9999;text-align:center;" class="blink-arrow">' +
+            '<div style="font-size:80px;color:#f7931a;text-shadow:0 0 20px #f7931a;">↗</div>' +
+            '<div style="background:#f7931a;color:#000;padding:8px 15px;border-radius:8px;font-weight:bold;font-size:14px;">KLIK DISINI</div>' +
+            '</div>' +
+            '<div style="background:#1a2332;padding:20px;border-radius:12px;margin:20px 0;text-align:center;">' +
+            '<p class="pulse-text" style="color:#00ff88;font-weight:bold;font-size:1.3em;margin-bottom:15px;">📱 Klik ikon di Address Bar!</p>' +
+            '<p style="color:#e7e9ea;margin-bottom:10px;">Klik ikon <strong style="color:#f7931a;font-size:1.2em;">⊕</strong> atau <strong style="color:#f7931a;">🖥️</strong> di pojok kanan atas</p>' +
+            '<p style="color:#71767b;font-size:0.9em;">Untuk membuka aplikasi Gold Monitor</p>' +
+            '</div>';
+        } else if (isEdge && !isMobile) {
+          openPwaGuide += '<div style="position:fixed;top:10px;right:120px;z-index:9999;text-align:center;" class="blink-arrow">' +
+            '<div style="font-size:80px;color:#f7931a;text-shadow:0 0 20px #f7931a;">↗</div>' +
+            '<div style="background:#f7931a;color:#000;padding:8px 15px;border-radius:8px;font-weight:bold;font-size:14px;">KLIK DISINI</div>' +
+            '</div>' +
+            '<div style="background:#1a2332;padding:20px;border-radius:12px;margin:20px 0;text-align:center;">' +
+            '<p class="pulse-text" style="color:#00ff88;font-weight:bold;font-size:1.3em;margin-bottom:15px;">📱 Klik ikon di Address Bar!</p>' +
+            '<p style="color:#e7e9ea;margin-bottom:10px;">Klik ikon <strong style="color:#f7931a;font-size:1.2em;">App available</strong> di address bar</p>' +
+            '<p style="color:#71767b;font-size:0.9em;">Atau menu ··· → Apps → Gold Price Monitor</p>' +
+            '</div>';
+        } else if (isMobile && isAndroid) {
+          openPwaGuide += '<div style="background:#1a2332;padding:20px;border-radius:12px;margin:20px 0;text-align:center;">' +
+            '<div class="blink-arrow" style="font-size:60px;margin-bottom:15px;">🏠</div>' +
+            '<p class="pulse-text" style="color:#00ff88;font-weight:bold;font-size:1.3em;margin-bottom:15px;">Buka dari Home Screen!</p>' +
+            '<p style="color:#e7e9ea;margin-bottom:10px;">Tekan tombol <strong style="color:#f7931a;">Home</strong> dan cari ikon <strong style="color:#f7931a;">Gold Monitor</strong></p>' +
+            '<p style="color:#71767b;font-size:0.9em;">Atau buka App Drawer dan cari aplikasinya</p>' +
+            '</div>';
+        } else if (isMobile && isIOS) {
+          openPwaGuide += '<div style="background:#1a2332;padding:20px;border-radius:12px;margin:20px 0;text-align:center;">' +
+            '<div class="blink-arrow" style="font-size:60px;margin-bottom:15px;">🏠</div>' +
+            '<p class="pulse-text" style="color:#00ff88;font-weight:bold;font-size:1.3em;margin-bottom:15px;">Buka dari Home Screen!</p>' +
+            '<p style="color:#e7e9ea;margin-bottom:10px;">Swipe ke Home Screen dan tap ikon <strong style="color:#f7931a;">Gold Monitor</strong></p>' +
+            '</div>';
+        } else {
+          openPwaGuide += '<div style="background:#1a2332;padding:20px;border-radius:12px;margin:20px 0;text-align:center;">' +
+            '<div class="blink-arrow" style="font-size:60px;margin-bottom:15px;">🔍</div>' +
+            '<p class="pulse-text" style="color:#00ff88;font-weight:bold;font-size:1.3em;margin-bottom:15px;">Cari Aplikasi Gold Monitor!</p>' +
+            '<p style="color:#e7e9ea;">Di Desktop, Start Menu, atau Home Screen</p>' +
+            '</div>';
+        }
+
+        manualSteps.innerHTML = openPwaGuide;
+        manualSteps.classList.add('show');
+
+        installBtn.style.display = 'none'; // Sembunyikan tombol install
+        notice.innerHTML = '<span class="pulse-text" style="color:#f7931a;font-weight:bold;">👆 Ikuti panah di atas untuk membuka aplikasi!</span>';
       } else {
         showManualSteps(instructions);
         notice.style.display = 'block';
