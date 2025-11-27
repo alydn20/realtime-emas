@@ -2777,6 +2777,29 @@ app.delete('/api/admin/users', express.json(), async (req, res) => {
   res.json({ success: true })
 })
 
+// Admin: Clear invalid users (short phone numbers < 9 digits)
+app.post('/api/admin/users/clear-invalid', express.json(), async (req, res) => {
+  const { password } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  try {
+    const allUsers = await redis.hgetall(REDIS_KEYS.USERS) || {}
+    let deleted = 0
+
+    for (const phone of Object.keys(allUsers)) {
+      // Delete if phone is less than 9 digits (invalid)
+      if (phone.length < 9) {
+        await redis.hdel(REDIS_KEYS.USERS, phone)
+        deleted++
+      }
+    }
+
+    res.json({ success: true, deleted })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
 // Admin: Send push notification
 app.post('/api/admin/push', express.json(), async (req, res) => {
   const { password, title, message, phone, type = 'info' } = req.body
@@ -2905,7 +2928,7 @@ app.post('/api/admin/wa-groups/sync', express.json(), async (req, res) => {
 
     let added = 0
     let skipped = 0
-    const newUsers = {}
+    const newUsersToAdd = []
 
     for (const p of participants) {
       const phone = extractPhoneFromJid(p.id)
@@ -2917,19 +2940,24 @@ app.post('/api/admin/wa-groups/sync', express.json(), async (req, res) => {
         continue
       }
 
-      // Prepare new user for batch insert
-      newUsers[phone] = JSON.stringify({
-        name: p.notify || 'Member ' + phone,
-        createdAt: Date.now(),
-        expired: null,
-        source: 'whatsapp_group'
+      // Collect new users
+      newUsersToAdd.push({
+        phone,
+        data: JSON.stringify({
+          name: p.notify || 'Member ' + phone,
+          createdAt: Date.now(),
+          expired: null,
+          source: 'whatsapp_group'
+        })
       })
       added++
     }
 
-    // Batch insert all new users at once
-    if (Object.keys(newUsers).length > 0) {
-      await redis.hset(REDIS_KEYS.USERS, newUsers)
+    // Insert new users in parallel batches of 20
+    const BATCH_SIZE = 20
+    for (let i = 0; i < newUsersToAdd.length; i += BATCH_SIZE) {
+      const batch = newUsersToAdd.slice(i, i + BATCH_SIZE)
+      await Promise.all(batch.map(u => redis.hset(REDIS_KEYS.USERS, u.phone, u.data)))
     }
 
     pushLog(`WA | Sync completed: ${added} added, ${skipped} skipped`)
@@ -3706,9 +3734,10 @@ app.get('/admin/users', (_req, res) => {
             <button class="btn btn-primary" onclick="setWaGroup()" style="width:100%;">Set Grup</button>
           </div>
         </div>
-        <div style="display:flex;gap:10px;margin-top:10px;">
+        <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;">
           <button class="btn" style="background:#2f3640;color:#e7e9ea;" onclick="loadWaGroups()">Refresh Grup</button>
           <button class="btn btn-primary" onclick="syncMembers()">Sync Semua Member</button>
+          <button class="btn" style="background:#ff4444;color:white;" onclick="clearInvalidUsers()">Hapus User Invalid</button>
         </div>
         <div id="currentGroup" style="margin-top:10px;font-size:0.85em;color:#71767b;"></div>
       </div>
@@ -3916,6 +3945,32 @@ app.get('/admin/users', (_req, res) => {
         if (data.success) {
           result.className = 'result-msg success';
           result.textContent = 'Sync selesai! ' + data.added + ' user baru ditambahkan, ' + data.skipped + ' sudah ada. Total: ' + data.total + ' member.';
+          loadUsers();
+        } else {
+          result.className = 'result-msg error';
+          result.textContent = 'Error: ' + data.error;
+        }
+        setTimeout(() => result.className = 'result-msg', 5000);
+      });
+    }
+
+    function clearInvalidUsers() {
+      if (!confirm('Hapus semua user dengan nomor invalid (< 9 digit)?')) return;
+
+      const result = document.getElementById('syncResult');
+      result.className = 'result-msg success';
+      result.textContent = 'Menghapus user invalid...';
+
+      fetch('/api/admin/users/clear-invalid', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          result.className = 'result-msg success';
+          result.textContent = 'Berhasil menghapus ' + data.deleted + ' user invalid.';
           loadUsers();
         } else {
           result.className = 'result-msg error';
