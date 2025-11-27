@@ -1791,15 +1791,93 @@ app.get('/health', (_req, res) => {
 })
 
 app.get('/qr', async (_req, res) => {
-  if (!lastQr) return res.send('<pre>QR not ready</pre>')
+  if (!lastQr) return res.send(`
+    <div style="text-align:center;padding:20px;font-family:sans-serif;background:#0f1419;color:#e7e9ea;min-height:100vh;">
+      <h2 style="color:#f7931a;">QR Code</h2>
+      <p>QR not ready. ${isReady ? 'WhatsApp sudah terhubung.' : 'Menunggu QR...'}</p>
+      <p style="margin-top:20px;"><a href="/qr-reset" style="color:#ff4444;text-decoration:none;padding:10px 20px;border:1px solid #ff4444;border-radius:8px;">Reset QR / Login Ulang</a></p>
+      <p style="margin-top:10px;"><a href="/qr" style="color:#f7931a;">Refresh</a></p>
+    </div>
+  `)
   try {
     const mod = await import('qrcode').catch(() => null)
     if (mod?.toDataURL) {
       const dataUrl = await mod.toDataURL(lastQr, { margin: 1 })
-      return res.send(`<div style="text-align:center;padding:20px"><img src="${dataUrl}" style="max-width:400px"/></div>`)
+      return res.send(`
+        <div style="text-align:center;padding:20px;font-family:sans-serif;background:#0f1419;color:#e7e9ea;min-height:100vh;">
+          <h2 style="color:#f7931a;">Scan QR dengan WhatsApp</h2>
+          <img src="${dataUrl}" style="max-width:300px;border-radius:10px;"/>
+          <p style="margin-top:15px;color:#71767b;">Settings > Linked Devices > Link a Device</p>
+          <p style="margin-top:20px;"><a href="/qr" style="color:#f7931a;">Refresh</a></p>
+        </div>
+      `)
     }
   } catch (_) {}
   res.send(lastQr)
+})
+
+// Reset QR - Hapus session dan restart koneksi WA
+app.get('/qr-reset', async (req, res) => {
+  const { confirm } = req.query
+
+  if (confirm !== 'yes') {
+    return res.send(`
+      <div style="text-align:center;padding:40px;font-family:sans-serif;background:#0f1419;color:#e7e9ea;min-height:100vh;">
+        <h2 style="color:#ff4444;">Reset WhatsApp Session</h2>
+        <p style="margin:20px 0;color:#71767b;">Ini akan menghapus sesi WhatsApp dan memerlukan scan QR ulang.</p>
+        <p style="margin:20px 0;color:#ffaa00;">⚠️ WhatsApp akan logout dari device ini!</p>
+        <a href="/qr-reset?confirm=yes" style="display:inline-block;margin:10px;padding:15px 30px;background:#ff4444;color:white;text-decoration:none;border-radius:10px;font-weight:bold;">Ya, Reset Sekarang</a>
+        <a href="/qr" style="display:inline-block;margin:10px;padding:15px 30px;background:#2f3640;color:white;text-decoration:none;border-radius:10px;">Batal</a>
+      </div>
+    `)
+  }
+
+  try {
+    // Close existing connection
+    if (sock) {
+      sock.ev.removeAllListeners()
+      await sock.logout().catch(() => {})
+      sock = null
+    }
+
+    isReady = false
+    lastQr = null
+
+    // Delete auth folder
+    const fs = await import('fs')
+    const path = await import('path')
+    const authPath = path.join(process.cwd(), 'auth')
+
+    if (fs.existsSync(authPath)) {
+      fs.rmSync(authPath, { recursive: true, force: true })
+      pushLog('WA | Auth folder deleted')
+    }
+
+    // Restart connection
+    pushLog('WA | Restarting connection...')
+    setTimeout(() => {
+      start().catch(e => pushLog('WA | Restart error: ' + e.message))
+    }, 2000)
+
+    res.send(`
+      <div style="text-align:center;padding:40px;font-family:sans-serif;background:#0f1419;color:#e7e9ea;min-height:100vh;">
+        <h2 style="color:#00ff88;">Reset Berhasil!</h2>
+        <p style="margin:20px 0;color:#71767b;">Menunggu QR code baru...</p>
+        <p style="margin:20px 0;">Halaman akan refresh otomatis dalam 5 detik.</p>
+        <a href="/qr" style="display:inline-block;margin:10px;padding:15px 30px;background:#f7931a;color:white;text-decoration:none;border-radius:10px;font-weight:bold;">Lihat QR Code</a>
+        <script>setTimeout(() => window.location.href = '/qr', 5000);</script>
+      </div>
+    `)
+  } catch (e) {
+    pushLog('WA | Reset error: ' + e.message)
+    res.send(`
+      <div style="text-align:center;padding:40px;font-family:sans-serif;background:#0f1419;color:#e7e9ea;min-height:100vh;">
+        <h2 style="color:#ff4444;">Reset Gagal</h2>
+        <p style="color:#71767b;">${e.message}</p>
+        <a href="/qr" style="color:#f7931a;">Kembali</a>
+      </div>
+    `)
+  }
 })
 
 app.get('/stats', (_req, res) => {
