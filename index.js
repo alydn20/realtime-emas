@@ -88,7 +88,7 @@ let sock = null
 
 const subscriptions = new Set()
 
-// ⚡ CACHE GLOBAL untuk market data (pre-fetched)
+// CACHE GLOBAL untuk market data (pre-fetched)
 let cachedMarketData = {
   usdIdr: { rate: 16600 }, // Updated default to current market rate
   xauUsd: null,
@@ -96,6 +96,152 @@ let cachedMarketData = {
   lastUpdate: 0,
   lastUsdIdrFetch: 0 // Track kapan terakhir fetch USD/IDR
 }
+
+// SERVER-SIDE DAILY STATS - konsisten di semua device
+let dailyStats = {
+  date: null,
+  open: null,
+  high: null,
+  low: null,
+  prices: [],
+  lastUpdate: 0
+}
+
+function updateDailyStats(buyPrice) {
+  const now = new Date()
+  const today = now.toISOString().split('T')[0]
+
+  // Reset jika hari baru
+  if (dailyStats.date !== today) {
+    dailyStats = {
+      date: today,
+      open: buyPrice,
+      high: buyPrice,
+      low: buyPrice,
+      prices: [buyPrice],
+      lastUpdate: Date.now()
+    }
+    return
+  }
+
+  // Update stats
+  if (dailyStats.open === null) dailyStats.open = buyPrice
+  if (buyPrice > dailyStats.high) dailyStats.high = buyPrice
+  if (buyPrice < dailyStats.low) dailyStats.low = buyPrice
+
+  // Simpan harga untuk average (max 1000 untuk memory)
+  if (dailyStats.prices.length < 1000) {
+    dailyStats.prices.push(buyPrice)
+  } else {
+    // Rolling average - hapus yang lama
+    dailyStats.prices.shift()
+    dailyStats.prices.push(buyPrice)
+  }
+  dailyStats.lastUpdate = Date.now()
+}
+
+function getDailyStats() {
+  if (!dailyStats.date || dailyStats.prices.length === 0) {
+    return { open: null, high: null, low: null, avg: null, change: null, changePct: null }
+  }
+
+  const avg = Math.round(dailyStats.prices.reduce((a, b) => a + b, 0) / dailyStats.prices.length)
+  const current = dailyStats.prices[dailyStats.prices.length - 1]
+  const change = current - dailyStats.open
+  const changePct = ((change / dailyStats.open) * 100).toFixed(2)
+
+  return {
+    date: dailyStats.date,
+    open: dailyStats.open,
+    high: dailyStats.high,
+    low: dailyStats.low,
+    avg: avg,
+    current: current,
+    change: change,
+    changePct: changePct
+  }
+}
+
+// SERVER-SIDE PRICE HISTORY - konsisten di semua device
+let priceHistory = []
+const MAX_HISTORY = 1440 // 24 jam (1 per menit)
+
+function addPriceHistory(buy, sell, prevBuy, prevSell, updatedAt) {
+  const now = new Date()
+  const entry = {
+    time: now.toISOString(),
+    buy: buy,
+    sell: sell,
+    buyChange: buy - prevBuy,
+    sellChange: sell - prevSell,
+    updatedAt: updatedAt
+  }
+
+  // Cek apakah sudah ada entry di menit yang sama
+  const lastEntry = priceHistory[priceHistory.length - 1]
+  if (lastEntry) {
+    const lastTime = new Date(lastEntry.time)
+    const lastMinute = lastTime.getHours() * 60 + lastTime.getMinutes()
+    const nowMinute = now.getHours() * 60 + now.getMinutes()
+
+    // Jika menit sama, update entry yang ada
+    if (lastMinute === nowMinute && lastTime.toDateString() === now.toDateString()) {
+      priceHistory[priceHistory.length - 1] = entry
+      return
+    }
+  }
+
+  // Tambah entry baru
+  priceHistory.push(entry)
+
+  // Limit max entries
+  if (priceHistory.length > MAX_HISTORY) {
+    priceHistory.shift()
+  }
+}
+
+function getPriceHistory(page = 1, perPage = 10) {
+  const total = priceHistory.length
+  const totalPages = Math.ceil(total / perPage)
+  const start = Math.max(0, total - (page * perPage))
+  const end = total - ((page - 1) * perPage)
+  const items = priceHistory.slice(start, end).reverse()
+
+  return {
+    items: items,
+    page: page,
+    perPage: perPage,
+    total: total,
+    totalPages: totalPages
+  }
+}
+
+// Reset data harian setiap jam 23:59 WIB
+function resetDailyData() {
+  dailyStats = {
+    date: null,
+    open: null,
+    high: null,
+    low: null,
+    prices: [],
+    lastUpdate: 0
+  }
+  priceHistory = []
+  pushLog('SYSTEM | Daily reset completed')
+}
+
+// Cek setiap menit untuk reset jam 23:59
+setInterval(() => {
+  const now = new Date()
+  // Konversi ke WIB (UTC+7)
+  const wibHour = (now.getUTCHours() + 7) % 24
+  const wibMinute = now.getUTCMinutes()
+
+  // Reset pada 23:59 WIB
+  if (wibHour === 23 && wibMinute === 59) {
+    resetDailyData()
+  }
+}, 60000)
 
 // Lock untuk mencegah double fetch USD/IDR
 let isUsdIdrFetching = false
@@ -991,7 +1137,7 @@ function doBroadcastInstant(message) {
     sock.sendMessage(chatIds[i], { text: message }).catch(() => {})
   }
 
-  pushLog(`SEND  | 📤 Broadcast #${currentBroadcastId} ke ${subsCount} subscriber`)
+  pushLog(`SEND | Broadcast #${currentBroadcastId} to ${subsCount} subscribers`)
 }
 
 let isPriceChecking = false // Lock untuk mencegah overlap
@@ -1015,43 +1161,6 @@ INTERVALS.forEach(interval => {
     errors: 0
   }
 })
-
-function logIntervalStats() {
-  console.log('\n📊 ═══════════ INTERVAL SPEED TEST RESULTS ═══════════')
-  INTERVALS.forEach(interval => {
-    const stats = intervalStats[interval]
-    if (stats.successes > 0) {
-      const avg = (stats.totalDelay / stats.successes / 1000).toFixed(2)
-      const min = stats.minDelay === Infinity ? '-' : (stats.minDelay / 1000).toFixed(2)
-      const max = (stats.maxDelay / 1000).toFixed(2)
-      const successRate = ((stats.successes / stats.attempts) * 100).toFixed(0)
-      console.log(`   ${interval}ms: Avg=${avg}s | Min=${min}s | Max=${max}s | Success=${successRate}% (${stats.successes}/${stats.attempts})`)
-    } else {
-      console.log(`   ${interval}ms: No data yet (${stats.attempts} attempts, ${stats.errors} errors)`)
-    }
-  })
-
-  // Recommend best interval
-  let bestInterval = null
-  let bestAvg = Infinity
-  INTERVALS.forEach(interval => {
-    const stats = intervalStats[interval]
-    if (stats.successes >= 3) {
-      const avg = stats.totalDelay / stats.successes
-      if (avg < bestAvg) {
-        bestAvg = avg
-        bestInterval = interval
-      }
-    }
-  })
-  if (bestInterval) {
-    console.log(`   🏆 RECOMMENDED: ${bestInterval}ms (avg ${(bestAvg/1000).toFixed(2)}s delay)`)
-  }
-  console.log('═══════════════════════════════════════════════════════\n')
-}
-
-// Log stats setiap 2 menit
-setInterval(logIntervalStats, 120000)
 
 async function checkPriceUpdate() {
   if (isPriceChecking) return // Skip jika masih fetching
@@ -1089,10 +1198,6 @@ async function checkPriceUpdate() {
       }
 
       lastApiUpdateTime = apiTime
-
-      // Log detection
-      const sec = new Date().getSeconds()
-      console.log(`⚡ DETECTED [${currentInterval}ms] | ${new Date().toISOString().substr(11, 12)} | Delay: ${(delayMs/1000).toFixed(2)}s | API: ${apiTime?.substr(11, 8)} | Fetch: ${fetchTime}ms`)
     }
 
     // Rotate interval untuk test berikutnya
@@ -1102,7 +1207,8 @@ async function checkPriceUpdate() {
       lastKnownPrice = currentPrice
       lastBroadcastedPrice = currentPrice
       lastPriceUpdateTime = Date.now()
-      pushLog(`PRICE | 📊 Initial: Buy ${formatRupiah(currentPrice.buy)} | Sell ${formatRupiah(currentPrice.sell)}`)
+      updateDailyStats(currentPrice.buy)
+      pushLog(`PRICE | Initial: Buy ${formatRupiah(currentPrice.buy)} | Sell ${formatRupiah(currentPrice.sell)}`)
 
       // Check initial price status
       if (cachedMarketData.xauUsd && cachedMarketData.usdIdr) {
@@ -1113,7 +1219,7 @@ async function checkPriceUpdate() {
           cachedMarketData.usdIdr.rate
         )
         if (priceStatus.status === 'ABNORMAL') {
-          pushLog(`PRICE | ⚠️ Initial status: TIDAK NORMAL`)
+          pushLog(`PRICE | Initial status: ABNORMAL`)
         }
       }
       return
@@ -1153,9 +1259,9 @@ async function checkPriceUpdate() {
 
       if (statusChanged) {
         if (currentStatus === 'ABNORMAL') {
-          pushLog(`PRICE | ⚠️ Status: NORMAL → TIDAK NORMAL`)
+          pushLog(`PRICE | Status changed: NORMAL -> ABNORMAL`)
         } else if (currentStatus === 'NORMAL') {
-          pushLog(`PRICE | ✅ Status: TIDAK NORMAL → NORMAL`)
+          pushLog(`PRICE | Status changed: ABNORMAL -> NORMAL`)
         }
       }
     }
@@ -1166,7 +1272,7 @@ async function checkPriceUpdate() {
 
     // SKIP jika data dari API lebih lama dari yang sudah ada
     if (currentUpdatedAt < lastUpdatedAt) {
-      pushLog(`PRICE | ⏮️ Skip data lama: ${currentPrice.updated_at} < ${lastKnownPrice.updated_at}`)
+      pushLog(`PRICE | Skip old data: ${currentPrice.updated_at} < ${lastKnownPrice.updated_at}`)
       return
     }
 
@@ -1174,7 +1280,13 @@ async function checkPriceUpdate() {
     const prevPrice = { ...lastKnownPrice }
     lastKnownPrice = currentPrice
 
-    // 🚀 INSTANT SSE PUSH ke frontend monitoring
+    // Update daily stats & history
+    if (buyChanged) {
+      updateDailyStats(currentPrice.buy)
+      addPriceHistory(currentPrice.buy, currentPrice.sell, prevPrice.buy, prevPrice.sell, currentPrice.updated_at)
+    }
+
+    // INSTANT SSE PUSH ke frontend monitoring
     if (buyChanged || sellChanged) {
       const sseData = {
         type: 'price',
@@ -1187,11 +1299,6 @@ async function checkPriceUpdate() {
         xauUsd: cachedMarketData.xauUsd,
         serverTime: new Date().toISOString()
       }
-      console.log(`SSE | 📤 Broadcasting to ${sseClients.size} clients:`, {
-        buy: currentPrice.buy,
-        prevBuy: prevPrice.buy,
-        change: currentPrice.buy - prevPrice.buy
-      })
       broadcastSSE(sseData)
     }
 
@@ -1285,7 +1392,7 @@ async function checkPriceUpdate() {
     const nowMinute = nowTime.getHours() * 60 + nowTime.getMinutes()
     
     if (priceMinute !== nowMinute && !isPriceStale) {
-      pushLog(`PRICE | ⚠️ Data dari menit lalu, skip`)
+      pushLog(`PRICE | Old minute data, skip`)
       lastBroadcastedPrice = {
         buy: currentPrice.buy,
         sell: currentPrice.sell,
@@ -1370,9 +1477,6 @@ async function fastPoll() {
       return
     }
 
-    const delayMs = Date.now() - newestTime
-    console.log(`🎯 FAST HIT | ${new Date().toISOString().substr(11, 12)} | Delay: ${(delayMs/1000).toFixed(2)}s | API: ${newestData.data.updated_at.substr(11, 8)}`)
-
     // Process the new data
     const currentPrice = {
       buy: newestData.data.buying_rate,
@@ -1389,6 +1493,12 @@ async function fastPoll() {
       const prevPrice = { ...lastKnownPrice }
       lastKnownPrice = currentPrice
 
+      // Update daily stats & history
+      if (currentPrice.buy !== prevPrice.buy) {
+        updateDailyStats(currentPrice.buy)
+        addPriceHistory(currentPrice.buy, currentPrice.sell, prevPrice.buy, prevPrice.sell, currentPrice.updated_at)
+      }
+
       // Instant SSE broadcast
       broadcastSSE({
         type: 'price',
@@ -1402,10 +1512,10 @@ async function fastPoll() {
         serverTime: new Date().toISOString()
       })
 
-      console.log(`🚀 SSE PUSH | ${sseClients.size} clients | Server delay: ${(delayMs/1000).toFixed(2)}s`)
     } else if (!lastKnownPrice) {
       // Initial price
       lastKnownPrice = currentPrice
+      updateDailyStats(currentPrice.buy)
     }
   } catch (e) {
     // Silent fail
@@ -1441,7 +1551,6 @@ async function checkXauUpdate() {
         timestamp: new Date().toISOString()
       })
 
-      console.log(`XAU | $${price.toFixed(2)} (${prevPrice ? (price > prevPrice ? '+' : '') + (price - prevPrice).toFixed(2) : 'initial'})`)
     }
   } catch (e) {
     // Silent fail
@@ -1454,28 +1563,14 @@ async function checkXauUpdate() {
 setInterval(checkXauUpdate, 1000)
 checkXauUpdate() // Initial fetch
 
-// Log initial message
-console.log('\n🔬 SPEED TEST MODE ACTIVE')
-console.log('   Testing intervals:', INTERVALS.join('ms, ') + 'ms')
-console.log('   Stats will be logged every 2 minutes')
-console.log('   Watch for "⚡ DETECTED" logs to see which interval catches updates fastest\n')
-
 // ==================== STARTUP INFO ====================
-console.log(`\n╔════════════════════════════════════════════════════╗`)
-console.log(`║           💰 GOLD PRICE BOT - STARTED 💰           ║`)
-console.log(`╠════════════════════════════════════════════════════╣`)
-console.log(`║  📡 Price Check    : Setiap ${PRICE_CHECK_INTERVAL/1000} detik              ║`)
-console.log(`║  📢 Broadcast      : Max 1x per menit              ║`)
-console.log(`║  💱 USD/IDR        : Update setiap menit           ║`)
-console.log(`║  🥇 XAU/USD        : Cache ${XAU_CACHE_DURATION/1000} detik                 ║`)
-console.log(`║  ⏰ Stale Alert    : ${STALE_PRICE_THRESHOLD/60000} menit tanpa update       ║`)
-console.log(`╚════════════════════════════════════════════════════╝\n`)
+console.log(`[GOLD] Bot started | Price check: ${PRICE_CHECK_INTERVAL/1000}s | Stale alert: ${STALE_PRICE_THRESHOLD/60000}min`)
 
 const app = express()
 app.use(express.json())
 
 app.get('/', (_req, res) => {
-  res.status(200).send('✅ Bot Running')
+  res.redirect('/monitoring')
 })
 
 app.get('/health', (_req, res) => {
@@ -1507,7 +1602,7 @@ app.get('/stats', (_req, res) => {
   const isPriceStale = timeSinceLastUpdate ? timeSinceLastUpdate >= STALE_PRICE_THRESHOLD : false
   
   res.json({
-    status: isReady ? '🟢' : '🔴',
+    status: isReady ? 'ready' : 'not_ready',
     uptime: Math.floor(process.uptime()),
     subs: subscriptions.size,
     lastPrice: lastKnownPrice,
@@ -1572,6 +1667,18 @@ app.get('/time', (_req, res) => {
   })
 })
 
+// Daily Stats API - konsisten di semua device
+app.get('/daily-stats', (_req, res) => {
+  res.json(getDailyStats())
+})
+
+// Price History API - konsisten di semua device
+app.get('/price-history', (req, res) => {
+  const page = parseInt(req.query.page) || 1
+  const perPage = parseInt(req.query.perPage) || 10
+  res.json(getPriceHistory(page, perPage))
+})
+
 // SSE (Server-Sent Events) untuk real-time push ke frontend
 const sseClients = new Set()
 
@@ -1595,11 +1702,9 @@ app.get('/sse', (req, res) => {
   }
 
   sseClients.add(res)
-  console.log(`SSE | Client connected (total: ${sseClients.size})`)
 
   req.on('close', () => {
     sseClients.delete(res)
-    console.log(`SSE | Client disconnected (total: ${sseClients.size})`)
   })
 })
 
@@ -1630,9 +1735,7 @@ setInterval(() => {
 }, 10000)
 
 // Log status setiap 30 detik
-setInterval(() => {
-  console.log(`📊 Status: ${sseClients.size} SSE clients | Last API: ${lastApiUpdateTime || 'N/A'} | Polling: active`)
-}, 30000)
+// Status log every 30s (silent - available via /stats)
 
 // PWA Manifest
 app.get('/manifest.json', (_req, res) => {
@@ -1692,6 +1795,7 @@ app.get('/monitoring', async (_req, res) => {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2150/2150150.png">
+  <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2150/2150150.png">
   <title>Gold Price Monitor</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1739,6 +1843,30 @@ app.get('/monitoring', async (_req, res) => {
       font-size: 0.6em;
       color: #71767b;
       margin-top: 2px;
+    }
+
+    /* Install Button */
+    .install-btn {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: #f7931a;
+      color: #000;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.75em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .install-btn:hover {
+      background: #e8850f;
+      transform: scale(1.02);
+    }
+    .install-btn svg {
+      width: 14px;
+      height: 14px;
     }
 
     /* Stat Items */
@@ -2082,7 +2210,12 @@ app.get('/monitoring', async (_req, res) => {
   <div class="container">
     <div class="header">
       <div class="header-left">
-        <h1><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f7931a" stroke-width="2" style="vertical-align:middle;margin-right:10px;"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10h8M8 14h8"/></svg>Gold Price Monitor</h1>
+        <h1><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f7931a" stroke-width="2" style="vertical-align:middle;margin-right:10px;"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10h8M8 14h8"/></svg>Gold Price Monitor
+        <button class="install-btn" id="installBtn" onclick="installApp()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Install
+        </button>
+        </h1>
         <div class="subtitle">Real-time Treasury Gold Rates</div>
       </div>
       <div class="header-right">
@@ -2151,7 +2284,7 @@ app.get('/monitoring', async (_req, res) => {
           </div>
           <div class="daily-item sound-toggle" id="soundToggle" onclick="toggleSound()">
             <span class="daily-label">Sound</span>
-            <span class="daily-value" id="soundStatus">🔔 ON</span>
+            <span class="daily-value" id="soundStatus">ON</span>
           </div>
         </div>
       </div>
@@ -2226,44 +2359,83 @@ app.get('/monitoring', async (_req, res) => {
 
     let lastBuy = 0;
     let lastSell = 0;
-    let priceHistory = [];
-    const MAX_HISTORY = 1440; // 24 jam x 60 menit
     const PER_PAGE = 10;
     let currentPage = 1;
-    const STORAGE_KEY = 'goldPriceHistory';
+    let totalPages = 1;
+    let totalRecords = 0;
 
-    // Load history dari localStorage saat startup
-    function loadHistory() {
+    // Load history dari server
+    async function loadHistory() {
       try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          // Convert string dates back to Date objects
-          priceHistory = parsed.map(item => ({
-            ...item,
-            time: new Date(item.time)
-          }));
-          // Set lastBuy dan lastSell dari entry terbaru
-          if (priceHistory.length > 0) {
-            lastBuy = priceHistory[0].buy;
-            lastSell = priceHistory[0].sell;
-          }
-          renderHistory();
-        }
+        const res = await fetch('/price-history?page=' + currentPage + '&perPage=' + PER_PAGE);
+        const data = await res.json();
+        totalRecords = data.total;
+        totalPages = data.totalPages;
+        renderServerHistory(data.items);
       } catch (e) {
-        console.error('Error loading history:', e);
-        priceHistory = [];
+        renderServerHistory([]);
       }
     }
 
-    // Save history ke localStorage
-    function saveHistory() {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(priceHistory));
-      } catch (e) {
-        console.error('Error saving history:', e);
+    function renderServerHistory(items) {
+      const tbody = document.getElementById('historyBody');
+      const countEl = document.getElementById('historyCount');
+      const pagination = document.getElementById('historyPagination');
+
+      if (!items || items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="no-data">Belum ada data perubahan harga</td></tr>';
+        countEl.textContent = '0 records';
+        pagination.style.display = 'none';
+        return;
+      }
+
+      countEl.textContent = totalRecords + ' records';
+
+      let html = '';
+      items.forEach(function(item) {
+        const time = new Date(item.time);
+        const timeStr = time.toTimeString().substring(0, 8);
+        const buyChange = item.buyChange || 0;
+        const sellChange = item.sellChange || 0;
+        const changeSign = buyChange >= 0 ? '+' : '';
+        const changeClass = buyChange >= 0 ? 'up' : 'down';
+
+        html += '<tr>' +
+          '<td>' + timeStr + '</td>' +
+          '<td>' + formatRupiah(item.buy) + '</td>' +
+          '<td>' + formatRupiah(item.sell) + '</td>' +
+          '<td class="' + changeClass + '">' + changeSign + buyChange.toLocaleString('id-ID') + '</td>' +
+          '</tr>';
+      });
+      tbody.innerHTML = html;
+
+      // Pagination
+      if (totalPages > 1) {
+        pagination.style.display = 'flex';
+        document.getElementById('pageInfo').textContent = 'Halaman ' + currentPage + ' / ' + totalPages;
+        document.getElementById('prevPage').disabled = currentPage >= totalPages;
+        document.getElementById('nextPage').disabled = currentPage <= 1;
+      } else {
+        pagination.style.display = 'none';
       }
     }
+
+    function prevPage() {
+      if (currentPage < totalPages) {
+        currentPage++;
+        loadHistory();
+      }
+    }
+
+    function nextPage() {
+      if (currentPage > 1) {
+        currentPage--;
+        loadHistory();
+      }
+    }
+
+    document.getElementById('prevPage').onclick = prevPage;
+    document.getElementById('nextPage').onclick = nextPage;
 
     function formatRupiah(n) {
       return 'Rp ' + n.toLocaleString('id-ID');
@@ -2276,88 +2448,32 @@ app.get('/monitoring', async (_req, res) => {
       return h + ':' + m + ':' + s;
     }
 
-    // Daily Statistics
-    let dayOpen = null;
-    let dayHigh = null;
-    let dayLow = null;
-    let dayPrices = [];
-    const DAILY_STORAGE_KEY = 'goldDailyStats';
-
-    function loadDailyStats() {
+    // Daily Statistics - fetch dari server
+    async function loadDailyStats() {
       try {
-        const saved = localStorage.getItem(DAILY_STORAGE_KEY);
-        if (saved) {
-          const data = JSON.parse(saved);
-          const today = new Date().toDateString();
-          if (data.date === today) {
-            dayOpen = data.open;
-            dayHigh = data.high;
-            dayLow = data.low;
-            dayPrices = data.prices || [];
-            updateDailyDisplay();
-          }
-        }
+        const res = await fetch('/daily-stats');
+        const data = await res.json();
+        updateDailyDisplay(data);
       } catch (e) {}
     }
 
-    function saveDailyStats() {
-      try {
-        localStorage.setItem(DAILY_STORAGE_KEY, JSON.stringify({
-          date: new Date().toDateString(),
-          open: dayOpen,
-          high: dayHigh,
-          low: dayLow,
-          prices: dayPrices.slice(-1440) // Keep last 24h
-        }));
-      } catch (e) {}
-    }
+    function updateDailyDisplay(data) {
+      if (!data) return;
+      if (data.open) document.getElementById('dayOpen').textContent = formatRupiah(data.open);
+      if (data.high) document.getElementById('dayHigh').textContent = formatRupiah(data.high);
+      if (data.low) document.getElementById('dayLow').textContent = formatRupiah(data.low);
+      if (data.avg) document.getElementById('dayAvg').textContent = formatRupiah(data.avg);
 
-    function updateDailyStats(buy) {
-      if (!buy) return;
-
-      // Reset at midnight
-      const today = new Date().toDateString();
-      const savedDate = localStorage.getItem(DAILY_STORAGE_KEY);
-      if (savedDate) {
-        const data = JSON.parse(savedDate);
-        if (data.date !== today) {
-          dayOpen = null;
-          dayHigh = null;
-          dayLow = null;
-          dayPrices = [];
-        }
-      }
-
-      if (dayOpen === null) dayOpen = buy;
-      if (dayHigh === null || buy > dayHigh) dayHigh = buy;
-      if (dayLow === null || buy < dayLow) dayLow = buy;
-      dayPrices.push(buy);
-
-      saveDailyStats();
-      updateDailyDisplay();
-    }
-
-    function updateDailyDisplay() {
-      if (dayOpen) document.getElementById('dayOpen').textContent = formatRupiah(dayOpen);
-      if (dayHigh) document.getElementById('dayHigh').textContent = formatRupiah(dayHigh);
-      if (dayLow) document.getElementById('dayLow').textContent = formatRupiah(dayLow);
-
-      if (dayPrices.length > 0) {
-        const avg = Math.round(dayPrices.reduce((a, b) => a + b, 0) / dayPrices.length);
-        document.getElementById('dayAvg').textContent = formatRupiah(avg);
-      }
-
-      if (dayOpen && dayPrices.length > 0) {
-        const current = dayPrices[dayPrices.length - 1];
-        const change = current - dayOpen;
-        const changePct = ((change / dayOpen) * 100).toFixed(2);
-        const sign = change >= 0 ? '+' : '';
+      if (data.changePct !== null) {
         const el = document.getElementById('dayChange');
-        el.textContent = sign + changePct + '%';
-        el.className = 'daily-value ' + (change >= 0 ? 'high' : 'low');
+        const sign = parseFloat(data.changePct) >= 0 ? '+' : '';
+        el.textContent = sign + data.changePct + '%';
+        el.className = 'daily-value ' + (parseFloat(data.changePct) >= 0 ? 'high' : 'low');
       }
     }
 
+    // Refresh daily stats setiap 30 detik
+    setInterval(loadDailyStats, 30000);
     loadDailyStats();
 
     // Sound Notification
@@ -2367,7 +2483,8 @@ app.get('/monitoring', async (_req, res) => {
     function toggleSound() {
       soundEnabled = !soundEnabled;
       localStorage.setItem('soundEnabled', soundEnabled);
-      document.getElementById('soundStatus').textContent = soundEnabled ? '🔔 ON' : '🔕 OFF';
+      document.getElementById('soundStatus').textContent = soundEnabled ? 'ON' : 'OFF';
+      document.getElementById('soundToggle').style.opacity = soundEnabled ? '1' : '0.5';
     }
 
     function playNotificationSound() {
@@ -2378,14 +2495,39 @@ app.get('/monitoring', async (_req, res) => {
     }
 
     // Update sound status on load
-    document.getElementById('soundStatus').textContent = soundEnabled ? '🔔 ON' : '🔕 OFF';
+    document.getElementById('soundStatus').textContent = soundEnabled ? 'ON' : 'OFF';
+    document.getElementById('soundToggle').style.opacity = soundEnabled ? '1' : '0.5';
 
     // Register Service Worker for PWA
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').then(() => {
-        console.log('%c📱 PWA Service Worker registered', 'color: #9c27b0');
-      }).catch(() => {});
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
+
+    // PWA Install Prompt
+    let deferredPrompt = null;
+
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      deferredPrompt = e;
+      document.getElementById('installBtn').style.display = 'inline-flex';
+    });
+
+    function installApp() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(function(result) {
+          if (result.outcome === 'accepted') {
+            document.getElementById('installBtn').style.display = 'none';
+          }
+          deferredPrompt = null;
+        });
+      }
+    }
+
+    window.addEventListener('appinstalled', function() {
+      document.getElementById('installBtn').style.display = 'none';
+      deferredPrompt = null;
+    });
 
     // Offset waktu server vs browser (dalam ms)
     let serverTimeOffset = 0;
@@ -2395,13 +2537,8 @@ app.get('/monitoring', async (_req, res) => {
       try {
         const res = await fetch('/time');
         const data = await res.json();
-        const serverTime = data.timestamp;
-        const browserTime = Date.now();
-        serverTimeOffset = serverTime - browserTime;
-        console.log('%c⏰ Server time synced, offset: ' + serverTimeOffset + 'ms', 'color: #00bcd4');
-      } catch (e) {
-        console.warn('Failed to sync time, using browser time');
-      }
+        serverTimeOffset = data.timestamp - Date.now();
+      } catch (e) {}
     }
 
     // Sync waktu saat load dan setiap 5 menit
@@ -2422,106 +2559,11 @@ app.get('/monitoring', async (_req, res) => {
       document.getElementById('dateInfo').textContent = dayName + ', ' + date + ' ' + month + ' ' + year + ' WIB';
     }
 
-    function updateHistory(buy, sell, prevBuy, prevSell, updatedAt) {
-      // Gunakan waktu dari API Treasury, bukan waktu browser
-      const apiTime = updatedAt ? new Date(updatedAt) : new Date();
-      const timeKey = apiTime.getHours() * 60 + apiTime.getMinutes();
-
-      // Cek apakah sudah ada entry dengan menit yang sama di history
-      const existingEntry = priceHistory.find(item => {
-        const itemMinute = item.time.getHours() * 60 + item.time.getMinutes();
-        return itemMinute === timeKey;
-      });
-
-      if (existingEntry) {
-        return; // Skip jika sudah ada entry di menit ini
-      }
-
-      const buyChange = buy - prevBuy;
-      const sellChange = sell - prevSell;
-
-      priceHistory.unshift({
-        time: apiTime,
-        buy: buy,
-        sell: sell,
-        buyChange: buyChange,
-        sellChange: sellChange
-      });
-
-      // Sort by time descending (terbaru di atas)
-      priceHistory.sort((a, b) => b.time.getTime() - a.time.getTime());
-
-      if (priceHistory.length > MAX_HISTORY) {
-        priceHistory.pop();
-      }
-
-      saveHistory(); // Simpan ke localStorage
-      renderHistory();
+    // updateHistory - refresh dari server saat ada perubahan
+    function updateHistory() {
+      currentPage = 1; // Reset ke halaman pertama
+      loadHistory();
     }
-
-    function renderHistory() {
-      const tbody = document.getElementById('historyBody');
-      const pagination = document.getElementById('historyPagination');
-      const totalRecords = priceHistory.length;
-      const totalPages = Math.ceil(totalRecords / PER_PAGE);
-
-      document.getElementById('historyCount').textContent = totalRecords + ' records';
-
-      if (totalRecords === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="no-data">Menunggu data...</td></tr>';
-        pagination.style.display = 'none';
-        return;
-      }
-
-      // Pagination
-      const startIdx = (currentPage - 1) * PER_PAGE;
-      const endIdx = Math.min(startIdx + PER_PAGE, totalRecords);
-      const pageData = priceHistory.slice(startIdx, endIdx);
-
-      tbody.innerHTML = pageData.map((item, idx) => {
-        const timeStr = formatTime(item.time);
-        const buyClass = item.buyChange > 0 ? 'price-up' : (item.buyChange < 0 ? 'price-down' : '');
-
-        let changeText = '-';
-        if (item.buyChange !== 0) {
-          const sign = item.buyChange > 0 ? '+' : '';
-          changeText = '<span class="' + buyClass + '">' + sign + item.buyChange.toLocaleString('id-ID') + '</span>';
-        }
-
-        return '<tr' + (startIdx === 0 && idx === 0 ? ' class="updated"' : '') + '>' +
-          '<td class="time-col">' + timeStr + '</td>' +
-          '<td>' + formatRupiah(item.buy) + '</td>' +
-          '<td>' + formatRupiah(item.sell) + '</td>' +
-          '<td>' + changeText + '</td>' +
-        '</tr>';
-      }).join('');
-
-      // Show/hide pagination
-      if (totalPages > 1) {
-        pagination.style.display = 'flex';
-        document.getElementById('pageInfo').textContent = 'Halaman ' + currentPage + ' / ' + totalPages;
-        document.getElementById('prevPage').disabled = currentPage === 1;
-        document.getElementById('nextPage').disabled = currentPage === totalPages;
-      } else {
-        pagination.style.display = 'none';
-      }
-    }
-
-    // Pagination event listeners
-    document.getElementById('prevPage').addEventListener('click', function() {
-      if (currentPage > 1) {
-        currentPage--;
-        renderHistory();
-      }
-    });
-
-    document.getElementById('nextPage').addEventListener('click', function() {
-      const totalPages = Math.ceil(priceHistory.length / PER_PAGE);
-      if (currentPage < totalPages) {
-        currentPage++;
-        renderHistory();
-      }
-    });
 
     let isFetching = false;
     let lastFetchTime = 0;
@@ -2550,45 +2592,12 @@ app.get('/monitoring', async (_req, res) => {
             // Flash animation - remove and re-add class to trigger
             const buyCard = document.getElementById('buyCard');
             buyCard.classList.remove('updated');
-            void buyCard.offsetWidth; // Force reflow
+            void buyCard.offsetWidth;
             buyCard.classList.add('updated');
 
-            // 📊 Console log untuk tracking perubahan
-            const now = new Date();
-            const timeStr = now.toTimeString().substring(0, 8);
-            const apiTime = data.updatedAt ? new Date(data.updatedAt).toTimeString().substring(0, 8) : '-';
-            const apiTimestamp = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
-            const delay = data.updatedAt ? Math.round((Date.now() - apiTimestamp) / 1000) : '-';
-
-            // Cek apakah data mundur (timestamp lebih lama dari sebelumnya)
-            if (window.lastApiTimestamp && apiTimestamp < window.lastApiTimestamp) {
-              console.error(
-                '%c⚠️ DATA MUNDUR!',
-                'background: #ff0000; color: #fff; padding: 2px 6px; border-radius: 3px; font-weight: bold;',
-                '\\n🕐 Current:', apiTime, '(' + apiTimestamp + ')',
-                '\\n🕐 Previous:', new Date(window.lastApiTimestamp).toTimeString().substring(0, 8), '(' + window.lastApiTimestamp + ')',
-                '\\n⏮️ Selisih:', Math.round((window.lastApiTimestamp - apiTimestamp) / 1000) + ' detik mundur'
-              );
-            }
-            window.lastApiTimestamp = apiTimestamp;
-
-            console.log(
-              '%c💰 HARGA BERUBAH',
-              'background: #f7931a; color: #000; padding: 2px 6px; border-radius: 3px; font-weight: bold;',
-              '\\n📅 Browser:', timeStr,
-              '\\n📡 API Time:', apiTime,
-              '\\n⏱️ Delay:', delay + 's',
-              '\\n💵 Beli:', formatRupiah(data.buy), '(' + sign + change.toLocaleString('id-ID') + ')',
-              '\\n💵 Jual:', formatRupiah(data.sell),
-              '\\n🔄 Fetch:', fetchTime + 'ms'
-            );
-
-            // Warning jika delay > 5 detik
-            if (delay > 5) {
-              console.warn('⚠️ DELAY TINGGI:', delay + ' detik dari API update');
-            }
-
-            updateHistory(data.buy, data.sell, lastBuy, lastSell, data.updatedAt);
+            window.lastApiTimestamp = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+            updateHistory();
+            loadDailyStats();
           }
           lastBuy = data.buy;
         }
@@ -2647,115 +2656,31 @@ app.get('/monitoring', async (_req, res) => {
 
     evtSource.onmessage = function(event) {
       try {
-        lastDataTime = Date.now(); // Update waktu terakhir dapat data
+        lastDataTime = Date.now();
         const data = JSON.parse(event.data);
-
-        // Handle heartbeat
-        if (data.type === 'heartbeat') {
-          console.log('%c💓 Heartbeat received', 'color: #9c27b0');
-          return;
-        }
+        if (data.type === 'heartbeat') return;
 
         if (data.type === 'price') {
-          const now = new Date();
-          const browserTime = now.toTimeString().substring(0, 12); // Include ms
-          const apiTime = data.updatedAt ? new Date(data.updatedAt).toTimeString().substring(0, 8) : '-';
-          const apiTimestamp = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
-          const serverTime = data.serverTime ? new Date(data.serverTime).toTimeString().substring(0, 12) : '-';
-
-          // Hitung delay dalam milidetik
-          const delayMs = data.updatedAt ? (Date.now() - apiTimestamp) : 0;
-          const delayS = (delayMs / 1000).toFixed(2);
-
           // Update harga beli
           if (data.buy) {
             document.getElementById('buyPrice').textContent = formatRupiah(data.buy);
-            updateDailyStats(data.buy); // Update daily stats
+            updateDailyStats(data.buy);
 
             if (data.prevBuy && data.buy !== data.prevBuy) {
               const change = data.buy - data.prevBuy;
               const sign = change > 0 ? '+' : '';
               const cls = change > 0 ? 'up' : 'down';
-              const animCls = change > 0 ? 'updated-up' : 'updated-down';
-              const priceCls = change > 0 ? 'price-up' : 'price-down';
               document.getElementById('buyChange').textContent = sign + change.toLocaleString('id-ID');
               document.getElementById('buyChange').className = 'stat-change ' + cls;
-
-              // Play notification sound
               playNotificationSound();
 
               const buyCard = document.getElementById('buyCard');
-              // Reset dan tambahkan class warna permanen + animasi
               buyCard.classList.remove('updated', 'updated-up', 'updated-down', 'price-up', 'price-down');
               void buyCard.offsetWidth;
-              buyCard.classList.add(animCls, priceCls);
+              buyCard.classList.add(change > 0 ? 'updated-up' : 'updated-down', change > 0 ? 'price-up' : 'price-down');
 
-              // Update stats
-              updateCount++;
-              totalDelay += delayMs;
-              if (delayMs < minDelay) minDelay = delayMs;
-              if (delayMs > maxDelay) maxDelay = delayMs;
-              delayHistory.push(delayMs);
-              if (delayHistory.length > 100) delayHistory.shift();
-              const avgDelay = (totalDelay / updateCount / 1000).toFixed(2);
-
-              // Evaluasi delay
-              let delayStatus, delayColor;
-              if (delayMs <= 500) {
-                delayStatus = '🟢 EXCELLENT';
-                delayColor = '#00ff00';
-              } else if (delayMs <= 1000) {
-                delayStatus = '🟡 GOOD';
-                delayColor = '#ffff00';
-              } else if (delayMs <= 2000) {
-                delayStatus = '🟠 OK';
-                delayColor = '#ff9900';
-              } else {
-                delayStatus = '🔴 SLOW';
-                delayColor = '#ff0000';
-              }
-
-              // Console log yang detail
-              console.log(
-                '%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-                'color: #f7931a'
-              );
-              console.log(
-                '%c💰 HARGA BERUBAH #' + updateCount,
-                'background: #f7931a; color: #000; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 14px;'
-              );
-              console.log(
-                '%c⏱️ TIMING',
-                'color: #00bcd4; font-weight: bold;',
-                '\\n   API Update  :', apiTime,
-                '\\n   Server Push :', serverTime,
-                '\\n   Browser Recv:', browserTime
-              );
-              console.log(
-                '%c📊 DELAY: ' + delayS + 's ' + delayStatus,
-                'background: ' + delayColor + '; color: #000; padding: 2px 6px; border-radius: 3px; font-weight: bold;'
-              );
-              console.log(
-                '%c💵 HARGA',
-                'color: #4caf50; font-weight: bold;',
-                '\\n   Beli:', formatRupiah(data.buy), '(' + sign + change.toLocaleString('id-ID') + ')',
-                '\\n   Jual:', formatRupiah(data.sell)
-              );
-              console.log(
-                '%c📈 STATISTIK',
-                'color: #9c27b0; font-weight: bold;',
-                '\\n   Total Update:', updateCount,
-                '\\n   Avg Delay   :', avgDelay + 's',
-                '\\n   Min Delay   :', (minDelay / 1000).toFixed(2) + 's',
-                '\\n   Max Delay   :', (maxDelay / 1000).toFixed(2) + 's'
-              );
-              console.log(
-                '%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-                'color: #f7931a'
-              );
-
-              // Update history
-              updateHistory(data.buy, data.sell, data.prevBuy, data.prevSell, data.updatedAt);
+              updateHistory();
+              loadDailyStats();
             }
             lastBuy = data.buy;
           }
@@ -2767,16 +2692,13 @@ app.get('/monitoring', async (_req, res) => {
               const change = data.sell - data.prevSell;
               const sign = change > 0 ? '+' : '';
               const cls = change > 0 ? 'up' : 'down';
-              const animCls = change > 0 ? 'updated-up' : 'updated-down';
-              const priceCls = change > 0 ? 'price-up' : 'price-down';
               document.getElementById('sellChange').textContent = sign + change.toLocaleString('id-ID');
               document.getElementById('sellChange').className = 'stat-change ' + cls;
 
               const sellCard = document.getElementById('sellCard');
-              // Reset dan tambahkan class warna permanen + animasi
               sellCard.classList.remove('updated', 'updated-up', 'updated-down', 'price-up', 'price-down');
               void sellCard.offsetWidth;
-              sellCard.classList.add(animCls, priceCls);
+              sellCard.classList.add(change > 0 ? 'updated-up' : 'updated-down', change > 0 ? 'price-up' : 'price-down');
             }
             lastSell = data.sell;
           }
@@ -2786,24 +2708,14 @@ app.get('/monitoring', async (_req, res) => {
             document.getElementById('usdIdr').textContent = 'Rp ' + Math.round(data.usdIdr).toLocaleString('id-ID');
           }
 
-          // Update Spread % (sama dengan WA: (sell - buy) / buy * 100)
+          // Update Spread dan Investasi
           if (data.buy && data.sell) {
-            const spreadPct = ((data.sell - data.buy) / data.buy * 100).toFixed(2);
-            document.getElementById('spreadPercent').textContent = spreadPct + '%';
-
-            // Update Simulasi Investasi (sama dengan WA)
-            // Discount: 20jt = 3.425%, 30jt = 3.4%
-            const discount20 = 20000000 * 0.03425;
-            const discount30 = 30000000 * 0.034;
+            document.getElementById('spreadPercent').textContent = ((data.sell - data.buy) / data.buy * 100).toFixed(2) + '%';
 
             const gram20 = 20000000 / data.buy;
             const gram30 = 30000000 / data.buy;
-
-            const sellValue20 = gram20 * data.sell;
-            const sellValue30 = gram30 * data.sell;
-
-            const profit20 = sellValue20 - (20000000 - discount20);
-            const profit30 = sellValue30 - (30000000 - discount30);
+            const profit20 = (gram20 * data.sell) - (20000000 - 20000000 * 0.03425);
+            const profit30 = (gram30 * data.sell) - (30000000 - 30000000 * 0.034);
 
             document.getElementById('gram20').textContent = gram20.toFixed(4) + ' gr';
             document.getElementById('gram30').textContent = gram30.toFixed(4) + ' gr';
@@ -2811,29 +2723,18 @@ app.get('/monitoring', async (_req, res) => {
             document.getElementById('profit30').textContent = '+Rp ' + Math.round(profit30).toLocaleString('id-ID');
           }
         }
-      } catch (e) {
-        console.error('SSE parse error:', e);
-      }
+      } catch (e) {}
     };
 
     evtSource.onopen = function() {
-      console.log('%c✅ SSE Connected - Real-time updates aktif', 'background: #4caf50; color: #fff; padding: 4px 8px; border-radius: 4px;');
-      // Update badge ke Live
       const badge = document.querySelector('.live-badge');
-      if (badge) {
-        badge.textContent = 'Live';
-        badge.style.background = '#00c853';
-      }
+      if (badge) { badge.textContent = 'Live'; badge.style.background = '#00c853'; }
       lastDataTime = Date.now();
     };
 
     evtSource.onerror = function() {
-      console.warn('%c⚠️ SSE Disconnected - Reconnecting...', 'background: #ff9800; color: #000; padding: 4px 8px; border-radius: 4px;');
-      // Update badge ke Reconnecting
       const badge = document.querySelector('.live-badge');
-      if (badge) {
-        badge.textContent = 'Reconnecting...';
-        badge.style.background = '#ff9800';
+      if (badge) { badge.textContent = 'Reconnecting...'; badge.style.background = '#ff9800';
       }
     };
     } // end setupSSEHandlers
@@ -2844,7 +2745,6 @@ app.get('/monitoring', async (_req, res) => {
     // Check jika tidak ada data selama 60 detik, reconnect
     setInterval(function() {
       if (Date.now() - lastDataTime > 60000) {
-        console.warn('%c🔄 No data for 60s, reconnecting SSE...', 'background: #ff5722; color: #fff; padding: 4px 8px; border-radius: 4px;');
         connectSSE();
       }
     }, 10000);
@@ -2899,14 +2799,7 @@ app.get('/monitoring/api', async (_req, res) => {
 })
 
 app.listen(PORT, () => {
-  console.log(`╔════════════════════════════════════════════════════╗`)
-  console.log(`║              🌐 WEB SERVER READY                   ║`)
-  console.log(`╠════════════════════════════════════════════════════╣`)
-  console.log(`║  Main     : http://localhost:${PORT}                    ║`)
-  console.log(`║  Monitor  : http://localhost:${PORT}/monitoring         ║`)
-  console.log(`║  Stats    : http://localhost:${PORT}/stats              ║`)
-  console.log(`║  Health   : http://localhost:${PORT}/health             ║`)
-  console.log(`╚════════════════════════════════════════════════════╝\n`)
+  console.log(`[SERVER] Ready on port ${PORT} | /monitoring | /stats | /health`)
 })
 
 // KEEP-ALIVE SYSTEM
@@ -2922,7 +2815,7 @@ setInterval(async () => {
     
     if (response.ok) {
       const data = await response.json()
-      pushLog(`PING  | ✓ OK (uptime: ${Math.floor(data.uptime/60)}m, subs: ${data.subscriptions})`)
+      pushLog(`PING | OK (uptime: ${Math.floor(data.uptime/60)}m, subs: ${data.subscriptions})`)
     }
   } catch (e) {
     // Silent fail
@@ -2966,32 +2859,32 @@ async function start() {
     
     if (qr) {
       lastQr = qr
-      pushLog('WA    | 📱 QR siap di /qr')
+      pushLog('WA | QR ready at /qr')
     }
 
     if (connection === 'close') {
       const reason = lastDisconnect?.error?.output?.statusCode
-      pushLog(`WA    | ❌ Terputus (${reason})`)
+      pushLog(`WA | Disconnected (${reason})`)
 
       if (reason === DisconnectReason.loggedOut) {
-        pushLog('WA    | 🚪 LOGGED OUT - Login manual diperlukan')
+        pushLog('WA | LOGGED OUT - Manual login required')
         return
       }
 
       if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
         const delay = BASE_RECONNECT_DELAY * Math.pow(1.5, reconnectAttempts)
         reconnectAttempts++
-        pushLog(`WA    | 🔄 Reconnect ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} dalam ${Math.round(delay/1000)}s`)
+        pushLog(`WA | Reconnect ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} in ${Math.round(delay/1000)}s`)
         setTimeout(() => start(), delay)
       } else {
-        pushLog('WA    | ❌ Max reconnect tercapai')
+        pushLog('WA | Max reconnect reached')
       }
 
     } else if (connection === 'open') {
       lastQr = null
       reconnectAttempts = 0
-      pushLog('WA    | ✅ Terhubung')
-      pushLog('WA    | ⏳ Warming up 15 detik...')
+      pushLog('WA | Connected')
+      pushLog('WA | Warming up 15s...')
 
       isReady = false
       setTimeout(async () => {
@@ -2999,18 +2892,18 @@ async function start() {
           const usdIdr = await fetchUSDIDRFromGoogle()
           cachedMarketData.usdIdr = usdIdr
           cachedMarketData.lastUsdIdrFetch = Date.now()
-          pushLog(`DATA  | 💱 USD/IDR: Rp ${usdIdr.rate.toLocaleString('id-ID')}`)
+          pushLog(`DATA | USD/IDR: Rp ${usdIdr.rate.toLocaleString('id-ID')}`)
         } catch (e) {
-          pushLog(`DATA  | ⚠️ USD/IDR fallback`)
+          pushLog(`DATA | USD/IDR fallback`)
         }
 
         isReady = true
-        pushLog('WA    | 🚀 Bot siap!')
+        pushLog('WA | Bot ready')
         checkPriceUpdate()
 
         fetchEconomicCalendar().then(events => {
           if (events && events.length > 0) {
-            pushLog(`DATA  | 📅 ${events.length} event ekonomi dimuat`)
+            pushLog(`DATA | ${events.length} economic events loaded`)
           }
         })
       }, 15000)
@@ -3110,6 +3003,6 @@ async function start() {
 }
 
 start().catch(e => {
-  console.error('FATAL | 💀', e.message)
+  console.error('FATAL |', e.message)
   process.exit(1)
 })
