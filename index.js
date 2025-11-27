@@ -1301,12 +1301,47 @@ app.get('/monitoring', async (_req, res) => {
       margin: 10px 0;
     }
     .date-info { font-size: 0.85em; color: #aaa; }
+    .price-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    .price-box {
+      background: rgba(255,255,255,0.1);
+      padding: 20px;
+      border-radius: 15px;
+      text-align: center;
+    }
+    .price-box.buy { border-left: 4px solid #00ff88; }
+    .price-box.sell { border-left: 4px solid #ff6b6b; }
+    .price-box .label { font-size: 0.85em; color: #aaa; margin-bottom: 8px; }
+    .price-box .value { font-size: 1.8em; font-weight: bold; color: #fff; }
+    .price-box .unit { font-size: 0.7em; color: #888; }
+    .market-info {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    .market-box {
+      background: rgba(255,255,255,0.05);
+      padding: 15px;
+      border-radius: 10px;
+      text-align: center;
+    }
+    .market-box .label { font-size: 0.75em; color: #888; margin-bottom: 5px; }
+    .market-box .value { font-size: 1.2em; font-weight: bold; color: #ffd700; }
     .chart-box {
       background: #0d1421;
       border: 1px solid #2a3f5f;
       border-radius: 15px;
       overflow: hidden;
     }
+    .loading { color: #888; animation: blink 1s infinite; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .updated { animation: flash 0.5s; }
+    @keyframes flash { 0%, 100% { background: transparent; } 50% { background: rgba(255,215,0,0.2); } }
   </style>
 </head>
 <body>
@@ -1317,9 +1352,33 @@ app.get('/monitoring', async (_req, res) => {
       <div class="date-info" id="dateInfo">Loading...</div>
     </div>
 
+    <div class="price-grid">
+      <div class="price-box buy" id="buyBox">
+        <div class="label">💰 HARGA BELI</div>
+        <div class="value" id="buyPrice"><span class="loading">Loading...</span></div>
+        <div class="unit">per gram</div>
+      </div>
+      <div class="price-box sell" id="sellBox">
+        <div class="label">💵 HARGA JUAL</div>
+        <div class="value" id="sellPrice"><span class="loading">Loading...</span></div>
+        <div class="unit">per gram</div>
+      </div>
+    </div>
+
+    <div class="market-info">
+      <div class="market-box">
+        <div class="label">💱 USD/IDR</div>
+        <div class="value" id="usdIdr">-</div>
+      </div>
+      <div class="market-box">
+        <div class="label">🥇 XAU/USD</div>
+        <div class="value" id="xauUsd">-</div>
+      </div>
+    </div>
+
     <div class="chart-box">
       <!-- TradingView Widget BEGIN -->
-      <div class="tradingview-widget-container" style="height:600px;width:100%">
+      <div class="tradingview-widget-container" style="height:500px;width:100%">
         <div class="tradingview-widget-container__widget" style="height:calc(100% - 32px);width:100%"></div>
         <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
         {
@@ -1337,8 +1396,7 @@ app.get('/monitoring', async (_req, res) => {
           "hide_volume": true,
           "support_host": "https://www.tradingview.com",
           "backgroundColor": "rgba(13, 20, 33, 1)",
-          "gridColor": "rgba(42, 63, 95, 0.3)",
-          "studies": ["STD;EMA"]
+          "gridColor": "rgba(42, 63, 95, 0.3)"
         }
         </script>
       </div>
@@ -1349,6 +1407,14 @@ app.get('/monitoring', async (_req, res) => {
   <script>
     const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
     const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+    let lastBuy = 0;
+    let lastSell = 0;
+
+    // Format angka ke Rupiah
+    function formatRupiah(n) {
+      return 'Rp' + n.toLocaleString('id-ID');
+    }
 
     // Update jam dengan detik
     function updateClock() {
@@ -1364,11 +1430,58 @@ app.get('/monitoring', async (_req, res) => {
       document.getElementById('dateInfo').textContent = dayName + ', ' + date + ' ' + month + ' ' + year + ' WIB';
     }
 
-    // Initialize - jam update setiap 50ms untuk super smooth
+    // Fetch data harga
+    let isFetching = false;
+    async function fetchPrices() {
+      if (isFetching) return;
+      isFetching = true;
+      try {
+        const res = await fetch('/monitoring/api', { cache: 'no-store' });
+        const data = await res.json();
+
+        // Update harga beli
+        if (data.buy) {
+          document.getElementById('buyPrice').textContent = formatRupiah(data.buy);
+          if (data.buy !== lastBuy && lastBuy > 0) {
+            document.getElementById('buyBox').classList.add('updated');
+            setTimeout(() => document.getElementById('buyBox').classList.remove('updated'), 500);
+          }
+          lastBuy = data.buy;
+        }
+
+        // Update harga jual
+        if (data.sell) {
+          document.getElementById('sellPrice').textContent = formatRupiah(data.sell);
+          if (data.sell !== lastSell && lastSell > 0) {
+            document.getElementById('sellBox').classList.add('updated');
+            setTimeout(() => document.getElementById('sellBox').classList.remove('updated'), 500);
+          }
+          lastSell = data.sell;
+        }
+
+        // Update market info
+        if (data.usdIdr) {
+          document.getElementById('usdIdr').textContent = 'Rp' + Math.round(data.usdIdr).toLocaleString('id-ID');
+        }
+        if (data.xauUsd) {
+          document.getElementById('xauUsd').textContent = '$' + data.xauUsd.toFixed(2);
+        }
+      } catch (e) {
+        // Silent fail
+      } finally {
+        isFetching = false;
+      }
+    }
+
+    // Initialize
     setInterval(updateClock, 50);
     updateClock();
 
-    console.log('📺 XAU/USD Real-Time Monitor');
+    // Fetch harga setiap 1 detik
+    setInterval(fetchPrices, 1000);
+    fetchPrices();
+
+    console.log('📺 Gold Price Monitor - Real-time');
   </script>
 </body>
 </html>`
