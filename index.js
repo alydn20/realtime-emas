@@ -1847,11 +1847,6 @@ app.get('/monitoring', async (_req, res) => {
         <div class="label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>USD/IDR</div>
         <div class="value" id="usdIdr">-</div>
       </div>
-      <div class="price-card">
-        <div class="label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>XAU/USD</div>
-        <div class="value" id="xauUsd">-</div>
-        <div class="change" id="xauUpdate" style="color:#71767b;font-size:0.75em;"></div>
-      </div>
     </div>
 
     <div class="chart-section">
@@ -1860,12 +1855,12 @@ app.get('/monitoring', async (_req, res) => {
         <span class="live-badge">Live</span>
       </div>
       <div class="tradingview-widget-container">
-        <!-- TradingView Widget BEGIN -->
+        <!-- TradingView Widget BEGIN - FULL FEATURES -->
         <div class="tradingview-widget-container__widget"></div>
         <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
         {
           "autosize": true,
-          "height": "500",
+          "height": "600",
           "symbol": "OANDA:XAUUSD",
           "interval": "1",
           "timezone": "Asia/Jakarta",
@@ -1876,10 +1871,25 @@ app.get('/monitoring', async (_req, res) => {
           "gridColor": "#2f3640",
           "hide_top_toolbar": false,
           "hide_legend": false,
-          "allow_symbol_change": false,
-          "save_image": false,
-          "calendar": false,
-          "hide_volume": true,
+          "allow_symbol_change": true,
+          "save_image": true,
+          "calendar": true,
+          "hide_volume": false,
+          "hide_side_toolbar": false,
+          "withdateranges": true,
+          "details": true,
+          "hotlist": true,
+          "show_popup_button": true,
+          "popup_width": "1000",
+          "popup_height": "650",
+          "watchlist": ["OANDA:XAUUSD", "OANDA:XAGUSD", "FX_IDC:USDIDR", "FOREXCOM:DXY", "TVC:GOLD", "COMEX:GC1!"],
+          "studies": [
+            "MASimple@tv-basicstudies",
+            "RSI@tv-basicstudies",
+            "MACD@tv-basicstudies",
+            "Volume@tv-basicstudies",
+            "BB@tv-basicstudies"
+          ],
           "support_host": "https://www.tradingview.com"
         }
         </script>
@@ -2171,53 +2181,10 @@ app.get('/monitoring', async (_req, res) => {
         if (data.usdIdr) {
           document.getElementById('usdIdr').textContent = 'Rp ' + Math.round(data.usdIdr).toLocaleString('id-ID');
         }
-        if (data.xauUsd) {
-          document.getElementById('xauUsd').textContent = '$' + data.xauUsd.toFixed(2);
-        }
       } catch (e) {
         // Silent fail
       } finally {
         isFetching = false;
-      }
-    }
-
-    // Fetch XAU/USD real-time via server proxy (avoid CORS)
-    let lastXauPrice = 0;
-    let xauFetching = false;
-    async function fetchXauRealtime() {
-      if (xauFetching) return;
-      xauFetching = true;
-      try {
-        const res = await fetch('/xau', { cache: 'no-store' });
-        if (res.ok) {
-          const json = await res.json();
-          const price = json.price;
-          if (price && price > 1000 && price < 10000) {
-            document.getElementById('xauUsd').textContent = '$' + price.toFixed(2);
-
-            // Update timestamp
-            const now = new Date();
-            const timeStr = now.getHours().toString().padStart(2,'0') + ':' +
-                           now.getMinutes().toString().padStart(2,'0') + ':' +
-                           now.getSeconds().toString().padStart(2,'0');
-
-            // Show change if price changed
-            if (lastXauPrice > 0 && price !== lastXauPrice) {
-              const change = price - lastXauPrice;
-              const sign = change > 0 ? '+' : '';
-              const cls = change > 0 ? 'up' : 'down';
-              document.getElementById('xauUpdate').innerHTML =
-                '<span class="' + cls + '">' + sign + change.toFixed(2) + '</span> • ' + timeStr;
-            } else {
-              document.getElementById('xauUpdate').textContent = 'Update ' + timeStr;
-            }
-            lastXauPrice = price;
-          }
-        }
-      } catch (e) {
-        // Silent fail
-      } finally {
-        xauFetching = false;
       }
     }
 
@@ -2351,47 +2318,9 @@ app.get('/monitoring', async (_req, res) => {
             lastSell = data.sell;
           }
 
-          // Update USD/IDR dan XAU/USD
+          // Update USD/IDR
           if (data.usdIdr) {
             document.getElementById('usdIdr').textContent = 'Rp ' + Math.round(data.usdIdr).toLocaleString('id-ID');
-          }
-          if (data.xauUsd) {
-            document.getElementById('xauUsd').textContent = '$' + data.xauUsd.toFixed(2);
-          }
-        }
-
-        // Handle XAU/USD real-time updates
-        if (data.type === 'xau') {
-          const xauEl = document.getElementById('xauUsd');
-          const xauUpdateEl = document.getElementById('xauUpdate');
-
-          if (data.price) {
-            xauEl.textContent = '$' + data.price.toFixed(2);
-
-            // Show change indicator
-            if (data.prevPrice && data.price !== data.prevPrice) {
-              const change = data.price - data.prevPrice;
-              const sign = change > 0 ? '+' : '';
-              const cls = change > 0 ? 'up' : 'down';
-              xauUpdateEl.textContent = sign + change.toFixed(2);
-              xauUpdateEl.className = 'change ' + cls;
-
-              // Flash animation on XAU card
-              const xauCard = xauEl.closest('.price-card');
-              if (xauCard) {
-                xauCard.classList.remove('updated');
-                void xauCard.offsetWidth;
-                xauCard.classList.add('updated');
-              }
-
-              // Console log
-              console.log(
-                '%c🥇 XAU/USD UPDATE',
-                'background: #ffd700; color: #000; padding: 2px 6px; border-radius: 3px; font-weight: bold;',
-                '$' + data.price.toFixed(2),
-                '(' + sign + change.toFixed(2) + ')'
-              );
-            }
           }
         }
       } catch (e) {
@@ -2409,10 +2338,6 @@ app.get('/monitoring', async (_req, res) => {
 
     // Fallback: Fetch sekali saat load untuk data awal
     fetchPrices();
-
-    // Fetch XAU/USD setiap 2 detik (real-time dari TradingView)
-    setInterval(fetchXauRealtime, 2000);
-    fetchXauRealtime();
 
     // Load history dari localStorage saat halaman dimuat
     loadHistory();
