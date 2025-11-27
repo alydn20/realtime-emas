@@ -2570,16 +2570,16 @@ app.get('/monitoring', async (_req, res) => {
     setInterval(loadDailyStats, 30000);
     loadDailyStats();
 
-    // Sound Notification - berbeda untuk naik dan turun
+    // Sound Notification - berbeda untuk naik dan turun menggunakan Web Audio API
     let soundEnabled = localStorage.getItem('soundEnabled') !== 'false';
+    let audioContext = null;
 
-    // Sound UP (JP JP) - winning/coin sound
-    const soundUp = new Audio();
-    soundUp.src = 'data:audio/wav;base64,UklGRl9JAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhO0kAAH9/f39/gIB/f39/f4CAgH9/gICAf3+AgICAgICAgIGBgYGBgYKCgoKCgoODg4ODhISEhIWFhYWGhoaGh4eHiIiIiImJiYmKioqLi4uMjIyMjY2Ojo6Pj4+QkJCRkZGSkpKTk5OUlJSVlZWWlpaXl5iYmJiZmZqampubm5ycnJ2dnZ6enp+fn6CgoKGhoaKioqOjo6SkpKWlpaampqenp6iopqSioJ6bmJWSkI2LiIaCgH17eXd1c3FwcHBwcXFydHV3eXt9f4GDhYeJi42PkZOVl5mbnZ+ho6Wnqaqsra6vr6+wr6+vr6+ura2sq6qpqKelpKOioaCfnp2cm5qZmJeWlZSTkpGQj46NjIuKiYiHhoWEg4KBgH9+fXx7enl4d3Z1dHNycXBwb29vb29vcHBxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqqqurq6ysrKysrKysq6urqqqqq6usra2ur7CxsrO0tba3uLm6u7y9vr/AwcLDxMTFxsfHyMjJycnKysvLzMzNzc7Oz8/Q0NDR0dLS09PT1NTU1dXW1tbX19fY2NjZ2dna2trb29vb29zc3N3d3d3e3t7e39/f39/g4ODg4eHh4eHi4uLi4uPj4+Pj5OTk5OTk5eXl5eXl5eXm5ubm5ubm5ubm5+fn5+fn5+fn5+fo6Ojo6Ojo6Ojo6Ojo6enp6enp6enp6enp6urq6urq6urq6urq6urq6+vr6+vr6+vr6+vr6+vr6+zs7Ozs7Ozs7Ozs7Ozs7O3t7e3t7e3t7e3t7e3t7u7u7u7u7u7u7u7u7u7u7u/v7+/v7+/v7+/v7+/v7+/w8PDw8PDw8PDw8PDw8PDw8fHx8fHx8fHx8fHx8fHx8vLy8vLy8vLy8vLy8vLy8vPz8/Pz8/Pz8/Pz8/Pz8/T09PT09PT09PT09PT09PX19fX19fX19fX19fX19fb29vb29vb29vb29vb29vf39/f39/f39/f39/f3+Pj4+Pj4+Pj4+Pj4+Pj4+fn5+fn5+fn5+fn5+fn5+vr6+vr6+vr6+vr6+vr6+/v7+/v7+/v7+/v7+/v7/Pz8/Pz8/Pz8/Pz8/Pz9PT09PT09PT09PT09PT0+Pj4+Pj4+Pj4+Pj4+Pj5OTk5OTk5OTk5OTk5OTl5eXl5eXl5eXl5eXl5ebn5+fn5+fn5+fn5+fn6Ojo6Ojo6Ojo6Ojo6Onp6enp6enp6enp6enq6urq6urq6urq6urq6uvr6+vr6+vr6+vr6+vs7Ozs7Ozs7Ozs7Ozs7e3t7e3t7e3t7e3t7e7u7u7u7u7u7u7u7u/v7+/v7+/v7+/v7/Dw8PDw8PDw8PDw8PHx8fHx8fHx8fHx8vLy8vLy8vLy8vLz8/Pz8/Pz8/Pz9PT09PT09PT09PX19fX19fX19fb29vb29vb29vf39/f39/f3+Pj4+Pj4+Pj5OTk5OTk5OXl5eXl5eXm5ubm5ufn5+fn5+jo6Ojo6enp6enq6urq6uvr6+vr7Ozs7O3t7e3u7u7v7+/w8PDx8fHy8vPz9PT19fb29/j4+fr6+/z8/f7+//8AAAEBAQQFBQYHCA==';
-
-    // Sound DOWN (SORRR) - descending/losing sound
-    const soundDown = new Audio();
-    soundDown.src = 'data:audio/wav;base64,UklGRl9JAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhO0kAAIGBgYGBgYGBgYCAgICAgIB/f39/f39+fn5+fn5+fX19fX19fXx8fHx8fHt7e3t7e3p6enp6enl5eXl5eXh4eHh4eHd3d3d3d3Z2dnZ2dnV1dXV1dXR0dHR0dHNzc3NzcnJycnJycXFxcXFxcHBwcHBwb29vb29vbm5ubm5ubW1tbW1tbGxsbGxsa2tra2tramtqamppampqaWlpaGhoaGdnaGdnZ2ZmZmZlZWVlZGRkZGNjY2NiYmJiYWFhYWBgYGBfX19fXl5eXl1dXVxcXFxbW1tbWlpaWllZWVlYWFhYV1dXV1ZWVlZVVVVUVFRUU1NTVFJSUVFRUVBQUFBPT09PTk5OTk1NTU1MTExMS0tLS0pKSkpJSUlJSEhISEdHR0dGRkZGRUVFRURERENDQ0NDQkJCQkFBQUFAQEBAQD8/Pz8+Pj4+PT09PTw8PDw7Ozs7Ojo6Ojk5OTk4ODg4Nzc3NzY2NjY1NTU1NDQ0NDMzMzMyMjIyMTExMTAwMDAvLy8vLi4uLi0tLS0sLCwsKysrKyoqKiooKCgoJycnJyYmJiYlJSUlJCQkJCMjIyMiIiIiISEhISAgICAfHx8fHh4eHh0dHR0cHBwcGxsbGxoaGhoZGRkZGBgYGBcXFxcWFhYWFRUVFRQUFBQTExMTEhISEhEREREQEBAQDw8PDw4ODg4NDQ0NDA0MDAsLCwsKCgoKCQkJCQgICAkICAgHBwcHBgYGBgUFBQUEBAQEAwMDAwICAgIBAQEBAAAAAP///////////v7+/v39/f38/Pz8+/v7+/r6+vr5+fn5+Pj4+Pf39/f29vb29fX19fT09PTz8/Pz8vLy8vHx8fHw8PDw7+/v7+7u7u7t7e3t7Ozs7Ovr6+vq6urq6enp6ejo6Ojn5+fn5ubm5uXl5eXk5OTk4+Pj4+Li4uLh4eHh4ODg4N/f39/e3t7e3d3d3dzc3Nzb29vb2tra2tnZ2dnY2NjY19fX19bW1tbV1dXV1NTU1NPT09PS0tLS0dHR0dDQ0NDPz8/Pzs7Ozs3Nzc3MzMzMy8vLy8rKysrJycnJyMjIyMfHx8fGxsbGxcXFxcTExMTDw8PDwsLCwsHBwcHAwMDAv7+/v76+vr69vb29vLy8vLu7u7u6urq6ubm5ubm4uLi4t7e3t7a2tra1tbW1tLS0tLOzs7OysrKysbGxsbCwsLCvr6+vrq6urq2tra2sra2sq6ysq6urq6qrq6qqqqqpqampqKmpqKioqKinp6enp6enp6ampqampqalpaWlpaWlpKSkpKOjo6OioqKioaGhobB+fn5+fn5+fn5+fn5+fn5/f39/f4CAgIGBgYKCg4OEhISFhYWGhoaHh4eIiIiJiYmKiouLi4yMjI2Njo6Oj4+QkJCRkZGSkpKTk5OUlJSVlZaWlpeXl5iYmJmZmZqampubm5ycnJ2dnZ6enp+fn5+goKChoaGioqKjo6OkpKSkpaWlpqamp6enp6ioqKmpqaqqqqurq6ysrK2tra6urq+vr7CwsLCxsbGysrKys7OztLS0tLW1tba2tre3t7i4uLi5ubm6urq6u7u7vLy8vL29vb6+vr+/v8DAwMDBwcHCwsLCw8PDxMTExMXFxcbGxsfHx8jIyMjJycnKysrKy8vLzMzMzM3Nzc7Ozs7Pz8/Q0NDQ0dHR0tLS0tPT09TU1NTV1dXW1tbW19fX2NjY2NnZ2dra2trb29vc3Nzc3d3d3t7e3t/f39/g4ODh4eHh4uLi4+Pj4+Tk5OXl5eXm5ubn5+fn6Ojo6enp6erq6uvr6+vs7Ozt7e3t7u7u7+/v7/Dw8PHx8fLy8vLz8/P09PT19fX29vb39/f4+Pj5+fn6+vr7+/v8/Pz9/f3+/v7///8AAAAAAQEBAQICBAUEBQUEBQUFBQUFBAMCAQEA';
+    function getAudioContext() {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      return audioContext;
+    }
 
     function toggleSound() {
       soundEnabled = !soundEnabled;
@@ -2590,9 +2590,40 @@ app.get('/monitoring', async (_req, res) => {
 
     function playSound(direction) {
       if (!soundEnabled) return;
-      const sound = direction === 'up' ? soundUp : soundDown;
-      sound.currentTime = 0;
-      sound.play().catch(() => {});
+
+      try {
+        const ctx = getAudioContext();
+        if (ctx.state === 'suspended') ctx.resume();
+
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+
+        if (direction === 'up') {
+          // JP JP sound - 2 beep naik (cheerful)
+          oscillator.type = 'sine';
+          oscillator.frequency.setValueAtTime(800, ctx.currentTime);
+          oscillator.frequency.setValueAtTime(1000, ctx.currentTime + 0.1);
+          oscillator.frequency.setValueAtTime(800, ctx.currentTime + 0.2);
+          oscillator.frequency.setValueAtTime(1200, ctx.currentTime + 0.3);
+          gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+          oscillator.start(ctx.currentTime);
+          oscillator.stop(ctx.currentTime + 0.5);
+        } else {
+          // SORRR sound - slide down (sad)
+          oscillator.type = 'sawtooth';
+          oscillator.frequency.setValueAtTime(400, ctx.currentTime);
+          oscillator.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.5);
+          gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+          oscillator.start(ctx.currentTime);
+          oscillator.stop(ctx.currentTime + 0.5);
+        }
+      } catch (e) {
+        console.log('Audio error:', e);
+      }
     }
 
     // Update sound status on load
