@@ -304,6 +304,7 @@ async function resetDailyData() {
     ])
     dailyStatsCache = null
     priceHistoryCache = []
+    lastAddedUpdatedAt = '' // Reset supaya data baru bisa masuk
     pushLog('SYSTEM | Daily reset completed')
   } catch (e) {
     pushLog('REDIS | Reset error: ' + e.message)
