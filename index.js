@@ -1776,7 +1776,7 @@ const app = express()
 app.use(express.json())
 
 app.get('/', (_req, res) => {
-  res.redirect('/login')
+  res.redirect('/install-pwa')
 })
 
 app.get('/health', (_req, res) => {
@@ -3046,6 +3046,15 @@ app.get('/login', (_req, res) => {
   </div>
 
   <script>
+    // Check if PWA is installed first
+    const pwaInstalled = localStorage.getItem('pwa_installed');
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+    if (!pwaInstalled && !isStandalone) {
+      // Belum install PWA, redirect ke halaman install
+      window.location.href = '/install-pwa';
+    }
+
     // Check existing session
     const existingSession = localStorage.getItem('goldmonitor_session');
     if (existingSession) {
@@ -3080,7 +3089,7 @@ app.get('/login', (_req, res) => {
         if (data.success) {
           localStorage.setItem('goldmonitor_session', data.sessionId);
           localStorage.setItem('goldmonitor_user', JSON.stringify(data.user));
-          window.location.href = '/install-pwa';
+          window.location.href = '/monitoring';
         } else {
           errorMsg.textContent = data.error;
           errorMsg.classList.add('show');
@@ -3277,43 +3286,52 @@ app.get('/install-pwa', (_req, res) => {
       </div>
 
       <button class="btn btn-primary" id="installBtn">Install Aplikasi</button>
-      <button class="btn btn-secondary" id="continueBtn" style="display:none;">Lanjut ke Monitoring</button>
-
-      <p class="skip-link" id="skipLink">Atau <a href="/monitoring">lewati untuk sekarang</a></p>
+      <button class="btn btn-secondary" id="continueBtn" style="display:none;">Lanjut Login</button>
     </div>
   </div>
 
   <script>
-    // Check session first
-    const session = localStorage.getItem('goldmonitor_session');
-    if (!session) {
-      window.location.href = '/login';
-    }
-
     let deferredPrompt;
     const installBtn = document.getElementById('installBtn');
     const continueBtn = document.getElementById('continueBtn');
     const installedMsg = document.getElementById('installedMsg');
-    const skipLink = document.getElementById('skipLink');
 
     // Detect iOS
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isAndroid = /Android/.test(navigator.userAgent);
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
 
-    if (isStandalone) {
-      // Already installed
+    // Mark as installed in localStorage
+    function markInstalled() {
+      localStorage.setItem('pwa_installed', 'true');
       installedMsg.classList.add('show');
       installBtn.style.display = 'none';
       continueBtn.style.display = 'block';
-      continueBtn.onclick = () => window.location.href = '/monitoring';
+      continueBtn.onclick = () => window.location.href = '/login';
+    }
+
+    if (isStandalone) {
+      // Already running as PWA
+      markInstalled();
+    } else if (localStorage.getItem('pwa_installed') === 'true') {
+      // Previously installed
+      installedMsg.textContent = 'Aplikasi sudah terinstall! Buka dari home screen untuk pengalaman terbaik.';
+      markInstalled();
     } else if (isIOS) {
       document.getElementById('iosSteps').classList.add('show');
-      installBtn.textContent = 'Buka Menu Share';
+      installBtn.textContent = 'Panduan Install iOS';
       installBtn.onclick = () => {
-        alert('Tap tombol Share di browser Safari, lalu pilih "Add to Home Screen"');
+        alert('1. Tap tombol Share di browser Safari\\n2. Scroll dan pilih "Add to Home Screen"\\n3. Tap "Add"\\n\\nSetelah install, buka aplikasi dari home screen.');
       };
-      skipLink.style.display = 'block';
+      // Show continue button for iOS after some time
+      setTimeout(() => {
+        continueBtn.style.display = 'block';
+        continueBtn.textContent = 'Sudah Install? Lanjut Login';
+        continueBtn.onclick = () => {
+          localStorage.setItem('pwa_installed', 'true');
+          window.location.href = '/login';
+        };
+      }, 3000);
     } else {
       document.getElementById('androidSteps').classList.add('show');
 
@@ -3328,26 +3346,35 @@ app.get('/install-pwa', (_req, res) => {
           deferredPrompt.prompt();
           const { outcome } = await deferredPrompt.userChoice;
           if (outcome === 'accepted') {
-            installedMsg.classList.add('show');
-            installBtn.style.display = 'none';
-            continueBtn.style.display = 'block';
-            continueBtn.onclick = () => window.location.href = '/monitoring';
+            markInstalled();
           }
           deferredPrompt = null;
         } else {
-          alert('Gunakan Chrome/Edge untuk install, atau pilih menu > "Add to Home Screen"');
+          alert('Gunakan Chrome/Edge untuk install, atau pilih menu (titik 3) > "Add to Home Screen" / "Install App"');
         }
       };
 
-      skipLink.style.display = 'block';
+      // Show continue button after some time for users who can't install
+      setTimeout(() => {
+        if (!localStorage.getItem('pwa_installed')) {
+          continueBtn.style.display = 'block';
+          continueBtn.textContent = 'Sudah Install? Lanjut Login';
+          continueBtn.onclick = () => {
+            localStorage.setItem('pwa_installed', 'true');
+            window.location.href = '/login';
+          };
+        }
+      }, 5000);
     }
 
     window.addEventListener('appinstalled', () => {
-      installedMsg.classList.add('show');
-      installBtn.style.display = 'none';
-      continueBtn.style.display = 'block';
-      continueBtn.onclick = () => window.location.href = '/monitoring';
+      markInstalled();
     });
+
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
   </script>
 </body>
 </html>`;
