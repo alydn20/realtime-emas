@@ -4,7 +4,10 @@ import makeWASocket, {
   fetchLatestBaileysVersion,
   useMultiFileAuthState,
   Browsers,
-  makeCacheableSignalKeyStore
+  makeCacheableSignalKeyStore,
+  initAuthCreds,
+  proto,
+  BufferJSON
 } from '@whiskeysockets/baileys'
 import pino from 'pino'
 import express from 'express'
@@ -142,7 +145,8 @@ let monitoredGroupId = null
 async function useRedisAuthState() {
   const writeData = async (key, data) => {
     try {
-      await redis.hset(REDIS_KEYS.WA_AUTH, key, JSON.stringify(data))
+      const serialized = JSON.stringify(data, BufferJSON.replacer)
+      await redis.hset(REDIS_KEYS.WA_AUTH, key, serialized)
     } catch (e) {
       console.error('Redis auth write error:', e.message)
     }
@@ -152,7 +156,8 @@ async function useRedisAuthState() {
     try {
       const data = await redis.hget(REDIS_KEYS.WA_AUTH, key)
       if (!data) return null
-      return typeof data === 'string' ? JSON.parse(data) : data
+      const parsed = typeof data === 'string' ? JSON.parse(data, BufferJSON.reviver) : data
+      return parsed
     } catch (e) {
       console.error('Redis auth read error:', e.message)
       return null
@@ -167,11 +172,13 @@ async function useRedisAuthState() {
     }
   }
 
-  // Load creds
-  const creds = await readData('creds') || {}
-
-  // Load keys
-  const keys = {}
+  // Load or initialize creds
+  let creds = await readData('creds')
+  if (!creds) {
+    creds = initAuthCreds()
+    await writeData('creds', creds)
+    pushLog('WA | New credentials initialized')
+  }
 
   return {
     state: {
@@ -182,8 +189,8 @@ async function useRedisAuthState() {
           for (const id of ids) {
             const value = await readData(`${type}-${id}`)
             if (value) {
-              if (type === 'app-state-sync-key') {
-                data[id] = { keyData: value.keyData ? Buffer.from(value.keyData) : value }
+              if (type === 'app-state-sync-key' && value.keyData) {
+                data[id] = proto.Message.AppStateSyncKeyData.fromObject(value)
               } else {
                 data[id] = value
               }
