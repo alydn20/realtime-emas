@@ -1670,113 +1670,54 @@ app.get('/monitoring', async (_req, res) => {
       margin-top: 4px;
     }
 
-    /* Compact Stats Row - Semua dalam satu baris */
-    .stats-row {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-      margin-bottom: 16px;
+    /* Current Stats - Inside History Section */
+    .current-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 16px;
+      border-bottom: 1px solid #2f3640;
+      background: rgba(0,0,0,0.2);
     }
-    .stat-card {
-      background: #1a1f26;
-      padding: 12px 14px;
-      border-radius: 10px;
-      border: 1px solid #2f3640;
-      position: relative;
-      overflow: hidden;
-    }
-    .stat-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, #f7931a, #ffd700);
-      opacity: 0;
-      transition: opacity 0.3s;
-    }
-    .stat-card .stat-label {
-      font-size: 0.65em;
-      color: #71767b;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 4px;
+    .stat-item {
       display: flex;
       align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: #1a1f26;
+      border-radius: 6px;
+      border: 1px solid #2f3640;
     }
-    .stat-card .stat-label svg {
-      width: 12px;
-      height: 12px;
-      margin-right: 4px;
+    .stat-item .stat-label {
+      font-size: 0.7em;
+      color: #71767b;
+      text-transform: uppercase;
     }
-    .stat-card .stat-value {
-      font-size: 1.1em;
-      font-weight: 700;
+    .stat-item .stat-value {
+      font-size: 0.85em;
+      font-weight: 600;
       color: #e7e9ea;
     }
-    .stat-card .stat-change {
+    .stat-item .stat-value.green { color: #00c853; }
+    .stat-item .stat-value.blue { color: #2196f3; }
+    .stat-item .stat-change {
       font-size: 0.7em;
-      padding: 2px 6px;
-      border-radius: 4px;
-      display: inline-block;
-      margin-top: 4px;
+      padding: 2px 5px;
+      border-radius: 3px;
     }
-    .stat-card .stat-change.up {
+    .stat-item .stat-change.up {
       color: #00c853;
       background: rgba(0, 200, 83, 0.15);
     }
-    .stat-card .stat-change.down {
+    .stat-item .stat-change.down {
       color: #ff5252;
       background: rgba(255, 82, 82, 0.15);
     }
-
-    /* Warna card berdasarkan arah harga terakhir */
-    .stat-card.price-up { border-color: #00c853; }
-    .stat-card.price-up .stat-value { color: #00c853; }
-    .stat-card.price-up::before { background: linear-gradient(90deg, #00c853, #4caf50); opacity: 1; }
-
-    .stat-card.price-down { border-color: #ff5252; }
-    .stat-card.price-down .stat-value { color: #ff5252; }
-    .stat-card.price-down::before { background: linear-gradient(90deg, #ff5252, #f44336); opacity: 1; }
-
-    .stat-card .stat-value.green { color: #00c853; }
-    .stat-card .stat-value.blue { color: #2196f3; }
-
-    /* Compact Investment Row */
-    .invest-row-compact {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
-      margin-bottom: 16px;
-    }
-    .invest-compact {
-      background: #1a1f26;
-      padding: 10px 14px;
-      border-radius: 10px;
-      border: 1px solid #2f3640;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .invest-compact .invest-left {
-      display: flex;
-      flex-direction: column;
-    }
-    .invest-compact .invest-title {
-      font-size: 0.9em;
-      font-weight: 700;
-      color: #f7931a;
-    }
-    .invest-compact .invest-gram {
-      font-size: 0.7em;
-      color: #71767b;
-    }
-    .invest-compact .invest-profit {
-      font-size: 0.85em;
-      font-weight: 600;
-      color: #00c853;
-    }
+    .stat-item.price-up { border-color: #00c853; }
+    .stat-item.price-up .stat-value { color: #00c853; }
+    .stat-item.price-down { border-color: #ff5252; }
+    .stat-item.price-down .stat-value { color: #ff5252; }
+    .stat-item.invest .stat-label { color: #f7931a; }
 
     /* Chart Section */
     .chart-section {
@@ -1929,14 +1870,9 @@ app.get('/monitoring', async (_req, res) => {
 
     /* Responsive */
     @media (max-width: 600px) {
-      .stats-row { grid-template-columns: repeat(2, 1fr); }
-      .invest-row-compact { grid-template-columns: 1fr; }
       .header { flex-direction: column; text-align: center; gap: 12px; }
       .header-right { text-align: center; }
-      .stat-card .stat-value { font-size: 0.95em; }
-    }
-    @media (max-width: 400px) {
-      .stats-row { grid-template-columns: 1fr; }
+      .current-stats { justify-content: center; }
     }
   </style>
 </head>
@@ -1950,52 +1886,6 @@ app.get('/monitoring', async (_req, res) => {
       <div class="header-right">
         <div class="clock" id="clock">--:--:--</div>
         <div class="date-info" id="dateInfo">Loading...</div>
-      </div>
-    </div>
-
-    <!-- Stats Row - 4 compact cards -->
-    <div class="stats-row">
-      <div class="stat-card" id="buyCard">
-        <div class="stat-label">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#00c853" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
-          Harga Beli
-        </div>
-        <div class="stat-value" id="buyPrice">-</div>
-        <div class="stat-change" id="buyChange"></div>
-      </div>
-      <div class="stat-card" id="sellCard">
-        <div class="stat-label">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#ff5252" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
-          Harga Jual
-        </div>
-        <div class="stat-value" id="sellPrice">-</div>
-        <div class="stat-change" id="sellChange"></div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Spread %</div>
-        <div class="stat-value green" id="spreadPercent">-</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">USD/IDR</div>
-        <div class="stat-value blue" id="usdIdr">-</div>
-      </div>
-    </div>
-
-    <!-- Compact Investment Row -->
-    <div class="invest-row-compact">
-      <div class="invest-compact">
-        <div class="invest-left">
-          <span class="invest-title">Rp 20jt</span>
-          <span class="invest-gram" id="gram20">-</span>
-        </div>
-        <span class="invest-profit" id="profit20">-</span>
-      </div>
-      <div class="invest-compact">
-        <div class="invest-left">
-          <span class="invest-title">Rp 30jt</span>
-          <span class="invest-gram" id="gram30">-</span>
-        </div>
-        <span class="invest-profit" id="profit30">-</span>
       </div>
     </div>
 
@@ -2023,18 +1913,17 @@ app.get('/monitoring', async (_req, res) => {
           "hide_legend": false,
           "allow_symbol_change": true,
           "save_image": true,
-          "calendar": false,
-          "hide_volume": false,
-          "hide_side_toolbar": true,
-          "withdateranges": false,
+          "calendar": true,
+          "hide_volume": true,
+          "hide_side_toolbar": false,
+          "withdateranges": true,
           "details": false,
           "hotlist": false,
           "show_popup_button": true,
           "popup_width": "1000",
           "popup_height": "650",
           "studies": [
-            "MASimple@tv-basicstudies",
-            "Volume@tv-basicstudies"
+            "MASimple@tv-basicstudies"
           ],
           "support_host": "https://www.tradingview.com"
         }
@@ -2048,6 +1937,39 @@ app.get('/monitoring', async (_req, res) => {
         <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Riwayat Perubahan Harga</h2>
         <span class="count" id="historyCount">0 records</span>
       </div>
+
+      <!-- Current Price Stats -->
+      <div class="current-stats">
+        <div class="stat-item" id="buyCard">
+          <span class="stat-label">Beli</span>
+          <span class="stat-value" id="buyPrice">-</span>
+          <span class="stat-change" id="buyChange"></span>
+        </div>
+        <div class="stat-item" id="sellCard">
+          <span class="stat-label">Jual</span>
+          <span class="stat-value" id="sellPrice">-</span>
+          <span class="stat-change" id="sellChange"></span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Spread</span>
+          <span class="stat-value green" id="spreadPercent">-</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">USD/IDR</span>
+          <span class="stat-value blue" id="usdIdr">-</span>
+        </div>
+        <div class="stat-item invest">
+          <span class="stat-label">20jt</span>
+          <span class="stat-value" id="gram20">-</span>
+          <span class="stat-change up" id="profit20">-</span>
+        </div>
+        <div class="stat-item invest">
+          <span class="stat-label">30jt</span>
+          <span class="stat-value" id="gram30">-</span>
+          <span class="stat-change up" id="profit30">-</span>
+        </div>
+      </div>
+
       <table class="history-table">
         <thead>
           <tr>
