@@ -4085,6 +4085,16 @@ app.get('/admin/users', (_req, res) => {
       </div>
 
       <div class="card">
+        <h2>Import Bulk User</h2>
+        <div class="result-msg" id="bulkResult"></div>
+        <div class="form-group">
+          <label>Daftar Nomor (satu per baris atau pisahkan dengan koma)</label>
+          <textarea id="bulkPhones" rows="6" style="width:100%;padding:10px;border:1px solid #2f3640;border-radius:8px;background:#0f1419;color:#e7e9ea;font-family:monospace;" placeholder="08123456789&#10;08234567890&#10;08345678901"></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="bulkImport()">Import Semua</button>
+      </div>
+
+      <div class="card">
         <h2>Daftar User</h2>
         <table class="user-table">
           <thead>
@@ -4414,6 +4424,40 @@ app.get('/admin/users', (_req, res) => {
           result.textContent = data.error;
         }
         setTimeout(() => result.className = 'result-msg', 3000);
+      });
+    }
+
+    function bulkImport() {
+      const text = document.getElementById('bulkPhones').value.trim();
+      const result = document.getElementById('bulkResult');
+
+      if (!text) return alert('Masukkan daftar nomor');
+
+      // Parse phones - support newline, comma, or space separated
+      const phones = text.split(/[\\n,\\s]+/).map(p => p.trim()).filter(p => p.length > 0);
+
+      if (phones.length === 0) return alert('Tidak ada nomor valid');
+
+      result.className = 'result-msg success';
+      result.textContent = 'Mengimport ' + phones.length + ' nomor...';
+
+      fetch('/api/admin/users/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass, phones })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          result.className = 'result-msg success';
+          result.textContent = 'Import selesai! ' + data.added + ' ditambahkan, ' + data.skipped + ' dilewati.';
+          document.getElementById('bulkPhones').value = '';
+          loadUsers();
+        } else {
+          result.className = 'result-msg error';
+          result.textContent = 'Error: ' + data.error;
+        }
+        setTimeout(() => result.className = 'result-msg', 5000);
       });
     }
 
