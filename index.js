@@ -1572,6 +1572,40 @@ app.get('/monitoring', async (_req, res) => {
     const MAX_HISTORY = 1440; // 24 jam x 60 menit
     const PER_PAGE = 10;
     let currentPage = 1;
+    const STORAGE_KEY = 'goldPriceHistory';
+
+    // Load history dari localStorage saat startup
+    function loadHistory() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          // Convert string dates back to Date objects
+          priceHistory = parsed.map(item => ({
+            ...item,
+            time: new Date(item.time)
+          }));
+          // Set lastBuy dan lastSell dari entry terbaru
+          if (priceHistory.length > 0) {
+            lastBuy = priceHistory[0].buy;
+            lastSell = priceHistory[0].sell;
+          }
+          renderHistory();
+        }
+      } catch (e) {
+        console.error('Error loading history:', e);
+        priceHistory = [];
+      }
+    }
+
+    // Save history ke localStorage
+    function saveHistory() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(priceHistory));
+      } catch (e) {
+        console.error('Error saving history:', e);
+      }
+    }
 
     function formatRupiah(n) {
       return 'Rp ' + n.toLocaleString('id-ID');
@@ -1627,6 +1661,7 @@ app.get('/monitoring', async (_req, res) => {
         priceHistory.pop();
       }
 
+      saveHistory(); // Simpan ke localStorage
       renderHistory();
     }
 
@@ -1807,6 +1842,9 @@ app.get('/monitoring', async (_req, res) => {
     // Fetch XAU/USD setiap 2 detik (real-time dari TradingView)
     setInterval(fetchXauRealtime, 2000);
     fetchXauRealtime();
+
+    // Load history dari localStorage saat halaman dimuat
+    loadHistory();
   </script>
 </body>
 </html>`
