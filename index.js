@@ -1769,12 +1769,19 @@ app.get('/monitoring', async (_req, res) => {
     });
 
     let isFetching = false;
+    let lastFetchTime = 0;
+    let fetchCount = 0;
+
     async function fetchPrices() {
       if (isFetching) return;
       isFetching = true;
+      fetchCount++;
+      const fetchStart = Date.now();
+
       try {
         const res = await fetch('/monitoring/api', { cache: 'no-store' });
         const data = await res.json();
+        const fetchTime = Date.now() - fetchStart;
 
         if (data.buy) {
           document.getElementById('buyPrice').textContent = formatRupiah(data.buy);
@@ -1790,6 +1797,28 @@ app.get('/monitoring', async (_req, res) => {
             buyCard.classList.remove('updated');
             void buyCard.offsetWidth; // Force reflow
             buyCard.classList.add('updated');
+
+            // 📊 Console log untuk tracking perubahan
+            const now = new Date();
+            const timeStr = now.toTimeString().substring(0, 8);
+            const apiTime = data.updatedAt ? new Date(data.updatedAt).toTimeString().substring(0, 8) : '-';
+            const delay = data.updatedAt ? Math.round((Date.now() - new Date(data.updatedAt).getTime()) / 1000) : '-';
+
+            console.log(
+              '%c💰 HARGA BERUBAH',
+              'background: #f7931a; color: #000; padding: 2px 6px; border-radius: 3px; font-weight: bold;',
+              '\\n📅 Browser:', timeStr,
+              '\\n📡 API Time:', apiTime,
+              '\\n⏱️ Delay:', delay + 's',
+              '\\n💵 Beli:', formatRupiah(data.buy), '(' + sign + change.toLocaleString('id-ID') + ')',
+              '\\n💵 Jual:', formatRupiah(data.sell),
+              '\\n🔄 Fetch:', fetchTime + 'ms'
+            );
+
+            // Warning jika delay > 5 detik
+            if (delay > 5) {
+              console.warn('⚠️ DELAY TINGGI:', delay + ' detik dari API update');
+            }
 
             updateHistory(data.buy, data.sell, lastBuy, lastSell, data.updatedAt);
           }
