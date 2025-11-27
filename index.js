@@ -2002,15 +2002,26 @@ app.get('/monitoring', async (_req, res) => {
     // 🚀 SSE (Server-Sent Events) untuk real-time INSTANT update
     const evtSource = new EventSource('/sse');
 
+    // Stats untuk evaluasi
+    let updateCount = 0;
+    let totalDelay = 0;
+    let minDelay = Infinity;
+    let maxDelay = 0;
+    let delayHistory = [];
+
     evtSource.onmessage = function(event) {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'price') {
           const now = new Date();
-          const timeStr = now.toTimeString().substring(0, 8);
+          const browserTime = now.toTimeString().substring(0, 12); // Include ms
           const apiTime = data.updatedAt ? new Date(data.updatedAt).toTimeString().substring(0, 8) : '-';
           const apiTimestamp = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
-          const delay = data.updatedAt ? Math.round((Date.now() - apiTimestamp) / 1000) : '-';
+          const serverTime = data.serverTime ? new Date(data.serverTime).toTimeString().substring(0, 12) : '-';
+
+          // Hitung delay dalam milidetik
+          const delayMs = data.updatedAt ? (Date.now() - apiTimestamp) : 0;
+          const delayS = (delayMs / 1000).toFixed(2);
 
           // Update harga beli
           if (data.buy) {
@@ -2027,15 +2038,68 @@ app.get('/monitoring', async (_req, res) => {
               void buyCard.offsetWidth;
               buyCard.classList.add('updated');
 
-              // Console log
+              // Update stats
+              updateCount++;
+              totalDelay += delayMs;
+              if (delayMs < minDelay) minDelay = delayMs;
+              if (delayMs > maxDelay) maxDelay = delayMs;
+              delayHistory.push(delayMs);
+              if (delayHistory.length > 100) delayHistory.shift();
+              const avgDelay = (totalDelay / updateCount / 1000).toFixed(2);
+
+              // Evaluasi delay
+              let delayStatus, delayColor;
+              if (delayMs <= 500) {
+                delayStatus = '🟢 EXCELLENT';
+                delayColor = '#00ff00';
+              } else if (delayMs <= 1000) {
+                delayStatus = '🟡 GOOD';
+                delayColor = '#ffff00';
+              } else if (delayMs <= 2000) {
+                delayStatus = '🟠 OK';
+                delayColor = '#ff9900';
+              } else {
+                delayStatus = '🔴 SLOW';
+                delayColor = '#ff0000';
+              }
+
+              // Console log yang detail
               console.log(
-                '%c🚀 SSE INSTANT UPDATE',
-                'background: #00ff00; color: #000; padding: 2px 6px; border-radius: 3px; font-weight: bold;',
-                '\\n📅 Browser:', timeStr,
-                '\\n📡 API Time:', apiTime,
-                '\\n⏱️ Delay:', delay + 's',
-                '\\n💵 Beli:', formatRupiah(data.buy), '(' + sign + change.toLocaleString('id-ID') + ')',
-                '\\n💵 Jual:', formatRupiah(data.sell)
+                '%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+                'color: #f7931a'
+              );
+              console.log(
+                '%c💰 HARGA BERUBAH #' + updateCount,
+                'background: #f7931a; color: #000; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 14px;'
+              );
+              console.log(
+                '%c⏱️ TIMING',
+                'color: #00bcd4; font-weight: bold;',
+                '\\n   API Update  :', apiTime,
+                '\\n   Server Push :', serverTime,
+                '\\n   Browser Recv:', browserTime
+              );
+              console.log(
+                '%c📊 DELAY: ' + delayS + 's ' + delayStatus,
+                'background: ' + delayColor + '; color: #000; padding: 2px 6px; border-radius: 3px; font-weight: bold;'
+              );
+              console.log(
+                '%c💵 HARGA',
+                'color: #4caf50; font-weight: bold;',
+                '\\n   Beli:', formatRupiah(data.buy), '(' + sign + change.toLocaleString('id-ID') + ')',
+                '\\n   Jual:', formatRupiah(data.sell)
+              );
+              console.log(
+                '%c📈 STATISTIK',
+                'color: #9c27b0; font-weight: bold;',
+                '\\n   Total Update:', updateCount,
+                '\\n   Avg Delay   :', avgDelay + 's',
+                '\\n   Min Delay   :', (minDelay / 1000).toFixed(2) + 's',
+                '\\n   Max Delay   :', (maxDelay / 1000).toFixed(2) + 's'
+              );
+              console.log(
+                '%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+                'color: #f7931a'
               );
 
               // Update history
@@ -2075,8 +2139,12 @@ app.get('/monitoring', async (_req, res) => {
       }
     };
 
+    evtSource.onopen = function() {
+      console.log('%c✅ SSE Connected - Real-time updates aktif', 'background: #4caf50; color: #fff; padding: 4px 8px; border-radius: 4px;');
+    };
+
     evtSource.onerror = function() {
-      console.warn('SSE connection error, akan reconnect...');
+      console.warn('%c⚠️ SSE Disconnected - Reconnecting...', 'background: #ff9800; color: #000; padding: 4px 8px; border-radius: 4px;');
     };
 
     // Fallback: Fetch sekali saat load untuk data awal
