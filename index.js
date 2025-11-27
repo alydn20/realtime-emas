@@ -1761,6 +1761,63 @@ app.get('/monitoring', async (_req, res) => {
     .info-card .info-value.green { color: #00c853; }
     .info-card .info-value.blue { color: #2196f3; }
 
+    /* Investment Section */
+    .investment-section {
+      background: #1a1f26;
+      border-radius: 12px;
+      border: 1px solid #2f3640;
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+    .investment-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #2f3640;
+    }
+    .investment-header h2 {
+      font-size: 1em;
+      font-weight: 600;
+      color: #e7e9ea;
+    }
+    .investment-cards {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding: 20px;
+    }
+    .invest-card {
+      background: linear-gradient(145deg, #151920, #1a1f26);
+      border: 1px solid #2f3640;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .invest-amount {
+      font-size: 1.1em;
+      font-weight: 700;
+      color: #f7931a;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #2f3640;
+    }
+    .invest-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .invest-row:last-child { margin-bottom: 0; }
+    .invest-label {
+      font-size: 0.85em;
+      color: #71767b;
+    }
+    .invest-value {
+      font-size: 1em;
+      font-weight: 600;
+      color: #e7e9ea;
+    }
+    .invest-value.profit {
+      color: #00c853;
+    }
+
     /* Chart Section */
     .chart-section {
       background: #1a1f26;
@@ -1926,6 +1983,7 @@ app.get('/monitoring', async (_req, res) => {
     @media (max-width: 768px) {
       .price-section { grid-template-columns: 1fr; }
       .info-row { grid-template-columns: 1fr; }
+      .investment-cards { grid-template-columns: 1fr; }
       .header { flex-direction: column; text-align: center; gap: 16px; }
       .header-right { text-align: center; }
       .price-card .value { font-size: 1.6em; }
@@ -1980,6 +2038,40 @@ app.get('/monitoring', async (_req, res) => {
       <div class="info-card">
         <div class="info-label">USD/IDR</div>
         <div class="info-value blue" id="usdIdr">-</div>
+      </div>
+    </div>
+
+    <div class="investment-section">
+      <div class="investment-header">
+        <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Simulasi Investasi</h2>
+      </div>
+      <div class="investment-cards">
+        <div class="invest-card">
+          <div class="invest-amount">Rp 20.000.000</div>
+          <div class="invest-details">
+            <div class="invest-row">
+              <span class="invest-label">Dapat Emas</span>
+              <span class="invest-value" id="gram20">-</span>
+            </div>
+            <div class="invest-row">
+              <span class="invest-label">Potensi Profit</span>
+              <span class="invest-value profit" id="profit20">-</span>
+            </div>
+          </div>
+        </div>
+        <div class="invest-card">
+          <div class="invest-amount">Rp 30.000.000</div>
+          <div class="invest-details">
+            <div class="invest-row">
+              <span class="invest-label">Dapat Emas</span>
+              <span class="invest-value" id="gram30">-</span>
+            </div>
+            <div class="invest-row">
+              <span class="invest-label">Potensi Profit</span>
+              <span class="invest-value profit" id="profit30">-</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -2459,12 +2551,31 @@ app.get('/monitoring', async (_req, res) => {
             document.getElementById('usdIdr').textContent = 'Rp ' + Math.round(data.usdIdr).toLocaleString('id-ID');
           }
 
-          // Update Spread
+          // Update Spread (sama dengan WA: (sell - buy) / buy * 100)
           if (data.buy && data.sell) {
             const spread = data.buy - data.sell;
-            const spreadPct = ((spread / data.sell) * 100).toFixed(2);
+            const spreadPct = ((data.sell - data.buy) / data.buy * 100).toFixed(2);
             document.getElementById('spread').textContent = 'Rp ' + spread.toLocaleString('id-ID');
             document.getElementById('spreadPercent').textContent = spreadPct + '%';
+
+            // Update Simulasi Investasi (sama dengan WA)
+            // Discount: 20jt = 3.425%, 30jt = 3.4%
+            const discount20 = 20000000 * 0.03425;
+            const discount30 = 30000000 * 0.034;
+
+            const gram20 = 20000000 / data.buy;
+            const gram30 = 30000000 / data.buy;
+
+            const sellValue20 = gram20 * data.sell;
+            const sellValue30 = gram30 * data.sell;
+
+            const profit20 = sellValue20 - (20000000 - discount20);
+            const profit30 = sellValue30 - (30000000 - discount30);
+
+            document.getElementById('gram20').textContent = gram20.toFixed(4) + ' gr';
+            document.getElementById('gram30').textContent = gram30.toFixed(4) + ' gr';
+            document.getElementById('profit20').textContent = '+Rp ' + Math.round(profit20).toLocaleString('id-ID');
+            document.getElementById('profit30').textContent = '+Rp ' + Math.round(profit30).toLocaleString('id-ID');
           }
         }
       } catch (e) {
