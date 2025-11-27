@@ -20,7 +20,7 @@ const GLOBAL_THROTTLE = 3000
 const TYPING_DURATION = 2000
 
 // BROADCAST COOLDOWN
-const PRICE_CHECK_INTERVAL = 50 // 50ms - super aggressive untuk 0 delay
+const PRICE_CHECK_INTERVAL = 500 // 500ms - balanced speed
 const MIN_PRICE_CHANGE = 1
 const BROADCAST_COOLDOWN = 50000 // 50 detik antar broadcast (atau ganti menit)
 
@@ -954,7 +954,7 @@ async function fetchTreasury() {
   const res = await fetch(TREASURY_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(500) // 500ms timeout - fail fast
+    signal: AbortSignal.timeout(2000) // 2 detik timeout
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const json = await res.json()
@@ -1236,23 +1236,27 @@ async function checkPriceUpdate() {
     doBroadcastInstant(message)
 
   } catch (e) {
-    // Silent fail
+    // Log error hanya sekali per 10 detik
+    const now = Date.now()
+    if (!global.lastErrorLog || now - global.lastErrorLog > 10000) {
+      console.error(`FETCH ERROR | ${e.message}`)
+      global.lastErrorLog = now
+    }
   } finally {
     isPriceChecking = false // Release lock
   }
 }
 
-// Super aggressive: fetch terus menerus setiap 50ms
+// Normal polling setiap 500ms
 setInterval(checkPriceUpdate, PRICE_CHECK_INTERVAL)
 
-// Tambahan: loop tanpa henti untuk detik 0-5 (saat Treasury pasti update)
+// Burst mode: lebih cepat di detik 0-10 (saat Treasury update)
 setInterval(() => {
   const seconds = new Date().getSeconds()
-  if (seconds <= 5) {
-    // Burst mode: fetch sebanyak mungkin di awal menit
+  if (seconds <= 10) {
     checkPriceUpdate()
   }
-}, 20) // 20ms = 50x per detik
+}, 200) // 200ms = 5x per detik di awal menit
 
 // ==================== STARTUP INFO ====================
 console.log(`\n╔════════════════════════════════════════════════════╗`)
