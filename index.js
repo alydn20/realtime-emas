@@ -2570,9 +2570,16 @@ app.get('/monitoring', async (_req, res) => {
     setInterval(loadDailyStats, 30000);
     loadDailyStats();
 
-    // Sound Notification
+    // Sound Notification - berbeda untuk naik dan turun
     let soundEnabled = localStorage.getItem('soundEnabled') !== 'false';
-    const notificationSound = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2QkYyHh4yOkI2Mjo+Oj4mMkJGJiIiLkZCKiIePjoeGh4qMi4eCg4WLjIuGgoKGi4yKhYKBhYqLiYWDgYSIi4qGhIGDhoqKh4WDgoWHiYmHhYODhYeIiIaFhIOFhoiIh4WEg4SGh4eGhYSDhIWGhoeGhYSDhIWGhoaFhYSEhYWGhoWFhISEhYWFhYWFhISEhIWFhYWFhISDhISFhYWFhISDg4SEhYWFhYSEg4ODhISFhYWEhIODg4SEhISEhISDg4ODhISEhISEg4ODg4ODhISEhISDg4ODg4OEhISEhIODg4ODg4SEhISEg4ODg4KDg4SEhISEg4OCgoKDg4SEhISDg4KCgoKDg4OEhISDgoKCgoKDg4OEhIODgoKCgoKDg4ODg4OCgoKBgoKDg4ODg4OCgoGBgoKDg4ODg4KCgYGBgoKDg4ODgoKBgYGBgoKCg4OCgoGBgYGBgoKCgoKCgYGBgYGBgoKCgoKBgYGBgYGBgoKCgoGBgYGAgYGBgoKCgYGBgYCAgYGBgoKBgYGBgICAgYGBgYGBgYGAgICAgYGBgYGBgICAgICAgYGBgYGAgICAgICAgYGBgYCAgICAgICAgYGBgYCAgICAgICAgYGBgICAgICAgH+AgYGBgICAgIB/f4CAgYGAgICAgH9/f4CAgYCAgICAf39/f4CAgICAgIB/f39/f4CAgICAgH9/f39/f4CAgICAf39/f39/f4CAgIB/f39/f39/f4CAgIB/f39/f39/f4CAgH9/f39/f39/f4CAf39/f39/f35/f4CAf39/f39/fn5/f4B/f39/f39+fn5/f39/f39/f35+fn5/f39/f39/fn5+fn9/f39/f35+fn5+f39/f39/fn5+fn5+f39/f39+fn5+fn5+f39/f35+fn5+fn5+f39/fn5+fn5+fn5+f39/fn5+fn5+fn5+fn9/fn5+fn5+fn5+fn5/fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fX5+fn5+fn5+fn5+fX1+fn5+fn5+fn59fX5+fn5+fn5+fn19fX5+fn5+fn5+fX19fn5+fn5+fn59fX19fn5+fn5+fn19fX1+fn5+fn59fX19fX5+fn5+fn19fX19fX5+fn5+fX19fX19fn5+fn59fX19fX19fn5+fn19fX19fX19fn5+fX19fX19fX1+fn59fX19fX19fX5+fn19fX19fX19fX5+fX19fX19fX19fn59fX19fX19fX1+fn19fX19fX19fX5+fX19fX19fX19fn19fX19fX19fX1+fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fXx9fX19fX19fX19fXx8fX19fX19fX18fHx9fX19fX19fHx8fH19fX19fXx8fHx8fX19fX18fHx8fHx9fX19fHx8fHx8fH19fX18fHx8fHx8fX19fHx8fHx8fHx9fX18fHx8fHx8fH19fHx8fHx8fHx8fX18fHx8fHx8fHx9fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8e3x8fHx8fHx8fHt7fHx8fHx8fHt7e3x8fHx8fHt7e3t8fHx8fHx7e3t7e3x8fHx8e3t7e3t7fHx8fHt7e3t7e3t8fHx7e3t7e3t7e3x8fHt7e3t7e3t7fHx7e3t7e3t7e3t8e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3p7e3t7e3t7e3t6ent7e3t7e3t6enp7e3t7e3t6enp6e3t7e3t7enp6ent7e3t7enp6enp7e3t7e3p6enp6e3t7e3p6enp6ent7e3p6enp6enp7e3p6enp6enp6e3t6enp6enp6ent6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6');
+
+    // Sound UP (JP JP) - winning/coin sound
+    const soundUp = new Audio();
+    soundUp.src = 'data:audio/wav;base64,UklGRl9JAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhO0kAAH9/f39/gIB/f39/f4CAgH9/gICAf3+AgICAgICAgIGBgYGBgYKCgoKCgoODg4ODhISEhIWFhYWGhoaGh4eHiIiIiImJiYmKioqLi4uMjIyMjY2Ojo6Pj4+QkJCRkZGSkpKTk5OUlJSVlZWWlpaXl5iYmJiZmZqampubm5ycnJ2dnZ6enp+fn6CgoKGhoaKioqOjo6SkpKWlpaampqenp6iopqSioJ6bmJWSkI2LiIaCgH17eXd1c3FwcHBwcXFydHV3eXt9f4GDhYeJi42PkZOVl5mbnZ+ho6Wnqaqsra6vr6+wr6+vr6+ura2sq6qpqKelpKOioaCfnp2cm5qZmJeWlZSTkpGQj46NjIuKiYiHhoWEg4KBgH9+fXx7enl4d3Z1dHNycXBwb29vb29vcHBxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqqqurq6ysrKysrKysq6urqqqqq6usra2ur7CxsrO0tba3uLm6u7y9vr/AwcLDxMTFxsfHyMjJycnKysvLzMzNzc7Oz8/Q0NDR0dLS09PT1NTU1dXW1tbX19fY2NjZ2dna2trb29vb29zc3N3d3d3e3t7e39/f39/g4ODg4eHh4eHi4uLi4uPj4+Pj5OTk5OTk5eXl5eXl5eXm5ubm5ubm5ubm5+fn5+fn5+fn5+fo6Ojo6Ojo6Ojo6Ojo6enp6enp6enp6enp6urq6urq6urq6urq6urq6+vr6+vr6+vr6+vr6+vr6+zs7Ozs7Ozs7Ozs7Ozs7O3t7e3t7e3t7e3t7e3t7u7u7u7u7u7u7u7u7u7u7u/v7+/v7+/v7+/v7+/v7+/w8PDw8PDw8PDw8PDw8PDw8fHx8fHx8fHx8fHx8fHx8vLy8vLy8vLy8vLy8vLy8vPz8/Pz8/Pz8/Pz8/Pz8/T09PT09PT09PT09PT09PX19fX19fX19fX19fX19fb29vb29vb29vb29vb29vf39/f39/f39/f39/f3+Pj4+Pj4+Pj4+Pj4+Pj4+fn5+fn5+fn5+fn5+fn5+vr6+vr6+vr6+vr6+vr6+/v7+/v7+/v7+/v7+/v7/Pz8/Pz8/Pz8/Pz8/Pz9PT09PT09PT09PT09PT0+Pj4+Pj4+Pj4+Pj4+Pj5OTk5OTk5OTk5OTk5OTl5eXl5eXl5eXl5eXl5ebn5+fn5+fn5+fn5+fn6Ojo6Ojo6Ojo6Ojo6Onp6enp6enp6enp6enq6urq6urq6urq6urq6uvr6+vr6+vr6+vr6+vs7Ozs7Ozs7Ozs7Ozs7e3t7e3t7e3t7e3t7e7u7u7u7u7u7u7u7u/v7+/v7+/v7+/v7/Dw8PDw8PDw8PDw8PHx8fHx8fHx8fHx8vLy8vLy8vLy8vLz8/Pz8/Pz8/Pz9PT09PT09PT09PX19fX19fX19fb29vb29vb29vf39/f39/f3+Pj4+Pj4+Pj5OTk5OTk5OXl5eXl5eXm5ubm5ufn5+fn5+jo6Ojo6enp6enq6urq6uvr6+vr7Ozs7O3t7e3u7u7v7+/w8PDx8fHy8vPz9PT19fb29/j4+fr6+/z8/f7+//8AAAEBAQQFBQYHCA==';
+
+    // Sound DOWN (SORRR) - descending/losing sound
+    const soundDown = new Audio();
+    soundDown.src = 'data:audio/wav;base64,UklGRl9JAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhO0kAAIGBgYGBgYGBgYCAgICAgIB/f39/f39+fn5+fn5+fX19fX19fXx8fHx8fHt7e3t7e3p6enp6enl5eXl5eXh4eHh4eHd3d3d3d3Z2dnZ2dnV1dXV1dXR0dHR0dHNzc3NzcnJycnJycXFxcXFxcHBwcHBwb29vb29vbm5ubm5ubW1tbW1tbGxsbGxsa2tra2tramtqamppampqaWlpaGhoaGdnaGdnZ2ZmZmZlZWVlZGRkZGNjY2NiYmJiYWFhYWBgYGBfX19fXl5eXl1dXVxcXFxbW1tbWlpaWllZWVlYWFhYV1dXV1ZWVlZVVVVUVFRUU1NTVFJSUVFRUVBQUFBPT09PTk5OTk1NTU1MTExMS0tLS0pKSkpJSUlJSEhISEdHR0dGRkZGRUVFRURERENDQ0NDQkJCQkFBQUFAQEBAQD8/Pz8+Pj4+PT09PTw8PDw7Ozs7Ojo6Ojk5OTk4ODg4Nzc3NzY2NjY1NTU1NDQ0NDMzMzMyMjIyMTExMTAwMDAvLy8vLi4uLi0tLS0sLCwsKysrKyoqKiooKCgoJycnJyYmJiYlJSUlJCQkJCMjIyMiIiIiISEhISAgICAfHx8fHh4eHh0dHR0cHBwcGxsbGxoaGhoZGRkZGBgYGBcXFxcWFhYWFRUVFRQUFBQTExMTEhISEhEREREQEBAQDw8PDw4ODg4NDQ0NDA0MDAsLCwsKCgoKCQkJCQgICAkICAgHBwcHBgYGBgUFBQUEBAQEAwMDAwICAgIBAQEBAAAAAP///////////v7+/v39/f38/Pz8+/v7+/r6+vr5+fn5+Pj4+Pf39/f29vb29fX19fT09PTz8/Pz8vLy8vHx8fHw8PDw7+/v7+7u7u7t7e3t7Ozs7Ovr6+vq6urq6enp6ejo6Ojn5+fn5ubm5uXl5eXk5OTk4+Pj4+Li4uLh4eHh4ODg4N/f39/e3t7e3d3d3dzc3Nzb29vb2tra2tnZ2dnY2NjY19fX19bW1tbV1dXV1NTU1NPT09PS0tLS0dHR0dDQ0NDPz8/Pzs7Ozs3Nzc3MzMzMy8vLy8rKysrJycnJyMjIyMfHx8fGxsbGxcXFxcTExMTDw8PDwsLCwsHBwcHAwMDAv7+/v76+vr69vb29vLy8vLu7u7u6urq6ubm5ubm4uLi4t7e3t7a2tra1tbW1tLS0tLOzs7OysrKysbGxsbCwsLCvr6+vrq6urq2tra2sra2sq6ysq6urq6qrq6qqqqqpqampqKmpqKioqKinp6enp6enp6ampqampqalpaWlpaWlpKSkpKOjo6OioqKioaGhobB+fn5+fn5+fn5+fn5+fn5/f39/f4CAgIGBgYKCg4OEhISFhYWGhoaHh4eIiIiJiYmKiouLi4yMjI2Njo6Oj4+QkJCRkZGSkpKTk5OUlJSVlZaWlpeXl5iYmJmZmZqampubm5ycnJ2dnZ6enp+fn5+goKChoaGioqKjo6OkpKSkpaWlpqamp6enp6ioqKmpqaqqqqurq6ysrK2tra6urq+vr7CwsLCxsbGysrKys7OztLS0tLW1tba2tre3t7i4uLi5ubm6urq6u7u7vLy8vL29vb6+vr+/v8DAwMDBwcHCwsLCw8PDxMTExMXFxcbGxsfHx8jIyMjJycnKysrKy8vLzMzMzM3Nzc7Ozs7Pz8/Q0NDQ0dHR0tLS0tPT09TU1NTV1dXW1tbW19fX2NjY2NnZ2dra2trb29vc3Nzc3d3d3t7e3t/f39/g4ODh4eHh4uLi4+Pj4+Tk5OXl5eXm5ubn5+fn6Ojo6enp6erq6uvr6+vs7Ozt7e3t7u7u7+/v7/Dw8PHx8fLy8vLz8/P09PT19fX29vb39/f4+Pj5+fn6+vr7+/v8/Pz9/f3+/v7///8AAAAAAQEBAQICBAUEBQUEBQUFBQUFBAMCAQEA';
 
     function toggleSound() {
       soundEnabled = !soundEnabled;
@@ -2581,11 +2588,11 @@ app.get('/monitoring', async (_req, res) => {
       document.getElementById('soundToggle').style.opacity = soundEnabled ? '1' : '0.5';
     }
 
-    function playNotificationSound() {
-      if (soundEnabled) {
-        notificationSound.currentTime = 0;
-        notificationSound.play().catch(() => {});
-      }
+    function playSound(direction) {
+      if (!soundEnabled) return;
+      const sound = direction === 'up' ? soundUp : soundDown;
+      sound.currentTime = 0;
+      sound.play().catch(() => {});
     }
 
     // Update sound status on load
@@ -2765,7 +2772,7 @@ app.get('/monitoring', async (_req, res) => {
               const cls = change > 0 ? 'up' : 'down';
               document.getElementById('buyChange').textContent = sign + change.toLocaleString('id-ID');
               document.getElementById('buyChange').className = 'stat-change ' + cls;
-              playNotificationSound();
+              playSound(change > 0 ? 'up' : 'down');
 
               const buyCard = document.getElementById('buyCard');
               buyCard.classList.remove('updated', 'updated-up', 'updated-down', 'price-up', 'price-down');
