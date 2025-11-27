@@ -2814,6 +2814,9 @@ app.get('/monitoring', async (_req, res) => {
         }
       }
 
+      return false;
+    }
+
     // Promo/Info Notification Popup
     function showPromoNotification(data) {
       // Buat elemen popup
@@ -2849,9 +2852,6 @@ app.get('/monitoring', async (_req, res) => {
 
       // Play sound
       playSound('up');
-    }
-
-      return false;
     }
 
     // Fungsi untuk tutup popup promo
