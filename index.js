@@ -986,18 +986,68 @@ function doBroadcastInstant(message) {
 
 let isPriceChecking = false // Lock untuk mencegah overlap
 
-// Aggressive polling - fetch lebih sering di awal menit (saat Treasury update)
-let lastAggressiveCheck = 0
-function shouldAggressiveCheck() {
-  const now = new Date()
-  const seconds = now.getSeconds()
-  // Aggressive di detik 0-10 setiap menit (saat Treasury kemungkinan update)
-  return seconds <= 10
+// ==================== MULTI-INTERVAL SPEED TEST ====================
+const INTERVALS = [100, 200, 300, 500] // Interval yang ditest (ms)
+let currentIntervalIndex = 0
+let intervalStats = {}
+let lastPriceChangeTime = null
+let lastApiUpdateTime = null
+
+// Initialize stats untuk setiap interval
+INTERVALS.forEach(interval => {
+  intervalStats[interval] = {
+    attempts: 0,
+    successes: 0,
+    totalDelay: 0,
+    minDelay: Infinity,
+    maxDelay: 0,
+    avgDelay: 0,
+    errors: 0
+  }
+})
+
+function logIntervalStats() {
+  console.log('\n📊 ═══════════ INTERVAL SPEED TEST RESULTS ═══════════')
+  INTERVALS.forEach(interval => {
+    const stats = intervalStats[interval]
+    if (stats.successes > 0) {
+      const avg = (stats.totalDelay / stats.successes / 1000).toFixed(2)
+      const min = stats.minDelay === Infinity ? '-' : (stats.minDelay / 1000).toFixed(2)
+      const max = (stats.maxDelay / 1000).toFixed(2)
+      const successRate = ((stats.successes / stats.attempts) * 100).toFixed(0)
+      console.log(`   ${interval}ms: Avg=${avg}s | Min=${min}s | Max=${max}s | Success=${successRate}% (${stats.successes}/${stats.attempts})`)
+    } else {
+      console.log(`   ${interval}ms: No data yet (${stats.attempts} attempts, ${stats.errors} errors)`)
+    }
+  })
+
+  // Recommend best interval
+  let bestInterval = null
+  let bestAvg = Infinity
+  INTERVALS.forEach(interval => {
+    const stats = intervalStats[interval]
+    if (stats.successes >= 3) {
+      const avg = stats.totalDelay / stats.successes
+      if (avg < bestAvg) {
+        bestAvg = avg
+        bestInterval = interval
+      }
+    }
+  })
+  if (bestInterval) {
+    console.log(`   🏆 RECOMMENDED: ${bestInterval}ms (avg ${(bestAvg/1000).toFixed(2)}s delay)`)
+  }
+  console.log('═══════════════════════════════════════════════════════\n')
 }
+
+// Log stats setiap 2 menit
+setInterval(logIntervalStats, 120000)
 
 async function checkPriceUpdate() {
   if (isPriceChecking) return // Skip jika masih fetching
   isPriceChecking = true
+
+  const currentInterval = INTERVALS[currentIntervalIndex]
 
   // Selalu fetch price untuk monitoring web, broadcast hanya jika ada subscriber
   try {
@@ -1011,11 +1061,32 @@ async function checkPriceUpdate() {
       fetchedAt: Date.now()
     }
 
-    // Log setiap detik 0-5 untuk debug
-    const sec = new Date().getSeconds()
-    if (sec <= 5) {
-      console.log(`FETCH | ${new Date().toISOString().substr(11, 12)} | ${fetchTime}ms | Buy: ${currentPrice.buy} | API: ${currentPrice.updated_at?.substr(11, 8)}`)
+    intervalStats[currentInterval].attempts++
+
+    // Cek apakah API time berubah (harga baru dari Treasury)
+    const apiTime = currentPrice.updated_at
+    if (apiTime && apiTime !== lastApiUpdateTime) {
+      const delayMs = Date.now() - new Date(apiTime).getTime()
+
+      // Update stats
+      intervalStats[currentInterval].successes++
+      intervalStats[currentInterval].totalDelay += delayMs
+      if (delayMs < intervalStats[currentInterval].minDelay) {
+        intervalStats[currentInterval].minDelay = delayMs
+      }
+      if (delayMs > intervalStats[currentInterval].maxDelay) {
+        intervalStats[currentInterval].maxDelay = delayMs
+      }
+
+      lastApiUpdateTime = apiTime
+
+      // Log detection
+      const sec = new Date().getSeconds()
+      console.log(`⚡ DETECTED [${currentInterval}ms] | ${new Date().toISOString().substr(11, 12)} | Delay: ${(delayMs/1000).toFixed(2)}s | API: ${apiTime?.substr(11, 8)} | Fetch: ${fetchTime}ms`)
     }
+
+    // Rotate interval untuk test berikutnya
+    currentIntervalIndex = (currentIntervalIndex + 1) % INTERVALS.length
 
     if (!lastKnownPrice) {
       lastKnownPrice = currentPrice
@@ -1236,10 +1307,14 @@ async function checkPriceUpdate() {
     doBroadcastInstant(message)
 
   } catch (e) {
+    // Track error per interval
+    const currentInterval = INTERVALS[currentIntervalIndex]
+    intervalStats[currentInterval].errors++
+
     // Log error hanya sekali per 10 detik
     const now = Date.now()
     if (!global.lastErrorLog || now - global.lastErrorLog > 10000) {
-      console.error(`FETCH ERROR | ${e.message}`)
+      console.error(`FETCH ERROR [${currentInterval}ms] | ${e.message}`)
       global.lastErrorLog = now
     }
   } finally {
@@ -1247,16 +1322,14 @@ async function checkPriceUpdate() {
   }
 }
 
-// Normal polling setiap 500ms
-setInterval(checkPriceUpdate, PRICE_CHECK_INTERVAL)
+// Polling dengan interval tercepat (100ms) untuk test semua
+setInterval(checkPriceUpdate, 100)
 
-// Burst mode: lebih cepat di detik 0-10 (saat Treasury update)
-setInterval(() => {
-  const seconds = new Date().getSeconds()
-  if (seconds <= 10) {
-    checkPriceUpdate()
-  }
-}, 200) // 200ms = 5x per detik di awal menit
+// Log initial message
+console.log('\n🔬 SPEED TEST MODE ACTIVE')
+console.log('   Testing intervals:', INTERVALS.join('ms, ') + 'ms')
+console.log('   Stats will be logged every 2 minutes')
+console.log('   Watch for "⚡ DETECTED" logs to see which interval catches updates fastest\n')
 
 // ==================== STARTUP INFO ====================
 console.log(`\n╔════════════════════════════════════════════════════╗`)
