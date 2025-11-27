@@ -1822,6 +1822,33 @@ function broadcastSSE(data) {
   })
 }
 
+// API untuk broadcast notifikasi/promo ke semua user
+// Contoh: /send-notif?title=Promo&message=Diskon%2050%25&type=promo
+// type: promo, info, warning, urgent
+app.get('/send-notif', (req, res) => {
+  const { title, message, type = 'info' } = req.query
+
+  if (!title || !message) {
+    return res.json({ success: false, error: 'title dan message wajib diisi' })
+  }
+
+  const notifData = {
+    type: 'notification',
+    notifType: type, // promo, info, warning, urgent
+    title: decodeURIComponent(title),
+    message: decodeURIComponent(message),
+    time: new Date().toISOString()
+  }
+
+  broadcastSSE(notifData)
+
+  res.json({
+    success: true,
+    sent: sseClients.size,
+    data: notifData
+  })
+})
+
 // SSE Heartbeat - kirim ping setiap 10 detik untuk menjaga koneksi aktif
 setInterval(() => {
   if (sseClients.size > 0) {
@@ -2132,6 +2159,73 @@ app.get('/monitoring', async (_req, res) => {
       transition: background 0.2s;
     }
     .daily-item.sound-toggle:hover { background: #2f3640; }
+
+    /* Promo/Notification Popup */
+    .promo-popup {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 320px;
+      max-width: 90vw;
+      background: linear-gradient(135deg, #1a1f26 0%, #2f3640 100%);
+      border-radius: 12px;
+      padding: 15px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+      z-index: 10000;
+      animation: slideIn 0.3s ease;
+      border-left: 4px solid #3498db;
+    }
+    .promo-popup.promo { border-left-color: #f7931a; }
+    .promo-popup.warning { border-left-color: #f39c12; }
+    .promo-popup.urgent { border-left-color: #e74c3c; }
+    .promo-popup.info { border-left-color: #3498db; }
+    .promo-popup.fade-out { animation: fadeOut 0.5s ease forwards; }
+    .promo-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .promo-type {
+      font-size: 11px;
+      font-weight: bold;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: #f7931a;
+      color: #000;
+    }
+    .promo-popup.info .promo-type { background: #3498db; color: #fff; }
+    .promo-popup.warning .promo-type { background: #f39c12; color: #000; }
+    .promo-popup.urgent .promo-type { background: #e74c3c; color: #fff; }
+    .promo-close {
+      background: none;
+      border: none;
+      color: #888;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 0 5px;
+    }
+    .promo-close:hover { color: #fff; }
+    .promo-title {
+      font-size: 16px;
+      font-weight: bold;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+    .promo-message {
+      font-size: 14px;
+      color: #b0b0b0;
+      line-height: 1.4;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; }
+      to { opacity: 0; transform: translateY(-20px); }
+    }
+
     .tradingview-widget-container {
       height: 500px;
     }
@@ -2700,8 +2794,50 @@ app.get('/monitoring', async (_req, res) => {
         }
       }
 
+    // Promo/Info Notification Popup
+    function showPromoNotification(data) {
+      // Buat elemen popup
+      const popup = document.createElement('div');
+      popup.className = 'promo-popup ' + (data.notifType || 'info');
+      popup.innerHTML = \`
+        <div class="promo-header">
+          <span class="promo-type">\${data.notifType === 'promo' ? 'PROMO' : data.notifType === 'warning' ? 'PERINGATAN' : data.notifType === 'urgent' ? 'PENTING' : 'INFO'}</span>
+          <button class="promo-close" onclick="this.parentElement.parentElement.remove()">&times;</button>
+        </div>
+        <div class="promo-title">\${data.title}</div>
+        <div class="promo-message">\${data.message}</div>
+      \`;
+
+      document.body.appendChild(popup);
+
+      // Auto remove setelah 10 detik
+      setTimeout(() => {
+        if (popup.parentElement) {
+          popup.classList.add('fade-out');
+          setTimeout(() => popup.remove(), 500);
+        }
+      }, 10000);
+
+      // Browser notification juga
+      if (notifEnabled && Notification.permission === 'granted') {
+        new Notification(data.title, {
+          body: data.message,
+          icon: '/icon.png',
+          tag: 'promo-' + Date.now()
+        });
+      }
+
+      // Play sound
+      playSound('up');
+    }
+
       return false;
     }
+
+    // Fungsi untuk tutup popup promo
+    window.closePromoPopup = function(el) {
+      el.parentElement.parentElement.remove();
+    };
 
     function showNotification(title, body, isUp) {
       if (!notifEnabled || Notification.permission !== 'granted') return;
@@ -2893,6 +3029,12 @@ app.get('/monitoring', async (_req, res) => {
         lastDataTime = Date.now();
         const data = JSON.parse(event.data);
         if (data.type === 'heartbeat') return;
+
+        // Handle notifikasi/promo dari admin
+        if (data.type === 'notification') {
+          showPromoNotification(data);
+          return;
+        }
 
         if (data.type === 'price') {
           // Update harga beli
