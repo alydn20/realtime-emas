@@ -1522,41 +1522,17 @@ app.get('/monitoring', async (_req, res) => {
         <span class="live-badge">Live</span>
       </div>
       <div class="tradingview-widget-container" style="height:600px;">
-        <div id="tv_chart"></div>
-        <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-        <script type="text/javascript">
-        new TradingView.widget({
-          "width": "100%",
-          "height": 600,
-          "symbol": "OANDA:XAUUSD",
-          "interval": "1",
-          "timezone": "Asia/Jakarta",
-          "theme": "dark",
-          "style": "1",
-          "locale": "en",
-          "toolbar_bg": "#1a1f26",
-          "enable_publishing": false,
-          "allow_symbol_change": true,
-          "hide_top_toolbar": false,
-          "hide_legend": false,
-          "hide_side_toolbar": false,
-          "withdateranges": true,
-          "save_image": true,
-          "hide_volume": false,
-          "show_popup_button": true,
-          "popup_width": "1000",
-          "popup_height": "650",
-          "container_id": "tv_chart",
-          "range": "1H",
-          "details": true,
-          "hotlist": true,
-          "calendar": true,
-          "studies": [
-            "MASimple@tv-basicstudies"
-          ],
-          "support_host": "https://www.tradingview.com"
-        });
-        </script>
+        <!-- TradingView Widget BEGIN -->
+        <div class="tradingview-widget-container__widget" style="height:600px;width:100%;">
+          <iframe
+            scrolling="no"
+            allowtransparency="true"
+            frameborder="0"
+            src="https://www.tradingview.com/widgetembed/?hideideas=1&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en&symbol=OANDA%3AXAUUSD&interval=1&range=60&theme=dark&style=1&timezone=Asia%2FJakarta&studies=%5B%5D&withdateranges=1&hide_side_toolbar=0&allow_symbol_change=1&save_image=1&hide_volume=1&support_host=https%3A%2F%2Fwww.tradingview.com"
+            style="width:100%;height:600px;">
+          </iframe>
+        </div>
+        <!-- TradingView Widget END -->
       </div>
     </div>
 
