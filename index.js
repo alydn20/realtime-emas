@@ -2664,6 +2664,60 @@ app.get('/monitoring', async (_req, res) => {
     document.getElementById('soundStatus').textContent = soundEnabled ? 'ON' : 'OFF';
     document.getElementById('soundToggle').style.opacity = soundEnabled ? '1' : '0.5';
 
+    // Browser Notification
+    let notifEnabled = false;
+
+    async function requestNotificationPermission() {
+      if (!('Notification' in window)) {
+        alert('Browser tidak mendukung notifikasi');
+        return false;
+      }
+
+      if (Notification.permission === 'granted') {
+        notifEnabled = true;
+        return true;
+      }
+
+      if (Notification.permission !== 'denied') {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+          notifEnabled = true;
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    function showNotification(title, body, isUp) {
+      if (!notifEnabled || Notification.permission !== 'granted') return;
+
+      const options = {
+        body: body,
+        icon: '/icon.png',
+        badge: '/icon.png',
+        tag: 'gold-price',
+        renotify: true,
+        silent: false
+      };
+
+      try {
+        new Notification(title, options);
+      } catch (e) {
+        console.log('Notification error:', e);
+      }
+    }
+
+    // Minta izin notifikasi saat halaman load
+    if ('Notification' in window && Notification.permission === 'granted') {
+      notifEnabled = true;
+    } else if ('Notification' in window && Notification.permission !== 'denied') {
+      // Tampilkan prompt untuk minta izin
+      setTimeout(() => {
+        requestNotificationPermission();
+      }, 3000);
+    }
+
     // Register Service Worker for PWA
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
@@ -2838,6 +2892,11 @@ app.get('/monitoring', async (_req, res) => {
               document.getElementById('buyChange').textContent = sign + change.toLocaleString('id-ID');
               document.getElementById('buyChange').className = 'stat-change ' + cls;
               playSound(change > 0 ? 'up' : 'down');
+
+              // Browser Notification
+              const notifTitle = change > 0 ? 'Harga Emas NAIK' : 'Harga Emas TURUN';
+              const notifBody = 'Rp ' + data.buy.toLocaleString('id-ID') + ' (' + sign + change.toLocaleString('id-ID') + ')';
+              showNotification(notifTitle, notifBody, change > 0);
 
               const buyCard = document.getElementById('buyCard');
               buyCard.classList.remove('updated', 'updated-up', 'updated-down', 'price-up', 'price-down');
