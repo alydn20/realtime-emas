@@ -1377,12 +1377,36 @@ app.get('/monitoring', async (_req, res) => {
     </div>
 
     <div class="chart-box">
-      <!-- TradingView Full Chart via iframe -->
-      <iframe
-        src="https://www.tradingview.com/chart/?symbol=OANDA:XAUUSD&interval=1&theme=dark&style=1&timezone=Asia/Jakarta&hide_side_toolbar=0&allow_symbol_change=0&save_image=0&hide_volume=1"
-        style="width:100%; height:550px; border:none;"
-        allowfullscreen>
-      </iframe>
+      <!-- TradingView Widget with Symbol Info -->
+      <div class="tradingview-widget-container" style="height:550px;">
+        <div id="tv_chart" style="height:100%;"></div>
+        <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+        <script type="text/javascript">
+        new TradingView.MediumWidget({
+          "symbols": [["OANDA:XAUUSD|1"]],
+          "chartOnly": false,
+          "width": "100%",
+          "height": "100%",
+          "locale": "id",
+          "colorTheme": "dark",
+          "autosize": true,
+          "showVolume": false,
+          "hideDateRanges": false,
+          "hideMarketStatus": false,
+          "hideSymbolLogo": false,
+          "scalePosition": "right",
+          "scaleMode": "Normal",
+          "fontFamily": "-apple-system, BlinkMacSystemFont, Trebuchet MS, Roboto, Ubuntu, sans-serif",
+          "fontSize": "10",
+          "noTimeScale": false,
+          "valuesTracking": "1",
+          "changeMode": "price-and-percent",
+          "chartType": "candlesticks",
+          "container_id": "tv_chart",
+          "dateFormat": "dd MMM yyyy HH:mm"
+        });
+        </script>
+      </div>
     </div>
   </div>
 
