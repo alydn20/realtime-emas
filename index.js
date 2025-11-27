@@ -1062,6 +1062,16 @@ async function checkPriceUpdate() {
       }
     }
 
+    // Cek apakah data lebih baru berdasarkan updated_at
+    const currentUpdatedAt = new Date(currentPrice.updated_at).getTime()
+    const lastUpdatedAt = lastKnownPrice.updated_at ? new Date(lastKnownPrice.updated_at).getTime() : 0
+
+    // SKIP jika data dari API lebih lama dari yang sudah ada
+    if (currentUpdatedAt < lastUpdatedAt) {
+      pushLog(`PRICE | ⏮️ Skip data lama: ${currentPrice.updated_at} < ${lastKnownPrice.updated_at}`)
+      return
+    }
+
     // Selalu update lastKnownPrice untuk monitoring web
     const prevPrice = { ...lastKnownPrice }
     lastKnownPrice = currentPrice
@@ -1802,7 +1812,20 @@ app.get('/monitoring', async (_req, res) => {
             const now = new Date();
             const timeStr = now.toTimeString().substring(0, 8);
             const apiTime = data.updatedAt ? new Date(data.updatedAt).toTimeString().substring(0, 8) : '-';
-            const delay = data.updatedAt ? Math.round((Date.now() - new Date(data.updatedAt).getTime()) / 1000) : '-';
+            const apiTimestamp = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+            const delay = data.updatedAt ? Math.round((Date.now() - apiTimestamp) / 1000) : '-';
+
+            // Cek apakah data mundur (timestamp lebih lama dari sebelumnya)
+            if (window.lastApiTimestamp && apiTimestamp < window.lastApiTimestamp) {
+              console.error(
+                '%c⚠️ DATA MUNDUR!',
+                'background: #ff0000; color: #fff; padding: 2px 6px; border-radius: 3px; font-weight: bold;',
+                '\\n🕐 Current:', apiTime, '(' + apiTimestamp + ')',
+                '\\n🕐 Previous:', new Date(window.lastApiTimestamp).toTimeString().substring(0, 8), '(' + window.lastApiTimestamp + ')',
+                '\\n⏮️ Selisih:', Math.round((window.lastApiTimestamp - apiTimestamp) / 1000) + ' detik mundur'
+              );
+            }
+            window.lastApiTimestamp = apiTimestamp;
 
             console.log(
               '%c💰 HARGA BERUBAH',
