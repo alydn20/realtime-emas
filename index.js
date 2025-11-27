@@ -1336,7 +1336,7 @@ async function checkPriceUpdate() {
 setInterval(checkPriceUpdate, 100)
 
 // ==================== AGGRESSIVE BURST POLLING ====================
-// Burst polling dari detik 00-10, retry sampai dapat data baru
+// Burst polling dari detik 50-59 dan 00-10 (window pergantian menit)
 let lastBurstMinute = -1
 let burstGotNewData = false
 
@@ -1351,8 +1351,10 @@ async function burstPoll() {
     lastBurstMinute = currentMinute
   }
 
-  // Burst di detik 00-10, stop jika sudah dapat data baru
-  if (currentSecond <= 10 && !burstGotNewData) {
+  // Burst di detik 50-59 dan 00-10 (window pergantian menit)
+  const inBurstWindow = currentSecond >= 50 || currentSecond <= 10
+
+  if (inBurstWindow && !burstGotNewData) {
     // Kirim 3 request paralel (lebih sedikit tapi lebih sering)
     const results = await Promise.allSettled([
       fetchTreasury(),
