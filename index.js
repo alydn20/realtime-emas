@@ -1499,31 +1499,28 @@ app.get('/monitoring', async (_req, res) => {
         <h2>XAU/USD Chart</h2>
         <span class="live-badge">Live</span>
       </div>
-      <div class="tradingview-widget-container">
-        <div id="tv_chart" style="height:450px;"></div>
+      <div class="tradingview-widget-container" style="height:500px;">
+        <div id="tv_chart"></div>
         <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
         <script type="text/javascript">
-        new TradingView.MediumWidget({
-          "symbols": [["OANDA:XAUUSD|1"]],
-          "chartOnly": true,
+        new TradingView.widget({
           "width": "100%",
-          "height": "100%",
+          "height": 500,
+          "symbol": "OANDA:XAUUSD",
+          "interval": "1",
+          "timezone": "Asia/Jakarta",
+          "theme": "dark",
+          "style": "1",
           "locale": "en",
-          "colorTheme": "dark",
-          "autosize": true,
-          "showVolume": false,
-          "hideDateRanges": false,
-          "hideMarketStatus": true,
-          "hideSymbolLogo": true,
-          "scalePosition": "right",
-          "scaleMode": "Normal",
-          "fontFamily": "Segoe UI, sans-serif",
-          "fontSize": "10",
-          "noTimeScale": false,
-          "valuesTracking": "1",
-          "changeMode": "price-and-percent",
-          "chartType": "candlesticks",
-          "container_id": "tv_chart"
+          "toolbar_bg": "#1a1f26",
+          "enable_publishing": false,
+          "allow_symbol_change": false,
+          "hide_top_toolbar": false,
+          "hide_legend": false,
+          "save_image": false,
+          "hide_volume": true,
+          "container_id": "tv_chart",
+          "range": "1D"
         });
         </script>
       </div>
