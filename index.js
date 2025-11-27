@@ -1573,8 +1573,8 @@ async function fastPoll() {
       const prevPrice = { ...lastKnownPrice }
       lastKnownPrice = currentPrice
 
-      // Update daily stats & history
-      if (currentPrice.buy !== prevPrice.buy) {
+      // Update daily stats & history (skip jika updatedAt sudah pernah disimpan)
+      if (currentPrice.buy !== prevPrice.buy && currentPrice.updated_at !== lastAddedUpdatedAt) {
         await updateDailyStats(currentPrice.buy)
         await addPriceHistory(currentPrice.buy, currentPrice.sell, prevPrice.buy, prevPrice.sell, currentPrice.updated_at)
       }
