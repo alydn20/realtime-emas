@@ -20,7 +20,7 @@ const GLOBAL_THROTTLE = 3000
 const TYPING_DURATION = 2000
 
 // BROADCAST COOLDOWN
-const PRICE_CHECK_INTERVAL = 300 // 300ms - ultra responsif
+const PRICE_CHECK_INTERVAL = 200 // 200ms - ultra responsif
 const MIN_PRICE_CHANGE = 1
 const BROADCAST_COOLDOWN = 50000 // 50 detik antar broadcast (atau ganti menit)
 
@@ -986,6 +986,15 @@ function doBroadcastInstant(message) {
 
 let isPriceChecking = false // Lock untuk mencegah overlap
 
+// Aggressive polling - fetch lebih sering di awal menit (saat Treasury update)
+let lastAggressiveCheck = 0
+function shouldAggressiveCheck() {
+  const now = new Date()
+  const seconds = now.getSeconds()
+  // Aggressive di detik 0-10 setiap menit (saat Treasury kemungkinan update)
+  return seconds <= 10
+}
+
 async function checkPriceUpdate() {
   if (isPriceChecking) return // Skip jika masih fetching
   isPriceChecking = true
@@ -1219,7 +1228,20 @@ async function checkPriceUpdate() {
   }
 }
 
-setInterval(checkPriceUpdate, PRICE_CHECK_INTERVAL)
+// Dual interval: aggressive (100ms) di detik 0-10, normal (200ms) sisanya
+setInterval(() => {
+  if (shouldAggressiveCheck()) {
+    // Aggressive mode: check setiap 100ms di awal menit
+    checkPriceUpdate()
+  }
+}, 100)
+
+setInterval(() => {
+  if (!shouldAggressiveCheck()) {
+    // Normal mode: check setiap 200ms
+    checkPriceUpdate()
+  }
+}, PRICE_CHECK_INTERVAL)
 
 // ==================== STARTUP INFO ====================
 console.log(`\n╔════════════════════════════════════════════════════╗`)
