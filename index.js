@@ -1284,7 +1284,7 @@ app.get('/monitoring', async (_req, res) => {
       padding: 20px;
       color: #fff;
     }
-    .container { max-width: 700px; margin: 0 auto; }
+    .container { max-width: 900px; margin: 0 auto; }
     .header {
       text-align: center;
       margin-bottom: 20px;
@@ -1301,80 +1301,11 @@ app.get('/monitoring', async (_req, res) => {
       margin: 10px 0;
     }
     .date-info { font-size: 0.85em; color: #aaa; }
-    .status-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-    .status-box {
-      background: rgba(255,255,255,0.1);
-      padding: 12px;
-      border-radius: 10px;
-      text-align: center;
-    }
-    .status-box .label { font-size: 0.75em; color: #aaa; margin-bottom: 5px; }
-    .status-box .value { font-size: 1.1em; font-weight: bold; }
     .chart-box {
       background: #0d1421;
       border: 1px solid #2a3f5f;
       border-radius: 15px;
-      padding: 15px;
-      margin-bottom: 20px;
       overflow: hidden;
-    }
-    .chart-box .title {
-      font-size: 0.85em;
-      color: #ffd700;
-      margin-bottom: 10px;
-    }
-    .message-box {
-      background: #0d1421;
-      border: 1px solid #2a3f5f;
-      border-radius: 15px;
-      padding: 20px;
-      margin-bottom: 20px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-    }
-    .message-box .title {
-      font-size: 0.85em;
-      color: #ffd700;
-      margin-bottom: 15px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .message-content {
-      font-family: 'SF Mono', Monaco, monospace;
-      font-size: 0.9em;
-      line-height: 1.6;
-      white-space: pre-wrap;
-      color: #e0e0e0;
-    }
-    .logs-box {
-      background: rgba(0,0,0,0.3);
-      border-radius: 10px;
-      padding: 15px;
-      max-height: 150px;
-      overflow-y: auto;
-    }
-    .logs-box .title { font-size: 0.85em; color: #888; margin-bottom: 10px; }
-    .log-line { font-family: monospace; font-size: 0.7em; color: #888; margin: 3px 0; }
-    .live-dot {
-      width: 10px; height: 10px;
-      background: #00ff00;
-      border-radius: 50%;
-      animation: pulse 1s infinite;
-      display: inline-block;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.5; transform: scale(0.8); }
-    }
-    .updated { animation: flash 0.5s; }
-    @keyframes flash {
-      0%, 100% { background: transparent; }
-      50% { background: rgba(255,215,0,0.2); }
     }
   </style>
 </head>
@@ -1386,44 +1317,12 @@ app.get('/monitoring', async (_req, res) => {
       <div class="date-info" id="dateInfo">Loading...</div>
     </div>
 
-    <div class="status-grid">
-      <div class="status-box">
-        <div class="label">Status</div>
-        <div class="value" id="status">-</div>
-      </div>
-      <div class="status-box">
-        <div class="label">Subscribers</div>
-        <div class="value" id="subs">-</div>
-      </div>
-      <div class="status-box">
-        <div class="label">Broadcasts</div>
-        <div class="value" id="broadcasts">-</div>
-      </div>
-    </div>
-
-    <div class="status-grid">
-      <div class="status-box">
-        <div class="label">Last Broadcast</div>
-        <div class="value" id="lastBroadcast">-</div>
-      </div>
-      <div class="status-box">
-        <div class="label">USD/IDR</div>
-        <div class="value" id="usdIdr">-</div>
-      </div>
-      <div class="status-box">
-        <div class="label">XAU/USD</div>
-        <div class="value" id="xauUsd">-</div>
-      </div>
-    </div>
-
     <div class="chart-box">
-      <div class="title">
-        <span>📈 XAU/USD Real-Time</span>
-      </div>
-      <div id="tradingview-widget" style="height: 400px;"></div>
-      <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-      <script type="text/javascript">
-        new TradingView.widget({
+      <!-- TradingView Widget BEGIN -->
+      <div class="tradingview-widget-container" style="height:600px;width:100%">
+        <div class="tradingview-widget-container__widget" style="height:calc(100% - 32px);width:100%"></div>
+        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+        {
           "autosize": true,
           "symbol": "OANDA:XAUUSD",
           "interval": "1",
@@ -1431,29 +1330,19 @@ app.get('/monitoring', async (_req, res) => {
           "theme": "dark",
           "style": "1",
           "locale": "id",
-          "toolbar_bg": "#0d1421",
           "enable_publishing": false,
           "hide_top_toolbar": false,
           "hide_legend": false,
           "save_image": false,
-          "container_id": "tradingview-widget",
           "hide_volume": true,
-          "backgroundColor": "#0d1421"
-        });
-      </script>
-    </div>
-
-    <div class="message-box" id="messageBox">
-      <div class="title">
-        <span class="live-dot"></span>
-        <span>PESAN BROADCAST TERKINI</span>
+          "support_host": "https://www.tradingview.com",
+          "backgroundColor": "rgba(13, 20, 33, 1)",
+          "gridColor": "rgba(42, 63, 95, 0.3)",
+          "studies": ["STD;EMA"]
+        }
+        </script>
       </div>
-      <div class="message-content" id="message">Loading...</div>
-    </div>
-
-    <div class="logs-box">
-      <div class="title">📋 Recent Logs</div>
-      <div id="logs">Loading...</div>
+      <!-- TradingView Widget END -->
     </div>
   </div>
 
@@ -1461,10 +1350,7 @@ app.get('/monitoring', async (_req, res) => {
     const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
     const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
-    let lastMessage = '';
-    let lastBroadcastCount = 0;
-
-    // Update jam
+    // Update jam dengan detik
     function updateClock() {
       const now = new Date();
       const hours = now.getHours().toString().padStart(2, '0');
@@ -1478,95 +1364,11 @@ app.get('/monitoring', async (_req, res) => {
       document.getElementById('dateInfo').textContent = dayName + ', ' + date + ' ' + month + ' ' + year + ' WIB';
     }
 
-    // Escape HTML
-    function escapeHtml(str) {
-      if (!str) return '';
-      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\\n/g, '<br>');
-    }
-
-    // Fetch data dari API - Ultra fast polling
-    let isFetching = false;
-    async function fetchData() {
-      if (isFetching) return;
-      isFetching = true;
-
-      try {
-        const res = await fetch('/monitoring/api', {
-          cache: 'no-store',
-          headers: { 'Cache-Control': 'no-cache' }
-        });
-        const data = await res.json();
-
-        // Update status
-        document.getElementById('status').innerHTML = data.status === 'ready' ? '🟢 Ready' : '🔴 Offline';
-        document.getElementById('subs').textContent = data.subscribers;
-        document.getElementById('broadcasts').textContent = '#' + data.broadcastCount;
-        document.getElementById('lastBroadcast').textContent = data.timeSinceLastBroadcast !== null ? data.timeSinceLastBroadcast + 's ago' : '-';
-        document.getElementById('usdIdr').textContent = data.usdIdr ? 'Rp' + Math.round(data.usdIdr).toLocaleString('id-ID') : '-';
-        document.getElementById('xauUsd').textContent = data.xauUsd ? '$' + data.xauUsd.toFixed(2) : '-';
-
-        // Update message
-        const messageEl = document.getElementById('message');
-        const messageBox = document.getElementById('messageBox');
-        if (data.message && data.message !== lastMessage) {
-          messageEl.innerHTML = escapeHtml(data.message);
-          messageBox.classList.add('updated');
-          setTimeout(() => messageBox.classList.remove('updated'), 500);
-          lastMessage = data.message;
-        } else if (data.message) {
-          messageEl.innerHTML = escapeHtml(data.message);
-        }
-
-        // Update logs
-        if (data.logs && data.logs.length > 0) {
-          document.getElementById('logs').innerHTML = data.logs.reverse().map(log =>
-            '<div class="log-line">' + escapeHtml(log) + '</div>'
-          ).join('');
-        }
-
-        // Flash on new broadcast
-        if (data.broadcastCount > lastBroadcastCount && lastBroadcastCount > 0) {
-          messageBox.classList.add('updated');
-          setTimeout(() => messageBox.classList.remove('updated'), 500);
-        }
-        lastBroadcastCount = data.broadcastCount;
-
-      } catch (e) {
-        // Silent fail, akan retry
-      } finally {
-        isFetching = false;
-      }
-    }
-
-    // Keep page alive - prevent sleep/idle
-    function keepAlive() {
-      // Prevent page from sleeping
-      if (document.visibilityState === 'visible') {
-        fetchData();
-      }
-    }
-
-    // Handle visibility change
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        fetchData(); // Immediate fetch when tab becomes visible
-      }
-    });
-
-    // Prevent connection timeout with periodic activity
-    setInterval(() => {
-      if (navigator.onLine) fetchData();
-    }, 200); // Fetch setiap 200ms untuk ultra real-time
-
-    // Initialize
-    setInterval(updateClock, 50); // Jam update 50ms untuk super smooth
+    // Initialize - jam update setiap 50ms untuk super smooth
+    setInterval(updateClock, 50);
     updateClock();
-    fetchData();
 
-    // Keep connection alive
-    setInterval(keepAlive, 30000);
-
-    console.log('🚀 Monitoring aktif 24 jam - Ultra real-time mode');
+    console.log('📺 XAU/USD Real-Time Monitor');
   </script>
 </body>
 </html>`
