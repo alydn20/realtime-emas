@@ -11,6 +11,12 @@ import express from 'express'
 import http from 'http'
 import https from 'https'
 import { Redis } from '@upstash/redis'
+import { readFileSync } from 'fs'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 // Redis untuk persistent storage
 const redis = new Redis({
@@ -1831,6 +1837,32 @@ setInterval(() => {
 // Log status setiap 30 detik
 // Status log every 30s (silent - available via /stats)
 
+// Serve icon.png
+let iconBuffer = null
+try {
+  iconBuffer = readFileSync(join(__dirname, 'icon.png'))
+} catch (e) {
+  console.log('Icon file not found')
+}
+
+app.get('/icon.png', (_req, res) => {
+  if (iconBuffer) {
+    res.setHeader('Content-Type', 'image/png')
+    res.send(iconBuffer)
+  } else {
+    res.status(404).send('Icon not found')
+  }
+})
+
+app.get('/favicon.ico', (_req, res) => {
+  if (iconBuffer) {
+    res.setHeader('Content-Type', 'image/png')
+    res.send(iconBuffer)
+  } else {
+    res.status(404).send('Favicon not found')
+  }
+})
+
 // PWA Manifest
 app.get('/manifest.json', (_req, res) => {
   res.json({
@@ -1843,14 +1875,16 @@ app.get('/manifest.json', (_req, res) => {
     theme_color: '#f7931a',
     icons: [
       {
-        src: 'https://cdn-icons-png.flaticon.com/512/2150/2150150.png',
+        src: '/icon.png',
         sizes: '192x192',
-        type: 'image/png'
+        type: 'image/png',
+        purpose: 'any maskable'
       },
       {
-        src: 'https://cdn-icons-png.flaticon.com/512/2150/2150150.png',
+        src: '/icon.png',
         sizes: '512x512',
-        type: 'image/png'
+        type: 'image/png',
+        purpose: 'any maskable'
       }
     ]
   })
@@ -1888,8 +1922,8 @@ app.get('/monitoring', async (_req, res) => {
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="/manifest.json">
-  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2150/2150150.png">
-  <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/2150/2150150.png">
+  <link rel="apple-touch-icon" href="/icon.png">
+  <link rel="icon" type="image/png" href="/icon.png">
   <title>Gold Price Monitor</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
