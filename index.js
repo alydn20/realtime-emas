@@ -1661,39 +1661,96 @@ app.get('/monitoring', async (_req, res) => {
       margin-top: 4px;
     }
 
-    /* Price Cards */
+    /* Price Cards - Redesigned for 3 cards */
     .price-section {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: 1fr 1fr;
       gap: 16px;
       margin-bottom: 24px;
     }
     .price-card {
-      background: #1a1f26;
-      padding: 20px;
-      border-radius: 12px;
+      background: linear-gradient(145deg, #1a1f26, #151920);
+      padding: 24px;
+      border-radius: 16px;
       border: 1px solid #2f3640;
+      position: relative;
+      overflow: hidden;
+    }
+    .price-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #f7931a, #ffd700);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .price-card.highlight::before {
+      opacity: 1;
     }
     .price-card .label {
-      font-size: 0.75em;
+      font-size: 0.8em;
       color: #71767b;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 8px;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
     }
     .price-card .value {
-      font-size: 1.5em;
+      font-size: 2em;
       font-weight: 700;
       color: #e7e9ea;
+      margin-bottom: 8px;
     }
     .price-card .change {
-      font-size: 0.8em;
-      margin-top: 6px;
+      font-size: 0.9em;
+      padding: 4px 10px;
+      border-radius: 6px;
+      display: inline-block;
     }
-    .price-card .change.up { color: #00c853; }
-    .price-card .change.down { color: #ff5252; }
+    .price-card .change.up {
+      color: #00c853;
+      background: rgba(0, 200, 83, 0.15);
+    }
+    .price-card .change.down {
+      color: #ff5252;
+      background: rgba(255, 82, 82, 0.15);
+    }
     .price-card.highlight { border-color: #f7931a; }
     .price-card.highlight .value { color: #f7931a; }
+
+    /* Info row - Spread dan USD/IDR */
+    .info-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .info-card {
+      background: #1a1f26;
+      padding: 16px 20px;
+      border-radius: 12px;
+      border: 1px solid #2f3640;
+      text-align: center;
+    }
+    .info-card .info-label {
+      font-size: 0.7em;
+      color: #71767b;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+    .info-card .info-value {
+      font-size: 1.2em;
+      font-weight: 600;
+      color: #e7e9ea;
+    }
+    .info-card .info-value.gold { color: #f7931a; }
+    .info-card .info-value.green { color: #00c853; }
+    .info-card .info-value.blue { color: #2196f3; }
 
     /* Chart Section */
     .chart-section {
@@ -1805,17 +1862,51 @@ app.get('/monitoring', async (_req, res) => {
     .page-info { color: #71767b; font-size: 0.85em; }
 
     /* Animations - color based on price direction */
-    .updated-up { animation: highlight-up 0.5s ease-out 1; }
-    .updated-down { animation: highlight-down 0.5s ease-out 1; }
+    .price-card.updated-up {
+      animation: highlight-up 0.8s ease-out 1;
+    }
+    .price-card.updated-up .value {
+      animation: value-up 0.8s ease-out 1;
+    }
+    .price-card.updated-down {
+      animation: highlight-down 0.8s ease-out 1;
+    }
+    .price-card.updated-down .value {
+      animation: value-down 0.8s ease-out 1;
+    }
     .updated { animation: highlight 0.3s ease-out 1; }
 
     @keyframes highlight-up {
-      0% { background: rgba(0, 200, 83, 0.4); border-color: #00c853; }
-      100% { background: transparent; border-color: #2f3640; }
+      0%, 30% {
+        background: linear-gradient(145deg, rgba(0, 200, 83, 0.3), rgba(0, 200, 83, 0.15));
+        border-color: #00c853;
+        box-shadow: 0 0 20px rgba(0, 200, 83, 0.3);
+      }
+      100% {
+        background: linear-gradient(145deg, #1a1f26, #151920);
+        border-color: #f7931a;
+        box-shadow: none;
+      }
     }
     @keyframes highlight-down {
-      0% { background: rgba(255, 82, 82, 0.4); border-color: #ff5252; }
-      100% { background: transparent; border-color: #2f3640; }
+      0%, 30% {
+        background: linear-gradient(145deg, rgba(255, 82, 82, 0.3), rgba(255, 82, 82, 0.15));
+        border-color: #ff5252;
+        box-shadow: 0 0 20px rgba(255, 82, 82, 0.3);
+      }
+      100% {
+        background: linear-gradient(145deg, #1a1f26, #151920);
+        border-color: #f7931a;
+        box-shadow: none;
+      }
+    }
+    @keyframes value-up {
+      0%, 30% { color: #00c853; }
+      100% { color: #f7931a; }
+    }
+    @keyframes value-down {
+      0%, 30% { color: #ff5252; }
+      100% { color: #f7931a; }
     }
     @keyframes highlight {
       0% { background: rgba(247, 147, 26, 0.3); }
@@ -1824,9 +1915,15 @@ app.get('/monitoring', async (_req, res) => {
 
     /* Responsive */
     @media (max-width: 768px) {
-      .price-section { grid-template-columns: repeat(2, 1fr); }
+      .price-section { grid-template-columns: 1fr; }
+      .info-row { grid-template-columns: 1fr; }
       .header { flex-direction: column; text-align: center; gap: 16px; }
       .header-right { text-align: center; }
+      .price-card .value { font-size: 1.6em; }
+    }
+    @media (min-width: 769px) and (max-width: 1024px) {
+      .price-section { grid-template-columns: 1fr 1fr; }
+      .info-row { grid-template-columns: repeat(3, 1fr); }
     }
   </style>
 </head>
@@ -1845,18 +1942,35 @@ app.get('/monitoring', async (_req, res) => {
 
     <div class="price-section">
       <div class="price-card highlight" id="buyCard">
-        <div class="label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Harga Beli</div>
+        <div class="label">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00c853" stroke-width="2" style="margin-right:8px;"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+          Harga Beli
+        </div>
         <div class="value" id="buyPrice">-</div>
         <div class="change" id="buyChange"></div>
       </div>
       <div class="price-card highlight" id="sellCard">
-        <div class="label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Harga Jual</div>
+        <div class="label">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff5252" stroke-width="2" style="margin-right:8px;"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+          Harga Jual
+        </div>
         <div class="value" id="sellPrice">-</div>
         <div class="change" id="sellChange"></div>
       </div>
-      <div class="price-card">
-        <div class="label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>USD/IDR</div>
-        <div class="value" id="usdIdr">-</div>
+    </div>
+
+    <div class="info-row">
+      <div class="info-card">
+        <div class="info-label">Spread</div>
+        <div class="info-value gold" id="spread">-</div>
+      </div>
+      <div class="info-card">
+        <div class="info-label">Spread %</div>
+        <div class="info-value green" id="spreadPercent">-</div>
+      </div>
+      <div class="info-card">
+        <div class="info-label">USD/IDR</div>
+        <div class="info-value blue" id="usdIdr">-</div>
       </div>
     </div>
 
@@ -2334,6 +2448,14 @@ app.get('/monitoring', async (_req, res) => {
           // Update USD/IDR
           if (data.usdIdr) {
             document.getElementById('usdIdr').textContent = 'Rp ' + Math.round(data.usdIdr).toLocaleString('id-ID');
+          }
+
+          // Update Spread
+          if (data.buy && data.sell) {
+            const spread = data.buy - data.sell;
+            const spreadPct = ((spread / data.sell) * 100).toFixed(2);
+            document.getElementById('spread').textContent = 'Rp ' + spread.toLocaleString('id-ID');
+            document.getElementById('spreadPercent').textContent = spreadPct + '%';
           }
         }
       } catch (e) {
