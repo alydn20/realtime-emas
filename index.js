@@ -125,9 +125,10 @@ const CACHE_TTL = 5000 // 5 detik
 // Load data dari Redis saat startup
 async function loadFromRedis() {
   try {
-    const [stats, history] = await Promise.all([
+    const [stats, history, lastTime] = await Promise.all([
       redis.get(REDIS_KEYS.DAILY_STATS),
-      redis.lrange(REDIS_KEYS.PRICE_HISTORY, 0, -1)
+      redis.lrange(REDIS_KEYS.PRICE_HISTORY, 0, -1),
+      redis.get('gold:last_history_time')
     ])
 
     if (stats) {
@@ -138,6 +139,11 @@ async function loadFromRedis() {
     if (history && history.length > 0) {
       priceHistoryCache = history
       pushLog(`REDIS | ${history.length} price history loaded`)
+    }
+
+    if (lastTime) {
+      lastAddedUpdatedAt = lastTime
+      pushLog('REDIS | Last history time loaded: ' + lastTime)
     }
   } catch (e) {
     pushLog('REDIS | Load error: ' + e.message)
@@ -236,31 +242,44 @@ let isAddingHistory = false // Lock untuk mencegah race condition
 let lastAddedUpdatedAt = '' // Track updatedAt terakhir yang sudah ditambahkan
 
 async function addPriceHistory(buy, sell, prevBuy, prevSell, updatedAt) {
-  // Skip jika updatedAt sama dengan yang terakhir ditambahkan
-  if (updatedAt === lastAddedUpdatedAt) return
+  // Skip jika updatedAt kosong atau sama dengan yang terakhir
+  if (!updatedAt || updatedAt === lastAddedUpdatedAt) return
 
   // Cek lock untuk mencegah race condition
   if (isAddingHistory) return
   isAddingHistory = true
 
   try {
-    // Cek apakah sudah ada entry dengan updatedAt yang sama
+    // Cek dari Redis apakah updatedAt sudah pernah disimpan
+    const lastSavedTime = await redis.get('gold:last_history_time')
+    if (lastSavedTime === updatedAt) {
+      lastAddedUpdatedAt = updatedAt
+      isAddingHistory = false
+      return
+    }
+
+    // Cek dari cache lokal
     const lastEntry = priceHistoryCache[priceHistoryCache.length - 1]
     if (lastEntry && lastEntry.time === updatedAt) {
+      lastAddedUpdatedAt = updatedAt
       isAddingHistory = false
       return
     }
 
     const entry = {
-      time: updatedAt, // Pakai waktu dari API Treasury
+      time: updatedAt,
       buy: buy,
       sell: sell,
       buyChange: buy - prevBuy,
       sellChange: sell - prevSell
     }
 
-    // Tambah entry baru
-    await redis.rpush(REDIS_KEYS.PRICE_HISTORY, entry)
+    // Simpan ke Redis (entry + timestamp terakhir)
+    await Promise.all([
+      redis.rpush(REDIS_KEYS.PRICE_HISTORY, entry),
+      redis.set('gold:last_history_time', updatedAt)
+    ])
+
     priceHistoryCache.push(entry)
     lastAddedUpdatedAt = updatedAt
 
@@ -306,7 +325,8 @@ async function resetDailyData() {
   try {
     await Promise.all([
       redis.del(REDIS_KEYS.DAILY_STATS),
-      redis.del(REDIS_KEYS.PRICE_HISTORY)
+      redis.del(REDIS_KEYS.PRICE_HISTORY),
+      redis.del('gold:last_history_time')
     ])
     dailyStatsCache = null
     priceHistoryCache = []
