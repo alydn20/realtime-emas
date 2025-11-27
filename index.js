@@ -1644,6 +1644,9 @@ app.get('/monitoring', async (_req, res) => {
         sellChange: sellChange
       });
 
+      // Sort by time descending (terbaru di atas)
+      priceHistory.sort((a, b) => b.time.getTime() - a.time.getTime());
+
       if (priceHistory.length > MAX_HISTORY) {
         priceHistory.pop();
       }
