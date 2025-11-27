@@ -1325,6 +1325,84 @@ async function checkPriceUpdate() {
 // Polling dengan interval tercepat (100ms) untuk test semua
 setInterval(checkPriceUpdate, 100)
 
+// ==================== BURST POLLING ====================
+// Kirim 5 request paralel saat detik 00-05 setiap menit untuk catch update lebih cepat
+let lastBurstMinute = -1
+
+async function burstPoll() {
+  const now = new Date()
+  const currentMinute = now.getMinutes()
+  const currentSecond = now.getSeconds()
+
+  // Hanya burst di detik 00-03 dan belum burst di menit ini
+  if (currentSecond <= 3 && currentMinute !== lastBurstMinute) {
+    lastBurstMinute = currentMinute
+
+    // Kirim 5 request paralel
+    console.log(`🚀 BURST POLL | ${now.toISOString().substr(11, 8)} | Sending 5 parallel requests...`)
+
+    const results = await Promise.allSettled([
+      fetchTreasury(),
+      fetchTreasury(),
+      fetchTreasury(),
+      fetchTreasury(),
+      fetchTreasury()
+    ])
+
+    // Cari hasil dengan updated_at terbaru
+    let newestData = null
+    let newestTime = 0
+
+    results.forEach((result, i) => {
+      if (result.status === 'fulfilled' && result.value?.data?.updated_at) {
+        const updateTime = new Date(result.value.data.updated_at).getTime()
+        if (updateTime > newestTime) {
+          newestTime = updateTime
+          newestData = result.value
+        }
+      }
+    })
+
+    if (newestData && newestData.data.updated_at !== lastApiUpdateTime) {
+      const delayMs = Date.now() - newestTime
+      console.log(`🎯 BURST HIT | New data found! Delay: ${(delayMs/1000).toFixed(2)}s | API: ${newestData.data.updated_at.substr(11, 8)}`)
+
+      // Process the new data
+      const currentPrice = {
+        buy: newestData.data.buying_rate,
+        sell: newestData.data.selling_rate,
+        updated_at: newestData.data.updated_at,
+        fetchedAt: Date.now()
+      }
+
+      lastApiUpdateTime = newestData.data.updated_at
+
+      if (lastKnownPrice && (lastKnownPrice.buy !== currentPrice.buy || lastKnownPrice.sell !== currentPrice.sell)) {
+        const prevPrice = { ...lastKnownPrice }
+        lastKnownPrice = currentPrice
+
+        // Instant SSE broadcast
+        broadcastSSE({
+          type: 'price',
+          buy: currentPrice.buy,
+          sell: currentPrice.sell,
+          prevBuy: prevPrice.buy,
+          prevSell: prevPrice.sell,
+          updatedAt: currentPrice.updated_at,
+          usdIdr: cachedMarketData.usdIdr?.rate,
+          xauUsd: cachedMarketData.xauUsd,
+          serverTime: new Date().toISOString()
+        })
+
+        console.log(`🚀 BURST SSE | Broadcasted to ${sseClients.size} clients`)
+      }
+    }
+  }
+}
+
+// Burst poll setiap 500ms
+setInterval(burstPoll, 500)
+
 // ==================== XAU/USD REAL-TIME ====================
 let lastXauUsdPrice = null
 let isXauFetching = false
