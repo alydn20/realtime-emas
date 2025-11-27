@@ -1837,12 +1837,20 @@ setInterval(() => {
 // Log status setiap 30 detik
 // Status log every 30s (silent - available via /stats)
 
-// Serve icon.png
+// Serve icon.png dan favicon.ico
 let iconBuffer = null
+let faviconBuffer = null
+
 try {
   iconBuffer = readFileSync(join(__dirname, 'icon.png'))
 } catch (e) {
   console.log('Icon file not found')
+}
+
+try {
+  faviconBuffer = readFileSync(join(__dirname, 'favicon.ico'))
+} catch (e) {
+  console.log('Favicon file not found')
 }
 
 app.get('/icon.png', (_req, res) => {
@@ -1855,7 +1863,10 @@ app.get('/icon.png', (_req, res) => {
 })
 
 app.get('/favicon.ico', (_req, res) => {
-  if (iconBuffer) {
+  if (faviconBuffer) {
+    res.setHeader('Content-Type', 'image/x-icon')
+    res.send(faviconBuffer)
+  } else if (iconBuffer) {
     res.setHeader('Content-Type', 'image/png')
     res.send(iconBuffer)
   } else {
@@ -1923,6 +1934,7 @@ app.get('/monitoring', async (_req, res) => {
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/icon.png">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <link rel="icon" type="image/png" href="/icon.png">
   <title>Gold Price Monitor</title>
   <style>
