@@ -1279,6 +1279,20 @@ app.get('/calendar', async (_req, res) => {
   }
 })
 
+// XAU/USD Proxy API - untuk menghindari CORS di frontend
+app.get('/xau', async (_req, res) => {
+  try {
+    const price = await fetchXAUUSD()
+    if (price) {
+      res.json({ price, timestamp: Date.now() })
+    } else {
+      res.json({ price: cachedXAUUSD, timestamp: lastXAUUSDFetch, cached: true })
+    }
+  } catch (e) {
+    res.json({ price: cachedXAUUSD, timestamp: lastXAUUSDFetch, cached: true })
+  }
+})
+
 // MONITORING PAGE - Professional Gold Price Dashboard
 app.get('/monitoring', async (_req, res) => {
   const html = `<!DOCTYPE html>
@@ -1800,49 +1814,37 @@ app.get('/monitoring', async (_req, res) => {
       }
     }
 
-    // Fetch XAU/USD real-time dari TradingView
+    // Fetch XAU/USD real-time via server proxy (avoid CORS)
     let lastXauPrice = 0;
     let xauFetching = false;
     async function fetchXauRealtime() {
       if (xauFetching) return;
       xauFetching = true;
       try {
-        const res = await fetch('https://scanner.tradingview.com/symbol', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            symbols: { tickers: ['OANDA:XAUUSD'], query: { types: [] } },
-            columns: ['close', 'change', 'change_abs']
-          })
-        });
+        const res = await fetch('/xau', { cache: 'no-store' });
         if (res.ok) {
           const json = await res.json();
-          if (json?.data?.[0]?.d) {
-            const price = json.data[0].d[0];
-            const changePercent = json.data[0].d[1];
-            const changeAbs = json.data[0].d[2];
-            if (price > 1000 && price < 10000) {
-              document.getElementById('xauUsd').textContent = '$' + price.toFixed(2);
+          const price = json.price;
+          if (price && price > 1000 && price < 10000) {
+            document.getElementById('xauUsd').textContent = '$' + price.toFixed(2);
 
-              // Update timestamp
-              const now = new Date();
-              const timeStr = now.getHours().toString().padStart(2,'0') + ':' +
-                             now.getMinutes().toString().padStart(2,'0') + ':' +
-                             now.getSeconds().toString().padStart(2,'0');
+            // Update timestamp
+            const now = new Date();
+            const timeStr = now.getHours().toString().padStart(2,'0') + ':' +
+                           now.getMinutes().toString().padStart(2,'0') + ':' +
+                           now.getSeconds().toString().padStart(2,'0');
+
+            // Show change if price changed
+            if (lastXauPrice > 0 && price !== lastXauPrice) {
+              const change = price - lastXauPrice;
+              const sign = change > 0 ? '+' : '';
+              const cls = change > 0 ? 'up' : 'down';
+              document.getElementById('xauUpdate').innerHTML =
+                '<span class="' + cls + '">' + sign + change.toFixed(2) + '</span> • ' + timeStr;
+            } else {
               document.getElementById('xauUpdate').textContent = 'Update ' + timeStr;
-
-              // Show change if available
-              if (changeAbs && lastXauPrice > 0) {
-                const change = price - lastXauPrice;
-                if (Math.abs(change) >= 0.01) {
-                  const sign = change > 0 ? '+' : '';
-                  const cls = change > 0 ? 'up' : 'down';
-                  document.getElementById('xauUpdate').innerHTML =
-                    '<span class="' + cls + '">' + sign + change.toFixed(2) + '</span> • ' + timeStr;
-                }
-              }
-              lastXauPrice = price;
             }
+            lastXauPrice = price;
           }
         }
       } catch (e) {
