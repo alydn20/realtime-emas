@@ -1464,7 +1464,7 @@ app.get('/monitoring', async (_req, res) => {
   <div class="container">
     <div class="header">
       <div class="header-left">
-        <h1>Gold Price Monitor</h1>
+        <h1><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f7931a" stroke-width="2" style="vertical-align:middle;margin-right:10px;"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10h8M8 14h8"/></svg>Gold Price Monitor</h1>
         <div class="subtitle">Real-time Treasury Gold Rates</div>
       </div>
       <div class="header-right">
@@ -1475,28 +1475,28 @@ app.get('/monitoring', async (_req, res) => {
 
     <div class="price-section">
       <div class="price-card highlight" id="buyCard">
-        <div class="label">Harga Beli</div>
+        <div class="label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Harga Beli</div>
         <div class="value" id="buyPrice">-</div>
         <div class="change" id="buyChange"></div>
       </div>
       <div class="price-card highlight" id="sellCard">
-        <div class="label">Harga Jual</div>
+        <div class="label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Harga Jual</div>
         <div class="value" id="sellPrice">-</div>
         <div class="change" id="sellChange"></div>
       </div>
       <div class="price-card">
-        <div class="label">USD/IDR</div>
+        <div class="label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>USD/IDR</div>
         <div class="value" id="usdIdr">-</div>
       </div>
       <div class="price-card">
-        <div class="label">XAU/USD</div>
+        <div class="label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>XAU/USD</div>
         <div class="value" id="xauUsd">-</div>
       </div>
     </div>
 
     <div class="chart-section">
       <div class="chart-header">
-        <h2>XAU/USD Chart</h2>
+        <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-3 3"/></svg>XAU/USD Chart</h2>
         <span class="live-badge">Live</span>
       </div>
       <div class="tradingview-widget-container" style="height:500px;">
@@ -1528,7 +1528,7 @@ app.get('/monitoring', async (_req, res) => {
 
     <div class="history-section">
       <div class="history-header">
-        <h2>Riwayat Perubahan Harga</h2>
+        <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Riwayat Perubahan Harga</h2>
         <span class="count" id="historyCount">0 records</span>
       </div>
       <table class="history-table">
@@ -1680,7 +1680,8 @@ app.get('/monitoring', async (_req, res) => {
     setInterval(updateClock, 100);
     updateClock();
 
-    setInterval(fetchPrices, 1000);
+    // Fetch setiap 500ms untuk lebih real-time
+    setInterval(fetchPrices, 500);
     fetchPrices();
   </script>
 </body>
@@ -1691,23 +1692,23 @@ app.get('/monitoring', async (_req, res) => {
 
 // API endpoint untuk mendapatkan data monitoring (JSON) - REAL-TIME
 app.get('/monitoring/api', async (_req, res) => {
-  // Fetch harga terbaru langsung jika belum ada lastKnownPrice
-  let buy = lastKnownPrice?.buy
-  let sell = lastKnownPrice?.sell
-  let updatedAt = lastKnownPrice?.updated_at
+  // SELALU fetch langsung dari Treasury untuk data real-time
+  let buy = null
+  let sell = null
+  let updatedAt = null
 
-  // Jika belum ada data, fetch langsung dari Treasury
-  if (!buy || !sell) {
-    try {
-      const treasury = await fetchTreasury()
-      if (treasury?.data) {
-        buy = treasury.data.buying_rate
-        sell = treasury.data.selling_rate
-        updatedAt = treasury.data.updated_at
-      }
-    } catch (e) {
-      // Silent fail
+  try {
+    const treasury = await fetchTreasury()
+    if (treasury?.data) {
+      buy = treasury.data.buying_rate
+      sell = treasury.data.selling_rate
+      updatedAt = treasury.data.updated_at
     }
+  } catch (e) {
+    // Fallback ke cache jika fetch gagal
+    buy = lastKnownPrice?.buy
+    sell = lastKnownPrice?.sell
+    updatedAt = lastKnownPrice?.updated_at
   }
 
   // Generate pesan real-time
