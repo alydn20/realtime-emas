@@ -2009,17 +2009,14 @@ app.get('/qr-reset', async (req, res) => {
     isReady = false
     lastQr = null
 
-    // Clear Redis auth (persistent session)
-    await clearRedisAuth()
-
-    // Delete local auth folder if exists
+    // Delete local auth folder
     const fs = await import('fs')
     const path = await import('path')
     const authPath = path.join(process.cwd(), 'auth')
 
     if (fs.existsSync(authPath)) {
       fs.rmSync(authPath, { recursive: true, force: true })
-      pushLog('WA | Local auth folder deleted')
+      pushLog('WA | Auth folder deleted')
     }
 
     // Restart connection
@@ -6216,27 +6213,16 @@ setTimeout(async () => {
   }
 }, 30000)
 
-// Track consecutive failures to detect corrupt auth
-let consecutiveFailures = 0
-const MAX_CONSECUTIVE_FAILURES = 3
-
 async function start() {
   // Load data dari Redis saat startup
   await loadFromRedis()
   await loadMonitoredGroup()
 
-  // Check if auth needs reset - auto-detect corrupt auth after 3 consecutive failures
-  const forceReset = process.env.RESET_WA_AUTH === 'true' || consecutiveFailures >= MAX_CONSECUTIVE_FAILURES
-  if (forceReset) {
-    await clearRedisAuth()
-    consecutiveFailures = 0
-    pushLog('WA | Cleared corrupt auth, starting fresh')
-  }
-
-  const { state, saveCreds } = await useRedisAuthState()
+  // Use file-based auth (standard Baileys)
+  const { state, saveCreds } = await useMultiFileAuthState('./auth')
   const { version } = await fetchLatestBaileysVersion()
 
-  pushLog('WA | Using Redis auth state (persistent)')
+  pushLog('WA | Using file-based auth')
 
   sock = makeWASocket({
     version,
@@ -6272,16 +6258,14 @@ async function start() {
       const reason = lastDisconnect?.error?.output?.statusCode
       pushLog(`WA | Disconnected (${reason})`)
 
-      // Track consecutive failures (disconnect without ever getting QR or connected)
-      if (!lastQr) {
-        consecutiveFailures++
-        pushLog(`WA | Consecutive failures: ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}`)
-      }
-
       if (reason === DisconnectReason.loggedOut) {
-        pushLog('WA | LOGGED OUT - Clearing auth and restarting')
-        await clearRedisAuth()
-        consecutiveFailures = 0
+        pushLog('WA | LOGGED OUT - Please scan QR again')
+        // Delete auth folder
+        const fs = await import('fs')
+        if (fs.existsSync('./auth')) {
+          fs.rmSync('./auth', { recursive: true, force: true })
+          pushLog('WA | Auth folder deleted')
+        }
         setTimeout(() => start(), 3000)
         return
       }
@@ -6292,17 +6276,12 @@ async function start() {
         pushLog(`WA | Reconnect ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} in ${Math.round(delay/1000)}s`)
         setTimeout(() => start(), delay)
       } else {
-        pushLog('WA | Max reconnect reached - clearing auth for fresh start')
-        await clearRedisAuth()
-        consecutiveFailures = 0
-        reconnectAttempts = 0
-        setTimeout(() => start(), 5000)
+        pushLog('WA | Max reconnect reached')
       }
 
     } else if (connection === 'open') {
       lastQr = null
       reconnectAttempts = 0
-      consecutiveFailures = 0 // Reset on successful connection
       pushLog('WA | Connected')
       pushLog('WA | Warming up 15s...')
 
