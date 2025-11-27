@@ -1,4 +1,4 @@
-// index.js - Gold Price Monitor v2.0
+// index.js - Gold Price Monitor v2.1 with Redis
 import makeWASocket, {
   DisconnectReason,
   fetchLatestBaileysVersion,
@@ -10,6 +10,13 @@ import pino from 'pino'
 import express from 'express'
 import http from 'http'
 import https from 'https'
+import { Redis } from '@upstash/redis'
+
+// Redis untuk persistent storage
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN
+})
 
 // HTTP Keep-Alive agents untuk koneksi lebih cepat
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
@@ -97,64 +104,120 @@ let cachedMarketData = {
   lastUsdIdrFetch: 0 // Track kapan terakhir fetch USD/IDR
 }
 
-// SERVER-SIDE DAILY STATS - konsisten di semua device
-let dailyStats = {
-  date: null,
-  open: null,
-  high: null,
-  low: null,
-  prices: [],
-  lastUpdate: 0
+// ==================== REDIS STORAGE ====================
+const REDIS_KEYS = {
+  DAILY_STATS: 'gold:daily_stats',
+  PRICE_HISTORY: 'gold:price_history'
 }
 
-function updateDailyStats(buyPrice) {
-  const now = new Date()
-  const today = now.toISOString().split('T')[0]
+// Cache lokal untuk mengurangi Redis calls
+let dailyStatsCache = null
+let priceHistoryCache = []
+let lastCacheUpdate = 0
+const CACHE_TTL = 5000 // 5 detik
 
-  // Reset jika hari baru
-  if (dailyStats.date !== today) {
-    dailyStats = {
-      date: today,
-      open: buyPrice,
-      high: buyPrice,
-      low: buyPrice,
-      prices: [buyPrice],
-      lastUpdate: Date.now()
+// Load data dari Redis saat startup
+async function loadFromRedis() {
+  try {
+    const [stats, history] = await Promise.all([
+      redis.get(REDIS_KEYS.DAILY_STATS),
+      redis.lrange(REDIS_KEYS.PRICE_HISTORY, 0, -1)
+    ])
+
+    if (stats) {
+      dailyStatsCache = stats
+      pushLog('REDIS | Daily stats loaded')
     }
-    return
-  }
 
-  // Update stats
-  if (dailyStats.open === null) dailyStats.open = buyPrice
-  if (buyPrice > dailyStats.high) dailyStats.high = buyPrice
-  if (buyPrice < dailyStats.low) dailyStats.low = buyPrice
-
-  // Simpan harga untuk average (max 1000 untuk memory)
-  if (dailyStats.prices.length < 1000) {
-    dailyStats.prices.push(buyPrice)
-  } else {
-    // Rolling average - hapus yang lama
-    dailyStats.prices.shift()
-    dailyStats.prices.push(buyPrice)
+    if (history && history.length > 0) {
+      priceHistoryCache = history
+      pushLog(`REDIS | ${history.length} price history loaded`)
+    }
+  } catch (e) {
+    pushLog('REDIS | Load error: ' + e.message)
   }
-  dailyStats.lastUpdate = Date.now()
 }
 
-function getDailyStats() {
-  if (!dailyStats.date || dailyStats.prices.length === 0) {
+// Update daily stats ke Redis
+async function updateDailyStats(buyPrice) {
+  const now = new Date()
+  // Konversi ke WIB
+  const wibOffset = 7 * 60 * 60 * 1000
+  const wibTime = new Date(now.getTime() + wibOffset + now.getTimezoneOffset() * 60 * 1000)
+  const today = wibTime.toISOString().split('T')[0]
+
+  try {
+    let stats = dailyStatsCache || await redis.get(REDIS_KEYS.DAILY_STATS)
+
+    // Reset jika hari baru
+    if (!stats || stats.date !== today) {
+      stats = {
+        date: today,
+        open: buyPrice,
+        high: buyPrice,
+        low: buyPrice,
+        prices: [buyPrice],
+        lastUpdate: Date.now()
+      }
+    } else {
+      // Update stats
+      if (stats.open === null) stats.open = buyPrice
+      if (buyPrice > stats.high) stats.high = buyPrice
+      if (buyPrice < stats.low) stats.low = buyPrice
+
+      // Simpan harga untuk average (max 500 untuk Redis)
+      if (!stats.prices) stats.prices = []
+      if (stats.prices.length < 500) {
+        stats.prices.push(buyPrice)
+      } else {
+        stats.prices.shift()
+        stats.prices.push(buyPrice)
+      }
+      stats.lastUpdate = Date.now()
+    }
+
+    // Simpan ke Redis dan cache
+    await redis.set(REDIS_KEYS.DAILY_STATS, stats)
+    dailyStatsCache = stats
+  } catch (e) {
+    pushLog('REDIS | Update daily stats error: ' + e.message)
+  }
+}
+
+// Get daily stats
+async function getDailyStats() {
+  try {
+    // Gunakan cache jika masih fresh
+    if (dailyStatsCache && Date.now() - lastCacheUpdate < CACHE_TTL) {
+      return formatDailyStats(dailyStatsCache)
+    }
+
+    const stats = await redis.get(REDIS_KEYS.DAILY_STATS)
+    if (stats) {
+      dailyStatsCache = stats
+      lastCacheUpdate = Date.now()
+      return formatDailyStats(stats)
+    }
+  } catch (e) {}
+
+  return { open: null, high: null, low: null, avg: null, change: null, changePct: null }
+}
+
+function formatDailyStats(stats) {
+  if (!stats || !stats.date || !stats.prices || stats.prices.length === 0) {
     return { open: null, high: null, low: null, avg: null, change: null, changePct: null }
   }
 
-  const avg = Math.round(dailyStats.prices.reduce((a, b) => a + b, 0) / dailyStats.prices.length)
-  const current = dailyStats.prices[dailyStats.prices.length - 1]
-  const change = current - dailyStats.open
-  const changePct = ((change / dailyStats.open) * 100).toFixed(2)
+  const avg = Math.round(stats.prices.reduce((a, b) => a + b, 0) / stats.prices.length)
+  const current = stats.prices[stats.prices.length - 1]
+  const change = current - stats.open
+  const changePct = ((change / stats.open) * 100).toFixed(2)
 
   return {
-    date: dailyStats.date,
-    open: dailyStats.open,
-    high: dailyStats.high,
-    low: dailyStats.low,
+    date: stats.date,
+    open: stats.open,
+    high: stats.high,
+    low: stats.low,
     avg: avg,
     current: current,
     change: change,
@@ -162,11 +225,8 @@ function getDailyStats() {
   }
 }
 
-// SERVER-SIDE PRICE HISTORY - konsisten di semua device
-let priceHistory = []
-const MAX_HISTORY = 1440 // 24 jam (1 per menit)
-
-function addPriceHistory(buy, sell, prevBuy, prevSell, updatedAt) {
+// Add price history ke Redis
+async function addPriceHistory(buy, sell, prevBuy, prevSell, updatedAt) {
   const now = new Date()
   const entry = {
     time: now.toISOString(),
@@ -177,57 +237,74 @@ function addPriceHistory(buy, sell, prevBuy, prevSell, updatedAt) {
     updatedAt: updatedAt
   }
 
-  // Cek apakah sudah ada entry di menit yang sama
-  const lastEntry = priceHistory[priceHistory.length - 1]
-  if (lastEntry) {
-    const lastTime = new Date(lastEntry.time)
-    const lastMinute = lastTime.getHours() * 60 + lastTime.getMinutes()
-    const nowMinute = now.getHours() * 60 + now.getMinutes()
+  try {
+    // Cek entry terakhir untuk menghindari duplikasi di menit yang sama
+    const lastEntry = priceHistoryCache[priceHistoryCache.length - 1]
+    if (lastEntry) {
+      const lastTime = new Date(lastEntry.time)
+      const lastMinute = lastTime.getHours() * 60 + lastTime.getMinutes()
+      const nowMinute = now.getHours() * 60 + now.getMinutes()
 
-    // Jika menit sama, update entry yang ada
-    if (lastMinute === nowMinute && lastTime.toDateString() === now.toDateString()) {
-      priceHistory[priceHistory.length - 1] = entry
-      return
+      if (lastMinute === nowMinute && lastTime.toDateString() === now.toDateString()) {
+        // Update entry terakhir
+        priceHistoryCache[priceHistoryCache.length - 1] = entry
+        await redis.lset(REDIS_KEYS.PRICE_HISTORY, -1, entry)
+        return
+      }
     }
-  }
 
-  // Tambah entry baru
-  priceHistory.push(entry)
+    // Tambah entry baru
+    await redis.rpush(REDIS_KEYS.PRICE_HISTORY, entry)
+    priceHistoryCache.push(entry)
 
-  // Limit max entries
-  if (priceHistory.length > MAX_HISTORY) {
-    priceHistory.shift()
+    // Limit max 1440 entries (24 jam)
+    const len = await redis.llen(REDIS_KEYS.PRICE_HISTORY)
+    if (len > 1440) {
+      await redis.lpop(REDIS_KEYS.PRICE_HISTORY)
+      priceHistoryCache.shift()
+    }
+  } catch (e) {
+    pushLog('REDIS | Add history error: ' + e.message)
   }
 }
 
-function getPriceHistory(page = 1, perPage = 10) {
-  const total = priceHistory.length
-  const totalPages = Math.ceil(total / perPage)
-  const start = Math.max(0, total - (page * perPage))
-  const end = total - ((page - 1) * perPage)
-  const items = priceHistory.slice(start, end).reverse()
+// Get price history dengan pagination
+async function getPriceHistory(page = 1, perPage = 10) {
+  try {
+    const total = await redis.llen(REDIS_KEYS.PRICE_HISTORY)
+    const totalPages = Math.ceil(total / perPage)
 
-  return {
-    items: items,
-    page: page,
-    perPage: perPage,
-    total: total,
-    totalPages: totalPages
+    // Ambil dari akhir (terbaru) dengan pagination
+    const start = Math.max(0, total - (page * perPage))
+    const end = total - ((page - 1) * perPage) - 1
+
+    const items = await redis.lrange(REDIS_KEYS.PRICE_HISTORY, start, end)
+
+    return {
+      items: items.reverse(),
+      page: page,
+      perPage: perPage,
+      total: total,
+      totalPages: totalPages
+    }
+  } catch (e) {
+    return { items: [], page: 1, perPage: 10, total: 0, totalPages: 0 }
   }
 }
 
 // Reset data harian setiap jam 23:59 WIB
-function resetDailyData() {
-  dailyStats = {
-    date: null,
-    open: null,
-    high: null,
-    low: null,
-    prices: [],
-    lastUpdate: 0
+async function resetDailyData() {
+  try {
+    await Promise.all([
+      redis.del(REDIS_KEYS.DAILY_STATS),
+      redis.del(REDIS_KEYS.PRICE_HISTORY)
+    ])
+    dailyStatsCache = null
+    priceHistoryCache = []
+    pushLog('SYSTEM | Daily reset completed')
+  } catch (e) {
+    pushLog('REDIS | Reset error: ' + e.message)
   }
-  priceHistory = []
-  pushLog('SYSTEM | Daily reset completed')
 }
 
 // Cek setiap menit untuk reset jam 23:59
@@ -1207,7 +1284,7 @@ async function checkPriceUpdate() {
       lastKnownPrice = currentPrice
       lastBroadcastedPrice = currentPrice
       lastPriceUpdateTime = Date.now()
-      updateDailyStats(currentPrice.buy)
+      await updateDailyStats(currentPrice.buy)
       pushLog(`PRICE | Initial: Buy ${formatRupiah(currentPrice.buy)} | Sell ${formatRupiah(currentPrice.sell)}`)
 
       // Check initial price status
@@ -1282,8 +1359,8 @@ async function checkPriceUpdate() {
 
     // Update daily stats & history
     if (buyChanged) {
-      updateDailyStats(currentPrice.buy)
-      addPriceHistory(currentPrice.buy, currentPrice.sell, prevPrice.buy, prevPrice.sell, currentPrice.updated_at)
+      await updateDailyStats(currentPrice.buy)
+      await addPriceHistory(currentPrice.buy, currentPrice.sell, prevPrice.buy, prevPrice.sell, currentPrice.updated_at)
     }
 
     // INSTANT SSE PUSH ke frontend monitoring
@@ -1495,8 +1572,8 @@ async function fastPoll() {
 
       // Update daily stats & history
       if (currentPrice.buy !== prevPrice.buy) {
-        updateDailyStats(currentPrice.buy)
-        addPriceHistory(currentPrice.buy, currentPrice.sell, prevPrice.buy, prevPrice.sell, currentPrice.updated_at)
+        await updateDailyStats(currentPrice.buy)
+        await addPriceHistory(currentPrice.buy, currentPrice.sell, prevPrice.buy, prevPrice.sell, currentPrice.updated_at)
       }
 
       // Instant SSE broadcast
@@ -1515,7 +1592,7 @@ async function fastPoll() {
     } else if (!lastKnownPrice) {
       // Initial price
       lastKnownPrice = currentPrice
-      updateDailyStats(currentPrice.buy)
+      await updateDailyStats(currentPrice.buy)
     }
   } catch (e) {
     // Silent fail
@@ -1667,16 +1744,18 @@ app.get('/time', (_req, res) => {
   })
 })
 
-// Daily Stats API - konsisten di semua device
-app.get('/daily-stats', (_req, res) => {
-  res.json(getDailyStats())
+// Daily Stats API - konsisten di semua device (async untuk Redis)
+app.get('/daily-stats', async (_req, res) => {
+  const stats = await getDailyStats()
+  res.json(stats)
 })
 
-// Price History API - konsisten di semua device
-app.get('/price-history', (req, res) => {
+// Price History API - konsisten di semua device (async untuk Redis)
+app.get('/price-history', async (req, res) => {
   const page = parseInt(req.query.page) || 1
   const perPage = parseInt(req.query.perPage) || 10
-  res.json(getPriceHistory(page, perPage))
+  const history = await getPriceHistory(page, perPage)
+  res.json(history)
 })
 
 // SSE (Server-Sent Events) untuk real-time push ke frontend
@@ -2830,6 +2909,9 @@ setTimeout(async () => {
 }, 30000)
 
 async function start() {
+  // Load data dari Redis saat startup
+  await loadFromRedis()
+
   const { state, saveCreds } = await useMultiFileAuthState('./auth')
   const { version } = await fetchLatestBaileysVersion()
 
