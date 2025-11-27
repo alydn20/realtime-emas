@@ -985,8 +985,7 @@ function doBroadcastInstant(message) {
 }
 
 async function checkPriceUpdate() {
-  if (!isReady || subscriptions.size === 0) return
-
+  // Selalu fetch price untuk monitoring web, broadcast hanya jika ada subscriber
   try {
     const treasuryData = await fetchTreasury()
     const currentPrice = {
@@ -1058,7 +1057,16 @@ async function checkPriceUpdate() {
       }
     }
 
+    // Selalu update lastKnownPrice untuk monitoring web
+    const prevPrice = { ...lastKnownPrice }
+    lastKnownPrice = currentPrice
+
     if (!buyChanged && !sellChanged) {
+      return
+    }
+
+    // Skip broadcast jika tidak ada subscriber
+    if (!isReady || subscriptions.size === 0) {
       return
     }
     
@@ -1067,7 +1075,6 @@ async function checkPriceUpdate() {
     const sellChangeSinceBroadcast = Math.abs(currentPrice.sell - (lastBroadcastedPrice?.sell || currentPrice.sell))
     
     if (buyChangeSinceBroadcast < MIN_PRICE_CHANGE && sellChangeSinceBroadcast < MIN_PRICE_CHANGE) {
-      lastKnownPrice = currentPrice
       lastPriceUpdateTime = now  // Update timestamp meskipun perubahan kecil
       return
     }
@@ -1100,11 +1107,10 @@ async function checkPriceUpdate() {
     
     if (!shouldBroadcast) {
       const priceChange = {
-        buyChange: currentPrice.buy - lastKnownPrice.buy,
-        sellChange: currentPrice.sell - lastKnownPrice.sell
+        buyChange: currentPrice.buy - prevPrice.buy,
+        sellChange: currentPrice.sell - prevPrice.sell
       }
 
-      lastKnownPrice = currentPrice
       lastPriceUpdateTime = now  // Update timestamp
 
       const time = new Date().toISOString().substring(11, 19)
@@ -1119,13 +1125,12 @@ async function checkPriceUpdate() {
       pushLog(`PRICE | ${buyIcon}Buy ${priceChange.buyChange > 0 ? '+' : ''}${formatRupiah(priceChange.buyChange)} ${sellIcon}Sell ${priceChange.sellChange > 0 ? '+' : ''}${formatRupiah(priceChange.sellChange)} → skip (${skipReason})`)
       return
     }
-    
+
     const priceChange = {
-      buyChange: currentPrice.buy - lastKnownPrice.buy,
-      sellChange: currentPrice.sell - lastKnownPrice.sell
+      buyChange: currentPrice.buy - prevPrice.buy,
+      sellChange: currentPrice.sell - prevPrice.sell
     }
-    
-    lastKnownPrice = currentPrice
+
     lastPriceUpdateTime = now  // Update timestamp saat broadcast
     
     const buyIcon = priceChange.buyChange > 0 ? '📈' : '📉'
@@ -1854,24 +1859,11 @@ app.get('/monitoring', async (_req, res) => {
 
 // API endpoint untuk mendapatkan data monitoring (JSON) - REAL-TIME
 app.get('/monitoring/api', async (_req, res) => {
-  // SELALU fetch langsung dari Treasury untuk data real-time
-  let buy = null
-  let sell = null
-  let updatedAt = null
-
-  try {
-    const treasury = await fetchTreasury()
-    if (treasury?.data) {
-      buy = treasury.data.buying_rate
-      sell = treasury.data.selling_rate
-      updatedAt = treasury.data.updated_at
-    }
-  } catch (e) {
-    // Fallback ke cache jika fetch gagal
-    buy = lastKnownPrice?.buy
-    sell = lastKnownPrice?.sell
-    updatedAt = lastKnownPrice?.updated_at
-  }
+  // Gunakan lastKnownPrice yang di-update oleh checkPriceUpdate setiap 1 detik
+  // Ini lebih cepat daripada fetch Treasury setiap request
+  let buy = lastKnownPrice?.buy || null
+  let sell = lastKnownPrice?.sell || null
+  let updatedAt = lastKnownPrice?.updated_at || null
 
   // Generate pesan real-time
   let currentMessage = ''
