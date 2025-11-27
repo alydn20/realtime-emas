@@ -4133,15 +4133,37 @@ app.get('/install', (_req, res) => {
     const isSafari = /Safari/.test(ua) && !/Chrome/.test(ua);
     const isMobile = isIOS || isAndroid;
 
-    // Simple standalone detection
+    // Comprehensive standalone detection for Desktop PWA
     function checkStandalone() {
+      // iOS Safari standalone
       if (window.navigator.standalone === true) return true;
+      // Standard standalone mode
       if (window.matchMedia('(display-mode: standalone)').matches) return true;
+      // Fullscreen mode
       if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
+      // Minimal UI mode
+      if (window.matchMedia('(display-mode: minimal-ui)').matches) return true;
+      // Desktop PWA detection - no browser UI elements
+      if (window.matchMedia('(display-mode: window-controls-overlay)').matches) return true;
+      // Check if running in app window (no location bar visible)
+      if (!window.locationbar || !window.locationbar.visible) return true;
+      // Check if menubar is hidden (typical for PWA)
+      if (!window.menubar || !window.menubar.visible) return true;
       return false;
     }
 
     const isStandalone = checkStandalone();
+
+    // Debug - log detection result
+    console.log('PWA Detection:', {
+      standalone: isStandalone,
+      navigatorStandalone: window.navigator.standalone,
+      displayModeStandalone: window.matchMedia('(display-mode: standalone)').matches,
+      displayModeFullscreen: window.matchMedia('(display-mode: fullscreen)').matches,
+      displayModeMinimalUI: window.matchMedia('(display-mode: minimal-ui)').matches,
+      locationbarVisible: window.locationbar?.visible,
+      menubarVisible: window.menubar?.visible
+    });
 
     // Check if PWA is already installed using getInstalledRelatedApps API
     async function checkPwaInstalled() {
@@ -6397,12 +6419,32 @@ app.get('/monitoring', async (_req, res) => {
 
     // HANYA PWA yang bisa akses - tidak ada bypass
     (function checkPwaAccess() {
-      // Standalone detection
-      const isStandalone = window.navigator.standalone === true
-        || window.matchMedia('(display-mode: standalone)').matches
-        || window.matchMedia('(display-mode: fullscreen)').matches;
+      // Comprehensive standalone detection
+      function isStandaloneMode() {
+        // iOS Safari standalone
+        if (window.navigator.standalone === true) return true;
+        // Standard standalone mode
+        if (window.matchMedia('(display-mode: standalone)').matches) return true;
+        // Fullscreen mode
+        if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
+        // Minimal UI mode
+        if (window.matchMedia('(display-mode: minimal-ui)').matches) return true;
+        // Desktop PWA - window controls overlay
+        if (window.matchMedia('(display-mode: window-controls-overlay)').matches) return true;
+        // Check if running in app window (no location bar visible)
+        if (!window.locationbar || !window.locationbar.visible) return true;
+        // Check if menubar is hidden (typical for PWA)
+        if (!window.menubar || !window.menubar.visible) return true;
+        return false;
+      }
 
-      if (!isStandalone) {
+      console.log('Monitoring PWA Check:', {
+        isStandalone: isStandaloneMode(),
+        locationbar: window.locationbar?.visible,
+        menubar: window.menubar?.visible
+      });
+
+      if (!isStandaloneMode()) {
         // Bukan PWA - redirect ke install
         window.location.href = '/install';
       }
