@@ -1804,8 +1804,19 @@ app.get('/monitoring', async (_req, res) => {
     .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .page-info { color: #71767b; font-size: 0.85em; }
 
-    /* Animations - single flash only */
+    /* Animations - color based on price direction */
+    .updated-up { animation: highlight-up 0.5s ease-out 1; }
+    .updated-down { animation: highlight-down 0.5s ease-out 1; }
     .updated { animation: highlight 0.3s ease-out 1; }
+
+    @keyframes highlight-up {
+      0% { background: rgba(0, 200, 83, 0.4); border-color: #00c853; }
+      100% { background: transparent; border-color: #2f3640; }
+    }
+    @keyframes highlight-down {
+      0% { background: rgba(255, 82, 82, 0.4); border-color: #ff5252; }
+      100% { background: transparent; border-color: #2f3640; }
+    }
     @keyframes highlight {
       0% { background: rgba(247, 147, 26, 0.3); }
       100% { background: transparent; }
@@ -2222,13 +2233,14 @@ app.get('/monitoring', async (_req, res) => {
               const change = data.buy - data.prevBuy;
               const sign = change > 0 ? '+' : '';
               const cls = change > 0 ? 'up' : 'down';
+              const animCls = change > 0 ? 'updated-up' : 'updated-down';
               document.getElementById('buyChange').textContent = sign + change.toLocaleString('id-ID');
               document.getElementById('buyChange').className = 'change ' + cls;
 
               const buyCard = document.getElementById('buyCard');
-              buyCard.classList.remove('updated');
+              buyCard.classList.remove('updated', 'updated-up', 'updated-down');
               void buyCard.offsetWidth;
-              buyCard.classList.add('updated');
+              buyCard.classList.add(animCls);
 
               // Update stats
               updateCount++;
@@ -2307,13 +2319,14 @@ app.get('/monitoring', async (_req, res) => {
               const change = data.sell - data.prevSell;
               const sign = change > 0 ? '+' : '';
               const cls = change > 0 ? 'up' : 'down';
+              const animCls = change > 0 ? 'updated-up' : 'updated-down';
               document.getElementById('sellChange').textContent = sign + change.toLocaleString('id-ID');
               document.getElementById('sellChange').className = 'change ' + cls;
 
               const sellCard = document.getElementById('sellCard');
-              sellCard.classList.remove('updated');
+              sellCard.classList.remove('updated', 'updated-up', 'updated-down');
               void sellCard.offsetWidth;
-              sellCard.classList.add('updated');
+              sellCard.classList.add(animCls);
             }
             lastSell = data.sell;
           }
