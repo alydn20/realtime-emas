@@ -1557,6 +1557,21 @@ app.get('/xau', async (_req, res) => {
   }
 })
 
+// Endpoint untuk waktu server yang akurat (WIB)
+app.get('/time', (_req, res) => {
+  const now = new Date()
+  // Konversi ke WIB (UTC+7)
+  const wibOffset = 7 * 60 * 60 * 1000
+  const wibTime = new Date(now.getTime() + wibOffset + now.getTimezoneOffset() * 60 * 1000)
+
+  res.json({
+    timestamp: now.getTime(),
+    iso: now.toISOString(),
+    wib: wibTime.toISOString().replace('Z', '+07:00'),
+    timezone: 'Asia/Jakarta'
+  })
+})
+
 // SSE (Server-Sent Events) untuk real-time push ke frontend
 const sseClients = new Set()
 
@@ -2144,24 +2159,22 @@ app.get('/monitoring', async (_req, res) => {
 
     // Offset waktu server vs browser (dalam ms)
     let serverTimeOffset = 0;
-    let timeInitialized = false;
 
-    // Ambil waktu akurat dari WorldTimeAPI
+    // Ambil waktu akurat dari server sendiri
     async function fetchServerTime() {
       try {
-        const res = await fetch('https://worldtimeapi.org/api/timezone/Asia/Jakarta');
+        const res = await fetch('/time');
         const data = await res.json();
-        const serverTime = new Date(data.datetime).getTime();
+        const serverTime = data.timestamp;
         const browserTime = Date.now();
         serverTimeOffset = serverTime - browserTime;
-        timeInitialized = true;
-        console.log('Server time synced, offset:', serverTimeOffset, 'ms');
+        console.log('%c⏰ Server time synced, offset: ' + serverTimeOffset + 'ms', 'color: #00bcd4');
       } catch (e) {
         console.warn('Failed to sync time, using browser time');
       }
     }
 
-    // Sync waktu setiap 5 menit
+    // Sync waktu saat load dan setiap 5 menit
     fetchServerTime();
     setInterval(fetchServerTime, 5 * 60 * 1000);
 
