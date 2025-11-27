@@ -349,50 +349,9 @@ async function loadFromRedis() {
   }
 }
 
-// Update daily stats ke Redis
-async function updateDailyStats(buyPrice) {
-  const now = new Date()
-  // Konversi ke WIB
-  const wibOffset = 7 * 60 * 60 * 1000
-  const wibTime = new Date(now.getTime() + wibOffset + now.getTimezoneOffset() * 60 * 1000)
-  const today = wibTime.toISOString().split('T')[0]
-
-  try {
-    let stats = dailyStatsCache || await redis.get(REDIS_KEYS.DAILY_STATS)
-
-    // Reset jika hari baru
-    if (!stats || stats.date !== today) {
-      stats = {
-        date: today,
-        open: buyPrice,
-        high: buyPrice,
-        low: buyPrice,
-        prices: [buyPrice],
-        lastUpdate: Date.now()
-      }
-    } else {
-      // Update stats
-      if (stats.open === null) stats.open = buyPrice
-      if (buyPrice > stats.high) stats.high = buyPrice
-      if (buyPrice < stats.low) stats.low = buyPrice
-
-      // Simpan harga untuk average (max 500 untuk Redis)
-      if (!stats.prices) stats.prices = []
-      if (stats.prices.length < 500) {
-        stats.prices.push(buyPrice)
-      } else {
-        stats.prices.shift()
-        stats.prices.push(buyPrice)
-      }
-      stats.lastUpdate = Date.now()
-    }
-
-    // Simpan ke Redis dan cache
-    await redis.set(REDIS_KEYS.DAILY_STATS, stats)
-    dailyStatsCache = stats
-  } catch (e) {
-    pushLog('REDIS | Update daily stats error: ' + e.message)
-  }
+// Update daily stats - DISABLED (not needed)
+function updateDailyStats(buyPrice) {
+  // Daily stats disabled - tidak digunakan
 }
 
 // Get daily stats
@@ -436,119 +395,73 @@ function formatDailyStats(stats) {
   }
 }
 
-// Add price history ke Redis
-let isAddingHistory = false // Lock untuk mencegah race condition
+// Add price history ke LOCAL memory only (no Redis)
 let lastAddedUpdatedAt = '' // Track updatedAt terakhir yang sudah ditambahkan
 const addedTimestamps = new Set() // Track semua timestamp yang sudah ditambahkan
 
-async function addPriceHistory(buy, sell, prevBuy, prevSell, updatedAt) {
+function addPriceHistory(buy, sell, prevBuy, prevSell, updatedAt) {
   // Skip jika updatedAt kosong atau sama dengan yang terakhir
   if (!updatedAt || updatedAt === lastAddedUpdatedAt) return
 
   // Cek apakah timestamp sudah pernah ditambahkan (anti-duplikat)
   if (addedTimestamps.has(updatedAt)) return
 
-  // Cek lock untuk mencegah race condition
-  if (isAddingHistory) return
-  isAddingHistory = true
-
-  try {
-    // Double check setelah dapat lock
-    if (addedTimestamps.has(updatedAt)) {
-      return
-    }
-
-    // Cek dari Redis langsung - ambil timestamp terakhir yang disimpan
-    const lastSavedTime = await redis.get('gold:last_history_time')
-    if (lastSavedTime === updatedAt) {
-      addedTimestamps.add(updatedAt)
-      lastAddedUpdatedAt = updatedAt
-      return
-    }
-
-    // Cek dari cache lokal - cari di seluruh array
-    const existsInCache = priceHistoryCache.some(entry => entry.time === updatedAt)
-    if (existsInCache) {
-      addedTimestamps.add(updatedAt)
-      lastAddedUpdatedAt = updatedAt
-      return
-    }
-
-    // TAMBAHAN: Cek 10 entry terakhir di Redis untuk memastikan tidak duplikat
-    const recentEntries = await redis.lrange(REDIS_KEYS.PRICE_HISTORY, -10, -1)
-    const existsInRedis = recentEntries.some(entry => {
-      const parsed = typeof entry === 'string' ? JSON.parse(entry) : entry
-      return parsed.time === updatedAt
-    })
-    if (existsInRedis) {
-      addedTimestamps.add(updatedAt)
-      lastAddedUpdatedAt = updatedAt
-      return
-    }
-
-    // Calculate spread percentage
-    const spread = ((sell - buy) / buy * 100).toFixed(2)
-
-    const entry = {
-      time: updatedAt,
-      buy: buy,
-      sell: sell,
-      buyChange: buy - prevBuy,
-      sellChange: sell - prevSell,
-      spread: spread,
-      usdIdr: cachedMarketData.usdIdr?.rate || 0
-    }
-
-    // Simpan timestamp DULU sebelum push untuk mencegah race condition
-    await redis.set('gold:last_history_time', updatedAt)
+  // Cek dari cache lokal
+  const existsInCache = priceHistoryCache.some(entry => entry.time === updatedAt)
+  if (existsInCache) {
     addedTimestamps.add(updatedAt)
     lastAddedUpdatedAt = updatedAt
+    return
+  }
 
-    // Baru push ke list
-    await redis.rpush(REDIS_KEYS.PRICE_HISTORY, entry)
-    priceHistoryCache.push(entry)
+  // Calculate spread percentage
+  const spread = ((sell - buy) / buy * 100).toFixed(2)
 
-    // Limit addedTimestamps to last 200 entries untuk hemat memory
-    if (addedTimestamps.size > 200) {
-      const arr = Array.from(addedTimestamps)
-      addedTimestamps.clear()
-      arr.slice(-100).forEach(t => addedTimestamps.add(t))
-    }
+  const entry = {
+    time: updatedAt,
+    buy: buy,
+    sell: sell,
+    buyChange: buy - prevBuy,
+    sellChange: sell - prevSell,
+    spread: spread,
+    usdIdr: cachedMarketData.usdIdr?.rate || 0
+  }
 
-    // Limit max 1440 entries (24 jam)
-    const len = await redis.llen(REDIS_KEYS.PRICE_HISTORY)
-    if (len > 1440) {
-      await redis.lpop(REDIS_KEYS.PRICE_HISTORY)
-      priceHistoryCache.shift()
-    }
-  } catch (e) {
-    pushLog('REDIS | Add history error: ' + e.message)
-  } finally {
-    isAddingHistory = false
+  // Simpan ke local cache
+  priceHistoryCache.push(entry)
+  addedTimestamps.add(updatedAt)
+  lastAddedUpdatedAt = updatedAt
+
+  // Limit max 1440 entries (24 jam)
+  if (priceHistoryCache.length > 1440) {
+    priceHistoryCache.shift()
+  }
+
+  // Limit addedTimestamps
+  if (addedTimestamps.size > 200) {
+    const arr = Array.from(addedTimestamps)
+    addedTimestamps.clear()
+    arr.slice(-100).forEach(t => addedTimestamps.add(t))
   }
 }
 
-// Get price history dengan pagination
-async function getPriceHistory(page = 1, perPage = 10) {
-  try {
-    const total = await redis.llen(REDIS_KEYS.PRICE_HISTORY)
-    const totalPages = Math.ceil(total / perPage)
+// Get price history dengan pagination (local memory)
+function getPriceHistory(page = 1, perPage = 10) {
+  const total = priceHistoryCache.length
+  const totalPages = Math.ceil(total / perPage)
 
-    // Ambil dari akhir (terbaru) dengan pagination
-    const start = Math.max(0, total - (page * perPage))
-    const end = total - ((page - 1) * perPage) - 1
+  // Ambil dari akhir (terbaru) dengan pagination
+  const start = Math.max(0, total - (page * perPage))
+  const end = total
 
-    const items = await redis.lrange(REDIS_KEYS.PRICE_HISTORY, start, end)
+  const items = priceHistoryCache.slice(start, end).reverse()
 
-    return {
-      items: items.reverse(),
-      page: page,
-      perPage: perPage,
-      total: total,
-      totalPages: totalPages
-    }
-  } catch (e) {
-    return { items: [], page: 1, perPage: 10, total: 0, totalPages: 0 }
+  return {
+    items: items,
+    page: page,
+    perPage: perPage,
+    total: total,
+    totalPages: totalPages
   }
 }
 
@@ -6021,28 +5934,8 @@ app.get('/monitoring', async (_req, res) => {
             <span class="stat-change up" id="profit30">-</span>
           </div>
         </div>
-        <!-- Daily Stats Row -->
+        <!-- Sound Toggle Only -->
         <div class="daily-stats">
-          <div class="daily-item">
-            <span class="daily-label">Open</span>
-            <span class="daily-value" id="dayOpen">-</span>
-          </div>
-          <div class="daily-item">
-            <span class="daily-label">High</span>
-            <span class="daily-value high" id="dayHigh">-</span>
-          </div>
-          <div class="daily-item">
-            <span class="daily-label">Low</span>
-            <span class="daily-value low" id="dayLow">-</span>
-          </div>
-          <div class="daily-item">
-            <span class="daily-label">Avg</span>
-            <span class="daily-value" id="dayAvg">-</span>
-          </div>
-          <div class="daily-item">
-            <span class="daily-label">Change</span>
-            <span class="daily-value" id="dayChange">-</span>
-          </div>
           <div class="daily-item sound-toggle" id="soundToggle" onclick="toggleSound()">
             <span class="daily-label">Sound</span>
             <span class="daily-value" id="soundStatus">ON</span>
@@ -6247,33 +6140,6 @@ app.get('/monitoring', async (_req, res) => {
     }
 
     // Daily Statistics - fetch dari server
-    async function loadDailyStats() {
-      try {
-        const res = await fetch('/daily-stats');
-        const data = await res.json();
-        updateDailyDisplay(data);
-      } catch (e) {}
-    }
-
-    function updateDailyDisplay(data) {
-      if (!data) return;
-      if (data.open) document.getElementById('dayOpen').textContent = formatRupiah(data.open);
-      if (data.high) document.getElementById('dayHigh').textContent = formatRupiah(data.high);
-      if (data.low) document.getElementById('dayLow').textContent = formatRupiah(data.low);
-      if (data.avg) document.getElementById('dayAvg').textContent = formatRupiah(data.avg);
-
-      if (data.changePct !== null) {
-        const el = document.getElementById('dayChange');
-        const sign = parseFloat(data.changePct) >= 0 ? '+' : '';
-        el.textContent = sign + data.changePct + '%';
-        el.className = 'daily-value ' + (parseFloat(data.changePct) >= 0 ? 'high' : 'low');
-      }
-    }
-
-    // Refresh daily stats setiap 30 detik
-    setInterval(loadDailyStats, 30000);
-    loadDailyStats();
-
     // Sound Notification - berbeda untuk naik dan turun menggunakan Web Audio API
     let soundEnabled = localStorage.getItem('soundEnabled') !== 'false';
     let audioContext = null;
@@ -6665,8 +6531,7 @@ app.get('/monitoring', async (_req, res) => {
 
             window.lastApiTimestamp = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
             updateHistory();
-            loadDailyStats();
-          }
+                      }
           lastBuy = data.buy;
         }
 
@@ -6770,8 +6635,7 @@ app.get('/monitoring', async (_req, res) => {
               buyCard.classList.add(change > 0 ? 'updated-up' : 'updated-down', change > 0 ? 'price-up' : 'price-down');
 
               updateHistory();
-              loadDailyStats();
-            }
+                          }
             lastBuy = data.buy;
           }
 
