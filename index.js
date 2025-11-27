@@ -2828,7 +2828,23 @@ app.post('/api/login', express.json(), async (req, res) => {
     return res.json({ success: false, error: 'Terjadi kesalahan' })
   }
 
-  // Create session
+  // Check existing sessions for this user (max 2 devices)
+  const allSessions = await redis.hgetall(REDIS_KEYS.SESSIONS) || {}
+  const userSessions = []
+  for (const [sessId, sessPhone] of Object.entries(allSessions)) {
+    if (sessPhone === normalizedPhone) {
+      userSessions.push(sessId)
+    }
+  }
+
+  // If already 2 sessions, remove the oldest one (first in array)
+  if (userSessions.length >= 2) {
+    // Remove oldest session (FIFO - first in first out)
+    await redis.hdel(REDIS_KEYS.SESSIONS, userSessions[0])
+    pushLog(`Auth | User +62${normalizedPhone} exceeded 2 devices, oldest session removed`)
+  }
+
+  // Create new session
   const sessionId = generateSessionId()
   await redis.hset(REDIS_KEYS.SESSIONS, { [sessionId]: normalizedPhone })
 
@@ -3518,9 +3534,6 @@ app.get('/login', (_req, res) => {
         </div>
         <button type="submit" class="btn btn-primary" id="loginBtn">Masuk</button>
       </form>
-
-      <p class="footer-text">Hubungi admin jika belum punya akun</p>
-      <p class="footer-text" style="margin-top:10px;font-size:0.75em;">Untuk admin: <a href="/admin/users" style="color:#f7931a;">kelola user</a></p>
     </div>
   </div>
 
