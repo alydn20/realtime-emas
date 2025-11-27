@@ -1444,6 +1444,27 @@ app.get('/monitoring', async (_req, res) => {
       color: #71767b;
       padding: 40px 20px;
     }
+    .history-pagination {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 20px;
+      border-top: 1px solid #2f3640;
+    }
+    .page-btn {
+      background: #2f3640;
+      color: #e7e9ea;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85em;
+      transition: background 0.2s;
+    }
+    .page-btn:hover:not(:disabled) { background: #3d4654; }
+    .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .page-info { color: #71767b; font-size: 0.85em; }
 
     /* Animations */
     .updated { animation: highlight 0.6s ease; }
@@ -1544,6 +1565,11 @@ app.get('/monitoring', async (_req, res) => {
           <tr><td colspan="4" class="no-data">Menunggu data...</td></tr>
         </tbody>
       </table>
+      <div class="history-pagination" id="historyPagination" style="display:none;">
+        <button class="page-btn" id="prevPage" disabled>Sebelumnya</button>
+        <span class="page-info" id="pageInfo">Halaman 1</span>
+        <button class="page-btn" id="nextPage">Selanjutnya</button>
+      </div>
     </div>
   </div>
 
@@ -1554,7 +1580,9 @@ app.get('/monitoring', async (_req, res) => {
     let lastBuy = 0;
     let lastSell = 0;
     let priceHistory = [];
-    const MAX_HISTORY = 20;
+    const MAX_HISTORY = 1440; // 24 jam x 60 menit
+    const PER_PAGE = 10;
+    let currentPage = 1;
 
     function formatRupiah(n) {
       return 'Rp ' + n.toLocaleString('id-ID');
@@ -1599,17 +1627,26 @@ app.get('/monitoring', async (_req, res) => {
 
     function renderHistory() {
       const tbody = document.getElementById('historyBody');
-      document.getElementById('historyCount').textContent = priceHistory.length + ' records';
+      const pagination = document.getElementById('historyPagination');
+      const totalRecords = priceHistory.length;
+      const totalPages = Math.ceil(totalRecords / PER_PAGE);
 
-      if (priceHistory.length === 0) {
+      document.getElementById('historyCount').textContent = totalRecords + ' records';
+
+      if (totalRecords === 0) {
         tbody.innerHTML = '<tr><td colspan="4" class="no-data">Menunggu data...</td></tr>';
+        pagination.style.display = 'none';
         return;
       }
 
-      tbody.innerHTML = priceHistory.map((item, idx) => {
+      // Pagination
+      const startIdx = (currentPage - 1) * PER_PAGE;
+      const endIdx = Math.min(startIdx + PER_PAGE, totalRecords);
+      const pageData = priceHistory.slice(startIdx, endIdx);
+
+      tbody.innerHTML = pageData.map((item, idx) => {
         const timeStr = formatTime(item.time);
         const buyClass = item.buyChange > 0 ? 'price-up' : (item.buyChange < 0 ? 'price-down' : '');
-        const sellClass = item.sellChange > 0 ? 'price-up' : (item.sellChange < 0 ? 'price-down' : '');
 
         let changeText = '-';
         if (item.buyChange !== 0) {
@@ -1617,14 +1654,40 @@ app.get('/monitoring', async (_req, res) => {
           changeText = '<span class="' + buyClass + '">' + sign + item.buyChange.toLocaleString('id-ID') + '</span>';
         }
 
-        return '<tr' + (idx === 0 ? ' class="updated"' : '') + '>' +
+        return '<tr' + (startIdx === 0 && idx === 0 ? ' class="updated"' : '') + '>' +
           '<td class="time-col">' + timeStr + '</td>' +
           '<td>' + formatRupiah(item.buy) + '</td>' +
           '<td>' + formatRupiah(item.sell) + '</td>' +
           '<td>' + changeText + '</td>' +
         '</tr>';
       }).join('');
+
+      // Show/hide pagination
+      if (totalPages > 1) {
+        pagination.style.display = 'flex';
+        document.getElementById('pageInfo').textContent = 'Halaman ' + currentPage + ' / ' + totalPages;
+        document.getElementById('prevPage').disabled = currentPage === 1;
+        document.getElementById('nextPage').disabled = currentPage === totalPages;
+      } else {
+        pagination.style.display = 'none';
+      }
     }
+
+    // Pagination event listeners
+    document.getElementById('prevPage').addEventListener('click', function() {
+      if (currentPage > 1) {
+        currentPage--;
+        renderHistory();
+      }
+    });
+
+    document.getElementById('nextPage').addEventListener('click', function() {
+      const totalPages = Math.ceil(priceHistory.length / PER_PAGE);
+      if (currentPage < totalPages) {
+        currentPage++;
+        renderHistory();
+      }
+    });
 
     let isFetching = false;
     async function fetchPrices() {
