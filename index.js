@@ -1576,21 +1576,36 @@ app.get('/monitoring', async (_req, res) => {
 
 // API endpoint untuk mendapatkan data monitoring (JSON) - REAL-TIME
 app.get('/monitoring/api', async (_req, res) => {
-  // Selalu generate pesan terbaru dari data real-time
-  let currentMessage = ''
+  // Fetch harga terbaru langsung jika belum ada lastKnownPrice
+  let buy = lastKnownPrice?.buy
+  let sell = lastKnownPrice?.sell
+  let updatedAt = lastKnownPrice?.updated_at
 
-  if (lastKnownPrice) {
-    const treasuryData = {
+  // Jika belum ada data, fetch langsung dari Treasury
+  if (!buy || !sell) {
+    try {
+      const treasury = await fetchTreasury()
+      if (treasury?.data) {
+        buy = treasury.data.buying_rate
+        sell = treasury.data.selling_rate
+        updatedAt = treasury.data.updated_at
+      }
+    } catch (e) {
+      // Silent fail
+    }
+  }
+
+  // Generate pesan real-time
+  let currentMessage = ''
+  if (buy && sell) {
+    const priceData = {
       data: {
-        buying_rate: lastKnownPrice.buy,
-        selling_rate: lastKnownPrice.sell,
-        updated_at: lastKnownPrice.updated_at
+        buying_rate: buy,
+        selling_rate: sell,
+        updated_at: updatedAt
       }
     }
-    // Generate pesan real-time tanpa priceChange (untuk monitoring)
-    currentMessage = formatMessage(treasuryData, cachedMarketData.usdIdr?.rate, cachedMarketData.xauUsd, null, cachedMarketData.economicEvents)
-  } else if (lastBroadcastMessage) {
-    currentMessage = lastBroadcastMessage
+    currentMessage = formatMessage(priceData, cachedMarketData.usdIdr?.rate, cachedMarketData.xauUsd, null, cachedMarketData.economicEvents)
   }
 
   res.json({
@@ -1601,11 +1616,10 @@ app.get('/monitoring/api', async (_req, res) => {
     timeSinceLastBroadcast: lastBroadcastTime > 0 ? Math.floor((Date.now() - lastBroadcastTime) / 1000) : null,
     usdIdr: cachedMarketData.usdIdr?.rate,
     xauUsd: cachedMarketData.xauUsd,
-    buy: lastKnownPrice?.buy,
-    sell: lastKnownPrice?.sell,
+    buy,
+    sell,
     message: currentMessage,
-    logs: logs.slice(-10),
-    xauHistory: xauHistory.map(h => ({ t: h.time, p: h.price }))
+    logs: logs.slice(-10)
   })
 })
 
