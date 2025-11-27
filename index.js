@@ -6217,14 +6217,11 @@ async function start() {
   await loadFromRedis()
   await loadMonitoredGroup()
 
-  // Clear any corrupt Redis auth from previous attempts
-  await clearRedisAuth()
-
-  // Use file-based auth (more stable)
-  const { state, saveCreds } = await useMultiFileAuthState('./auth')
+  // Use Redis-based auth (persistent across deploys)
+  const { state, saveCreds } = await useRedisAuthState()
   const { version } = await fetchLatestBaileysVersion()
 
-  pushLog('WA | Using file-based auth state')
+  pushLog('WA | Using Redis auth state (persistent)')
 
   sock = makeWASocket({
     version,
