@@ -1887,7 +1887,7 @@ const app = express()
 app.use(express.json())
 
 app.get('/', (_req, res) => {
-  res.redirect('/install-pwa')
+  res.redirect('/login')
 })
 
 app.get('/health', (_req, res) => {
@@ -3511,6 +3511,34 @@ app.get('/login', (_req, res) => {
       color: #71767b;
       font-size: 0.8em;
     }
+    .btn-install {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #f7931a;
+      border-radius: 12px;
+      font-size: 1em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: transparent;
+      color: #f7931a;
+      margin-top: 15px;
+      display: none;
+    }
+    .btn-install:hover {
+      background: rgba(247,147,26,0.1);
+    }
+    .btn-install.show { display: block; }
+    .install-badge {
+      display: inline-block;
+      background: #00ff88;
+      color: #0f1419;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.7em;
+      margin-left: 8px;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -3534,17 +3562,63 @@ app.get('/login', (_req, res) => {
         </div>
         <button type="submit" class="btn btn-primary" id="loginBtn">Masuk</button>
       </form>
+
+      <button class="btn-install" id="installBtn">
+        Install Aplikasi <span class="install-badge">Recommended</span>
+      </button>
     </div>
   </div>
 
   <script>
-    // Check if PWA is installed first
-    const pwaInstalled = localStorage.getItem('pwa_installed');
+    // PWA Install prompt
+    let deferredPrompt = null;
+    const installBtn = document.getElementById('installBtn');
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
 
-    if (!pwaInstalled && !isStandalone) {
-      // Belum install PWA, redirect ke halaman install
-      window.location.href = '/install-pwa';
+    // Show install button if not already installed as PWA
+    if (!isStandalone) {
+      installBtn.classList.add('show');
+    }
+
+    // Capture the install prompt
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      // Show install button
+      installBtn.classList.add('show');
+    });
+
+    // Handle install button click
+    installBtn.addEventListener('click', async () => {
+      if (deferredPrompt) {
+        // Show the install prompt
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          localStorage.setItem('pwa_installed', 'true');
+          installBtn.style.display = 'none';
+        }
+        deferredPrompt = null;
+      } else {
+        // For iOS or browsers that don't support beforeinstallprompt
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        if (isIOS) {
+          alert('Untuk install di iPhone/iPad:\\n\\n1. Tap icon Share (kotak dengan panah ke atas)\\n2. Scroll ke bawah, tap "Add to Home Screen"\\n3. Tap "Add"');
+        } else {
+          alert('Untuk install aplikasi:\\n\\n1. Tap menu (titik 3) di pojok kanan atas\\n2. Pilih "Install App" atau "Add to Home Screen"');
+        }
+      }
+    });
+
+    // Hide install button when app is installed
+    window.addEventListener('appinstalled', () => {
+      localStorage.setItem('pwa_installed', 'true');
+      installBtn.style.display = 'none';
+    });
+
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
 
     // Check existing session

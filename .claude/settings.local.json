@@ -8,7 +8,8 @@
       "Bash(railway:*)",
       "Bash(npm install:*)",
       "WebFetch(domain:realtime-emas-production.up.railway.app)",
-      "Bash(npx web-push:*)"
+      "Bash(npx web-push:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []
