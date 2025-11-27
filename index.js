@@ -1335,29 +1335,17 @@ async function checkPriceUpdate() {
 // Polling dengan interval tercepat (100ms) untuk test semua
 setInterval(checkPriceUpdate, 100)
 
-// ==================== AGGRESSIVE BURST POLLING ====================
-// Burst polling dari detik 50-59 dan 00-10 (window pergantian menit)
-let lastBurstMinute = -1
-let burstGotNewData = false
+// ==================== CONTINUOUS FAST POLLING ====================
+// Polling terus-menerus dengan 2 request paralel setiap 150ms
+let isFastPolling = false
 
-async function burstPoll() {
-  const now = new Date()
-  const currentMinute = now.getMinutes()
-  const currentSecond = now.getSeconds()
+async function fastPoll() {
+  if (isFastPolling) return
+  isFastPolling = true
 
-  // Reset flag saat menit baru
-  if (currentMinute !== lastBurstMinute) {
-    burstGotNewData = false
-    lastBurstMinute = currentMinute
-  }
-
-  // Burst di detik 50-59 dan 00-10 (window pergantian menit)
-  const inBurstWindow = currentSecond >= 50 || currentSecond <= 10
-
-  if (inBurstWindow && !burstGotNewData) {
-    // Kirim 3 request paralel (lebih sedikit tapi lebih sering)
+  try {
+    // Kirim 2 request paralel untuk meningkatkan chance dapat data baru
     const results = await Promise.allSettled([
-      fetchTreasury(),
       fetchTreasury(),
       fetchTreasury()
     ])
@@ -1377,9 +1365,8 @@ async function burstPoll() {
     })
 
     if (newestData && newestData.data.updated_at !== lastApiUpdateTime) {
-      burstGotNewData = true // Stop burst untuk menit ini
       const delayMs = Date.now() - newestTime
-      console.log(`🎯 BURST HIT | ${now.toISOString().substr(11, 12)} | Delay: ${(delayMs/1000).toFixed(2)}s | API: ${newestData.data.updated_at.substr(11, 8)}`)
+      console.log(`🎯 FAST HIT | ${new Date().toISOString().substr(11, 12)} | Delay: ${(delayMs/1000).toFixed(2)}s | API: ${newestData.data.updated_at.substr(11, 8)}`)
 
       // Process the new data
       const currentPrice = {
@@ -1408,14 +1395,18 @@ async function burstPoll() {
           serverTime: new Date().toISOString()
         })
 
-        console.log(`🚀 BURST SSE | Broadcasted to ${sseClients.size} clients | Server delay: ${(delayMs/1000).toFixed(2)}s`)
+        console.log(`🚀 SSE PUSH | ${sseClients.size} clients | Server delay: ${(delayMs/1000).toFixed(2)}s`)
       }
     }
+  } catch (e) {
+    // Silent fail
+  } finally {
+    isFastPolling = false
   }
 }
 
-// Burst poll setiap 200ms (lebih agresif)
-setInterval(burstPoll, 200)
+// Fast poll setiap 150ms (continuous)
+setInterval(fastPoll, 150)
 
 // ==================== XAU/USD REAL-TIME ====================
 let lastXauUsdPrice = null
