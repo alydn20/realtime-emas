@@ -1791,14 +1791,47 @@ app.get('/health', (_req, res) => {
 })
 
 app.get('/qr', async (_req, res) => {
-  if (!lastQr) return res.send(`
+  if (!lastQr) {
+    const statusMsg = isReady
+      ? '<span style="color:#00ff88;">✓ WhatsApp sudah terhubung!</span><br><small style="color:#71767b;">Bot aktif dan siap digunakan.</small>'
+      : '<span style="color:#ffaa00;">⏳ Menunggu QR Code...</span><br><small style="color:#71767b;">Jika tidak muncul dalam 30 detik, coba Reset.</small>'
+
+    return res.send(`
     <div style="text-align:center;padding:20px;font-family:sans-serif;background:#0f1419;color:#e7e9ea;min-height:100vh;">
-      <h2 style="color:#f7931a;">QR Code</h2>
-      <p>QR not ready. ${isReady ? 'WhatsApp sudah terhubung.' : 'Menunggu QR...'}</p>
-      <p style="margin-top:20px;"><a href="/qr-reset" style="color:#ff4444;text-decoration:none;padding:10px 20px;border:1px solid #ff4444;border-radius:8px;">Reset QR / Login Ulang</a></p>
-      <p style="margin-top:10px;"><a href="/qr" style="color:#f7931a;">Refresh</a></p>
+      <h2 style="color:#f7931a;">WhatsApp Bot Status</h2>
+      <div style="margin:30px 0;padding:20px;background:#1a1f26;border-radius:12px;border:1px solid #2f3640;">
+        <p style="font-size:1.2em;">${statusMsg}</p>
+      </div>
+
+      ${isReady ? `
+      <div style="margin:20px 0;padding:15px;background:rgba(0,255,136,0.1);border:1px solid #00ff88;border-radius:10px;">
+        <p style="color:#00ff88;margin-bottom:10px;">Bot sudah aktif!</p>
+        <p style="color:#71767b;font-size:0.9em;">Jika ingin ganti nomor WA atau login ulang, klik Reset di bawah.</p>
+      </div>
+      ` : ''}
+
+      <div style="margin-top:30px;">
+        <a href="/qr-reset" style="display:inline-block;margin:10px;padding:12px 25px;background:#ff4444;color:white;text-decoration:none;border-radius:8px;font-weight:bold;">Reset / Login Ulang</a>
+        <a href="/qr" style="display:inline-block;margin:10px;padding:12px 25px;background:#2f3640;color:white;text-decoration:none;border-radius:8px;">Refresh</a>
+      </div>
+
+      <div style="margin-top:30px;padding:15px;background:#1a1f26;border-radius:10px;text-align:left;max-width:400px;margin-left:auto;margin-right:auto;">
+        <p style="color:#f7931a;font-weight:bold;margin-bottom:10px;">Jika tidak bisa "Tautkan Perangkat":</p>
+        <ol style="color:#71767b;font-size:0.85em;line-height:1.8;padding-left:20px;">
+          <li>Buka WhatsApp di HP</li>
+          <li>Pergi ke Settings > Linked Devices</li>
+          <li>Hapus semua device yang terhubung</li>
+          <li>Klik "Reset / Login Ulang" di atas</li>
+          <li>Scan QR code yang muncul</li>
+        </ol>
+      </div>
+
+      <p style="margin-top:20px;color:#555;font-size:0.8em;">Auto-refresh dalam 10 detik...</p>
+      <script>setTimeout(() => window.location.reload(), 10000);</script>
     </div>
   `)
+  }
+
   try {
     const mod = await import('qrcode').catch(() => null)
     if (mod?.toDataURL) {
@@ -1806,9 +1839,22 @@ app.get('/qr', async (_req, res) => {
       return res.send(`
         <div style="text-align:center;padding:20px;font-family:sans-serif;background:#0f1419;color:#e7e9ea;min-height:100vh;">
           <h2 style="color:#f7931a;">Scan QR dengan WhatsApp</h2>
-          <img src="${dataUrl}" style="max-width:300px;border-radius:10px;"/>
-          <p style="margin-top:15px;color:#71767b;">Settings > Linked Devices > Link a Device</p>
-          <p style="margin-top:20px;"><a href="/qr" style="color:#f7931a;">Refresh</a></p>
+          <div style="background:white;padding:15px;border-radius:15px;display:inline-block;margin:20px 0;">
+            <img src="${dataUrl}" style="max-width:280px;display:block;"/>
+          </div>
+          <div style="margin:20px 0;padding:15px;background:#1a1f26;border-radius:10px;max-width:350px;margin-left:auto;margin-right:auto;">
+            <p style="color:#f7931a;font-weight:bold;margin-bottom:10px;">Cara Scan:</p>
+            <p style="color:#71767b;font-size:0.9em;line-height:1.6;">
+              1. Buka WhatsApp di HP<br>
+              2. Tap ⋮ atau Settings<br>
+              3. Pilih "Linked Devices"<br>
+              4. Tap "Link a Device"<br>
+              5. Arahkan kamera ke QR di atas
+            </p>
+          </div>
+          <p style="margin-top:20px;"><a href="/qr" style="color:#f7931a;">Refresh QR</a></p>
+          <p style="margin-top:10px;color:#555;font-size:0.8em;">QR expires dalam 60 detik, refresh jika perlu</p>
+          <script>setTimeout(() => window.location.reload(), 30000);</script>
         </div>
       `)
     }
@@ -3042,6 +3088,7 @@ app.get('/login', (_req, res) => {
       </form>
 
       <p class="footer-text">Hubungi admin jika belum punya akun</p>
+      <p class="footer-text" style="margin-top:10px;font-size:0.75em;">Untuk admin: <a href="/admin/users" style="color:#f7931a;">kelola user</a></p>
     </div>
   </div>
 
