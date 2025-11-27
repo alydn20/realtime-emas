@@ -127,11 +127,92 @@ const REDIS_KEYS = {
   PRICE_HISTORY: 'gold:price_history',
   USERS: 'gold:users',           // Hash: phone -> user data (name, expired, createdAt)
   PUSH_SUBS: 'gold:push_subs',   // Hash: phone -> push subscription JSON
-  SESSIONS: 'gold:sessions'      // Hash: sessionId -> phone
+  SESSIONS: 'gold:sessions',     // Hash: sessionId -> phone
+  WA_GROUP_ID: 'gold:wa_group_id' // String: ID grup WA yang di-monitor
 }
 
 // Admin password untuk akses admin panel
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'
+
+// ID Grup WhatsApp yang membernya otomatis terdaftar (di-set via admin panel)
+let monitoredGroupId = null
+
+// Load grup ID dari Redis saat startup
+async function loadMonitoredGroup() {
+  try {
+    const groupId = await redis.get(REDIS_KEYS.WA_GROUP_ID)
+    if (groupId) {
+      monitoredGroupId = groupId
+      pushLog('WA | Monitored group: ' + groupId.substring(0, 20) + '...')
+    }
+  } catch (e) {
+    pushLog('WA | Failed to load monitored group: ' + e.message)
+  }
+}
+
+// Helper: Extract phone from JID (62xxx@s.whatsapp.net -> xxx)
+function extractPhoneFromJid(jid) {
+  if (!jid) return null
+  const match = jid.match(/^(\d+)@/)
+  if (!match) return null
+  let phone = match[1]
+  if (phone.startsWith('62')) phone = phone.substring(2)
+  return phone
+}
+
+// Auto-register member grup ke database
+async function autoRegisterGroupMember(phone, name = null) {
+  if (!phone) return
+
+  try {
+    const existing = await redis.hget(REDIS_KEYS.USERS, phone)
+    if (existing) return // Sudah terdaftar
+
+    const userData = {
+      name: name || 'Member ' + phone,
+      createdAt: Date.now(),
+      expired: null, // Default lifetime, admin bisa atur nanti
+      source: 'whatsapp_group'
+    }
+
+    await redis.hset(REDIS_KEYS.USERS, phone, JSON.stringify(userData))
+    pushLog('WA | Auto-registered: +62' + phone)
+  } catch (e) {
+    pushLog('WA | Auto-register failed: ' + e.message)
+  }
+}
+
+// Remove member dari database saat keluar grup
+async function removeGroupMember(phone) {
+  if (!phone) return
+
+  try {
+    const existing = await redis.hget(REDIS_KEYS.USERS, phone)
+    if (!existing) return
+
+    const user = typeof existing === 'string' ? JSON.parse(existing) : existing
+
+    // Hanya hapus jika source dari whatsapp_group
+    if (user.source === 'whatsapp_group') {
+      await Promise.all([
+        redis.hdel(REDIS_KEYS.USERS, phone),
+        redis.hdel(REDIS_KEYS.PUSH_SUBS, phone)
+      ])
+
+      // Hapus semua session user ini
+      const sessions = await redis.hgetall(REDIS_KEYS.SESSIONS)
+      for (const [sessId, sessPhone] of Object.entries(sessions || {})) {
+        if (sessPhone === phone) {
+          await redis.hdel(REDIS_KEYS.SESSIONS, sessId)
+        }
+      }
+
+      pushLog('WA | Removed member: +62' + phone)
+    }
+  } catch (e) {
+    pushLog('WA | Remove member failed: ' + e.message)
+  }
+}
 
 // Cache lokal untuk mengurangi Redis calls
 let dailyStatsCache = null
@@ -2634,6 +2715,99 @@ app.post('/api/admin/push', express.json(), async (req, res) => {
   }
 })
 
+// ==================== WHATSAPP GROUP MANAGEMENT ====================
+
+// Admin: Get list of WhatsApp groups
+app.get('/api/admin/wa-groups', async (req, res) => {
+  const { password } = req.query
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  if (!sock || !isReady) {
+    return res.json({ success: false, error: 'WhatsApp not connected' })
+  }
+
+  try {
+    const groups = await sock.groupFetchAllParticipating()
+    const groupList = Object.values(groups).map(g => ({
+      id: g.id,
+      name: g.subject,
+      participants: g.participants?.length || 0,
+      isMonitored: g.id === monitoredGroupId
+    }))
+
+    res.json({ success: true, groups: groupList, currentGroupId: monitoredGroupId })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
+// Admin: Set monitored group
+app.post('/api/admin/wa-groups/set', express.json(), async (req, res) => {
+  const { password, groupId } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  if (!groupId) return res.json({ success: false, error: 'Group ID wajib' })
+
+  try {
+    await redis.set(REDIS_KEYS.WA_GROUP_ID, groupId)
+    monitoredGroupId = groupId
+    pushLog('WA | Monitored group set: ' + groupId.substring(0, 20) + '...')
+
+    res.json({ success: true, groupId })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
+// Admin: Sync all members from monitored group
+app.post('/api/admin/wa-groups/sync', express.json(), async (req, res) => {
+  const { password } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  if (!sock || !isReady) {
+    return res.json({ success: false, error: 'WhatsApp not connected' })
+  }
+
+  if (!monitoredGroupId) {
+    return res.json({ success: false, error: 'Belum ada grup yang dipilih' })
+  }
+
+  try {
+    const groupMeta = await sock.groupMetadata(monitoredGroupId)
+    const participants = groupMeta.participants || []
+
+    let added = 0
+    let skipped = 0
+
+    for (const p of participants) {
+      const phone = extractPhoneFromJid(p.id)
+      if (!phone) continue
+
+      // Check if already exists
+      const existing = await redis.hget(REDIS_KEYS.USERS, phone)
+      if (existing) {
+        skipped++
+        continue
+      }
+
+      // Add new user
+      const userData = {
+        name: p.notify || 'Member ' + phone,
+        createdAt: Date.now(),
+        expired: null,
+        source: 'whatsapp_group'
+      }
+      await redis.hset(REDIS_KEYS.USERS, phone, JSON.stringify(userData))
+      added++
+    }
+
+    pushLog(`WA | Sync completed: ${added} added, ${skipped} skipped`)
+    res.json({ success: true, added, skipped, total: participants.length })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
 // ==================== LOGIN PAGE ====================
 app.get('/login', (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
@@ -3356,8 +3530,31 @@ app.get('/admin/users', (_req, res) => {
         </div>
       </div>
 
+      <!-- WhatsApp Group Sync -->
       <div class="card">
-        <h2>Tambah User Baru</h2>
+        <h2>Sinkronisasi Grup WhatsApp</h2>
+        <p style="color:#71767b;font-size:0.85em;margin-bottom:15px;">Member grup yang dipilih akan otomatis terdaftar dan bisa login ke website.</p>
+        <div class="result-msg" id="syncResult"></div>
+        <div class="form-row" style="align-items:flex-end;">
+          <div class="form-group" style="flex:2;">
+            <label>Pilih Grup WhatsApp</label>
+            <select id="waGroupSelect" style="width:100%;padding:10px;border:1px solid #2f3640;border-radius:8px;background:#0f1419;color:#e7e9ea;">
+              <option value="">-- Pilih Grup --</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:1;">
+            <button class="btn btn-primary" onclick="setWaGroup()" style="width:100%;">Set Grup</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:10px;">
+          <button class="btn" style="background:#2f3640;color:#e7e9ea;" onclick="loadWaGroups()">Refresh Grup</button>
+          <button class="btn btn-primary" onclick="syncMembers()">Sync Semua Member</button>
+        </div>
+        <div id="currentGroup" style="margin-top:10px;font-size:0.85em;color:#71767b;"></div>
+      </div>
+
+      <div class="card">
+        <h2>Tambah User Manual</h2>
         <div class="result-msg" id="addResult"></div>
         <div class="form-row">
           <div class="form-group">
@@ -3465,6 +3662,7 @@ app.get('/admin/users', (_req, res) => {
             document.getElementById('mainContent').style.display = 'block';
             localStorage.setItem('admin_pass', adminPass);
             loadUsers();
+            loadWaGroups();
           } else {
             alert('Password salah');
           }
@@ -3476,6 +3674,95 @@ app.get('/admin/users', (_req, res) => {
     if (savedPass) {
       document.getElementById('adminPassword').value = savedPass;
       adminLogin();
+    }
+
+    // ==================== WhatsApp Group Functions ====================
+    function loadWaGroups() {
+      const select = document.getElementById('waGroupSelect');
+      select.innerHTML = '<option value="">Memuat grup...</option>';
+
+      fetch('/api/admin/wa-groups?password=' + encodeURIComponent(adminPass))
+        .then(r => r.json())
+        .then(data => {
+          if (!data.success) {
+            select.innerHTML = '<option value="">Error: ' + (data.error || 'Unknown') + '</option>';
+            return;
+          }
+
+          select.innerHTML = '<option value="">-- Pilih Grup (' + data.groups.length + ' grup) --</option>';
+          data.groups.forEach(g => {
+            const opt = document.createElement('option');
+            opt.value = g.id;
+            opt.textContent = g.name + ' (' + g.participants + ' member)' + (g.isMonitored ? ' [AKTIF]' : '');
+            if (g.isMonitored) opt.selected = true;
+            select.appendChild(opt);
+          });
+
+          // Show current group
+          if (data.currentGroupId) {
+            const current = data.groups.find(g => g.id === data.currentGroupId);
+            if (current) {
+              document.getElementById('currentGroup').innerHTML = 'Grup aktif: <strong style="color:#00ff88;">' + current.name + '</strong>';
+            }
+          } else {
+            document.getElementById('currentGroup').textContent = 'Belum ada grup yang dipilih';
+          }
+        })
+        .catch(e => {
+          select.innerHTML = '<option value="">Error loading groups</option>';
+        });
+    }
+
+    function setWaGroup() {
+      const groupId = document.getElementById('waGroupSelect').value;
+      const result = document.getElementById('syncResult');
+
+      if (!groupId) {
+        alert('Pilih grup terlebih dahulu');
+        return;
+      }
+
+      fetch('/api/admin/wa-groups/set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass, groupId })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          result.className = 'result-msg success';
+          result.textContent = 'Grup berhasil di-set! Member baru yang masuk akan otomatis terdaftar.';
+          loadWaGroups();
+        } else {
+          result.className = 'result-msg error';
+          result.textContent = 'Error: ' + data.error;
+        }
+        setTimeout(() => result.className = 'result-msg', 5000);
+      });
+    }
+
+    function syncMembers() {
+      const result = document.getElementById('syncResult');
+      result.className = 'result-msg success';
+      result.textContent = 'Menyinkronkan member...';
+
+      fetch('/api/admin/wa-groups/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          result.className = 'result-msg success';
+          result.textContent = 'Sync selesai! ' + data.added + ' user baru ditambahkan, ' + data.skipped + ' sudah ada. Total: ' + data.total + ' member.';
+          loadUsers();
+        } else {
+          result.className = 'result-msg error';
+          result.textContent = 'Error: ' + data.error;
+        }
+        setTimeout(() => result.className = 'result-msg', 5000);
+      });
     }
 
     function loadUsers() {
@@ -5047,6 +5334,7 @@ setTimeout(async () => {
 async function start() {
   // Load data dari Redis saat startup
   await loadFromRedis()
+  await loadMonitoredGroup()
 
   const { state, saveCreds } = await useMultiFileAuthState('./auth')
   const { version } = await fetchLatestBaileysVersion()
@@ -5128,6 +5416,31 @@ async function start() {
   })
 
   sock.ev.on('creds.update', saveCreds)
+
+  // ==================== GROUP PARTICIPANT UPDATE ====================
+  sock.ev.on('group-participants.update', async (update) => {
+    try {
+      const { id, participants, action } = update
+
+      // Hanya proses jika ini grup yang di-monitor
+      if (!monitoredGroupId || id !== monitoredGroupId) return
+
+      for (const participant of participants) {
+        const phone = extractPhoneFromJid(participant)
+        if (!phone) continue
+
+        if (action === 'add') {
+          // Member baru masuk grup
+          await autoRegisterGroupMember(phone)
+        } else if (action === 'remove') {
+          // Member keluar/dikeluarkan dari grup
+          await removeGroupMember(phone)
+        }
+      }
+    } catch (e) {
+      pushLog('WA | Group update error: ' + e.message)
+    }
+  })
 
   sock.ev.on('messages.upsert', async (ev) => {
     if (!isReady || ev.type !== 'notify') return
