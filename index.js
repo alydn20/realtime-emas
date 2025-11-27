@@ -3905,21 +3905,28 @@ app.get('/install', (_req, res) => {
   </div>
 
   <script>
+    // Disable right-click
+    document.addEventListener('contextmenu', e => e.preventDefault());
+
     let deferredPrompt;
     const installBtn = document.getElementById('installBtn');
     const continueBtn = document.getElementById('continueBtn');
     const installedMsg = document.getElementById('installedMsg');
     const notice = document.getElementById('notice');
 
-    // Detect platform
+    // Detect platform - check multiple ways for standalone mode
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isAndroid = /Android/.test(navigator.userAgent);
     const isMobile = isIOS || isAndroid;
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                      || window.navigator.standalone === true
+                      || document.referrer.includes('android-app://')
+                      || window.matchMedia('(display-mode: fullscreen)').matches;
 
     // Go to monitoring after install
     function goToMonitoring() {
-      window.location.href = '/monitoring';
+      localStorage.setItem('pwa_installed_v2', 'true');
+      window.location.replace('/monitoring');
     }
 
     // Mark as installed and go to monitoring
@@ -3933,6 +3940,7 @@ app.get('/install', (_req, res) => {
       setTimeout(goToMonitoring, 2000);
     }
 
+    // IMMEDIATELY check if running as PWA
     if (isStandalone) {
       // Already running as PWA - go directly to monitoring
       goToMonitoring();
@@ -5950,9 +5958,15 @@ app.get('/monitoring', async (_req, res) => {
       }, 3000);
     }
 
+    // Disable right-click
+    document.addEventListener('contextmenu', e => e.preventDefault());
+
     // Check if PWA installed - redirect to install page if not
     (function checkPwaInstalled() {
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                        || window.navigator.standalone === true
+                        || document.referrer.includes('android-app://')
+                        || window.matchMedia('(display-mode: fullscreen)').matches;
       const isInstalled = localStorage.getItem('pwa_installed_v2') === 'true';
 
       if (!isStandalone && !isInstalled) {
