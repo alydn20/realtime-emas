@@ -311,6 +311,8 @@ async function resetDailyData() {
     dailyStatsCache = null
     priceHistoryCache = []
     lastAddedUpdatedAt = '' // Reset supaya data baru bisa masuk
+    lastKnownPrice = null // Reset supaya harga pertama hari baru dianggap initial
+    lastKnownTimestamp = 0 // Reset timestamp tracker
     pushLog('SYSTEM | Daily reset completed')
   } catch (e) {
     pushLog('REDIS | Reset error: ' + e.message)
