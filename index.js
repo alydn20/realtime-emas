@@ -6216,16 +6216,21 @@ setTimeout(async () => {
   }
 }, 30000)
 
+// Track consecutive failures to detect corrupt auth
+let consecutiveFailures = 0
+const MAX_CONSECUTIVE_FAILURES = 3
+
 async function start() {
   // Load data dari Redis saat startup
   await loadFromRedis()
   await loadMonitoredGroup()
 
-  // Check if auth needs reset (set via /qr-reset or env var)
-  const forceReset = process.env.RESET_WA_AUTH === 'true'
+  // Check if auth needs reset - auto-detect corrupt auth after 3 consecutive failures
+  const forceReset = process.env.RESET_WA_AUTH === 'true' || consecutiveFailures >= MAX_CONSECUTIVE_FAILURES
   if (forceReset) {
     await clearRedisAuth()
-    pushLog('WA | Force reset auth (RESET_WA_AUTH=true)')
+    consecutiveFailures = 0
+    pushLog('WA | Cleared corrupt auth, starting fresh')
   }
 
   const { state, saveCreds } = await useRedisAuthState()
@@ -6267,8 +6272,17 @@ async function start() {
       const reason = lastDisconnect?.error?.output?.statusCode
       pushLog(`WA | Disconnected (${reason})`)
 
+      // Track consecutive failures (disconnect without ever getting QR or connected)
+      if (!lastQr) {
+        consecutiveFailures++
+        pushLog(`WA | Consecutive failures: ${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}`)
+      }
+
       if (reason === DisconnectReason.loggedOut) {
-        pushLog('WA | LOGGED OUT - Manual login required')
+        pushLog('WA | LOGGED OUT - Clearing auth and restarting')
+        await clearRedisAuth()
+        consecutiveFailures = 0
+        setTimeout(() => start(), 3000)
         return
       }
 
@@ -6278,12 +6292,17 @@ async function start() {
         pushLog(`WA | Reconnect ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} in ${Math.round(delay/1000)}s`)
         setTimeout(() => start(), delay)
       } else {
-        pushLog('WA | Max reconnect reached')
+        pushLog('WA | Max reconnect reached - clearing auth for fresh start')
+        await clearRedisAuth()
+        consecutiveFailures = 0
+        reconnectAttempts = 0
+        setTimeout(() => start(), 5000)
       }
 
     } else if (connection === 'open') {
       lastQr = null
       reconnectAttempts = 0
+      consecutiveFailures = 0 // Reset on successful connection
       pushLog('WA | Connected')
       pushLog('WA | Warming up 15s...')
 
