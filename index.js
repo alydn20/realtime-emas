@@ -1547,17 +1547,29 @@ app.get('/monitoring', async (_req, res) => {
         <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-3 3"/></svg>XAU/USD Chart</h2>
         <span class="live-badge">Live</span>
       </div>
-      <div class="tradingview-widget-container" style="height:600px;">
+      <div class="tradingview-widget-container">
         <!-- TradingView Widget BEGIN -->
-        <div class="tradingview-widget-container__widget" style="height:600px;width:100%;">
-          <iframe
-            scrolling="no"
-            allowtransparency="true"
-            frameborder="0"
-            src="https://www.tradingview.com/widgetembed/?hideideas=1&overrides=%7B%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en&symbol=OANDA%3AXAUUSD&interval=1&range=60&theme=dark&style=1&timezone=Asia%2FJakarta&studies=%5B%5D&withdateranges=1&hide_side_toolbar=0&allow_symbol_change=1&save_image=1&hide_volume=1&support_host=https%3A%2F%2Fwww.tradingview.com"
-            style="width:100%;height:600px;">
-          </iframe>
-        </div>
+        <div id="tradingview_chart" style="height:500px;"></div>
+        <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+        <script type="text/javascript">
+        new TradingView.widget({
+          "autosize": true,
+          "symbol": "OANDA:XAUUSD",
+          "interval": "1",
+          "timezone": "Asia/Jakarta",
+          "theme": "dark",
+          "style": "1",
+          "locale": "en",
+          "toolbar_bg": "#1a1f26",
+          "enable_publishing": false,
+          "hide_top_toolbar": false,
+          "hide_legend": false,
+          "save_image": false,
+          "container_id": "tradingview_chart",
+          "hide_volume": true,
+          "studies": []
+        });
+        </script>
         <!-- TradingView Widget END -->
       </div>
     </div>
