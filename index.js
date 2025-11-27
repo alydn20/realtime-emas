@@ -2664,7 +2664,6 @@ app.get('/monitoring', async (_req, res) => {
           // Update harga beli
           if (data.buy) {
             document.getElementById('buyPrice').textContent = formatRupiah(data.buy);
-            updateDailyStats(data.buy);
 
             if (data.prevBuy && data.buy !== data.prevBuy) {
               const change = data.buy - data.prevBuy;
