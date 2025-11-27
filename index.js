@@ -20,7 +20,7 @@ const GLOBAL_THROTTLE = 3000
 const TYPING_DURATION = 2000
 
 // BROADCAST COOLDOWN
-const PRICE_CHECK_INTERVAL = 1000 // 1 DETIK - ULTRA REAL-TIME!
+const PRICE_CHECK_INTERVAL = 500 // 500ms - ULTRA REAL-TIME!
 const MIN_PRICE_CHANGE = 1
 const BROADCAST_COOLDOWN = 50000 // 50 detik antar broadcast (atau ganti menit)
 
@@ -954,7 +954,7 @@ async function fetchTreasury() {
   const res = await fetch(TREASURY_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(3000)
+    signal: AbortSignal.timeout(800) // Fast timeout for real-time
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const json = await res.json()
@@ -984,7 +984,12 @@ function doBroadcastInstant(message) {
   pushLog(`SEND  | 📤 Broadcast #${currentBroadcastId} ke ${subsCount} subscriber`)
 }
 
+let isPriceChecking = false // Lock untuk mencegah overlap
+
 async function checkPriceUpdate() {
+  if (isPriceChecking) return // Skip jika masih fetching
+  isPriceChecking = true
+
   // Selalu fetch price untuk monitoring web, broadcast hanya jika ada subscriber
   try {
     const treasuryData = await fetchTreasury()
@@ -1181,9 +1186,11 @@ async function checkPriceUpdate() {
 
     // 🚀 INSTANT BROADCAST - Langsung kirim tanpa delay
     doBroadcastInstant(message)
-    
+
   } catch (e) {
     // Silent fail
+  } finally {
+    isPriceChecking = false // Release lock
   }
 }
 
@@ -1848,8 +1855,8 @@ app.get('/monitoring', async (_req, res) => {
     setInterval(updateClock, 100);
     updateClock();
 
-    // Fetch Treasury setiap 500ms
-    setInterval(fetchPrices, 500);
+    // Fetch Treasury setiap 300ms untuk real-time
+    setInterval(fetchPrices, 300);
     fetchPrices();
 
     // Fetch XAU/USD setiap 2 detik (real-time dari TradingView)
