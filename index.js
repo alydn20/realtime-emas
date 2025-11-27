@@ -4103,11 +4103,9 @@ app.get('/install', (_req, res) => {
       <div class="steps manual-steps" id="manualSteps"></div>
 
       <button class="btn btn-primary" id="installBtn">Install Aplikasi</button>
-      <button class="btn btn-secondary" id="continueBtn">Lanjutkan</button>
       <p class="notice" id="notice">
         Anda harus install aplikasi terlebih dahulu untuk mengakses monitoring harga emas.
       </p>
-      <p class="status-msg" id="statusMsg" style="color:#71767b;font-size:0.85em;margin-top:10px;display:none;"></p>
     </div>
   </div>
 
@@ -4118,7 +4116,6 @@ app.get('/install', (_req, res) => {
     let deferredPrompt;
     let pwaIsInstalled = false;
     const installBtn = document.getElementById('installBtn');
-    const continueBtn = document.getElementById('continueBtn');
     const installedMsg = document.getElementById('installedMsg');
     const notice = document.getElementById('notice');
     const browserInfo = document.getElementById('browserInfo');
@@ -4270,16 +4267,13 @@ app.get('/install', (_req, res) => {
       browserInfo.innerHTML = 'Browser: <strong>' + browserName + '</strong>' + (isMobile ? ' (Mobile)' : ' (Desktop)');
 
       if (pwaIsInstalled) {
-        // PWA sudah terinstall - tampilkan pesan khusus
+        // PWA sudah terinstall - tampilkan pesan untuk buka dari Home Screen
         browserInfo.innerHTML += '<br><span style="color:#00ff88;">✓ Aplikasi sudah terinstall!</span>';
-        installBtn.textContent = 'Buka Aplikasi';
+        installBtn.textContent = 'Buka dari Home Screen';
         installBtn.onclick = () => {
-          // Langsung ke monitoring - akan terbuka di PWA jika sudah install
-          localStorage.setItem('pwa_verified', 'true');
-          window.location.href = '/monitoring';
+          alert('Aplikasi sudah terinstall!\\n\\nBuka aplikasi Gold Monitor dari Home Screen atau App Drawer Anda.');
         };
-        continueBtn.textContent = 'Buka Aplikasi';
-        notice.innerHTML = 'Klik tombol di atas untuk membuka aplikasi Gold Monitor.';
+        notice.innerHTML = 'Buka aplikasi <strong>Gold Monitor</strong> dari Home Screen untuk mengakses monitoring.';
       } else {
         showManualSteps(instructions);
         notice.style.display = 'block';
@@ -4328,18 +4322,6 @@ app.get('/install', (_req, res) => {
           }
         };
       }
-
-      // Continue button - langsung ke monitoring
-      const statusMsg = document.getElementById('statusMsg');
-      continueBtn.onclick = () => {
-        statusMsg.style.display = 'block';
-        statusMsg.style.color = '#00ff88';
-        statusMsg.textContent = 'Mengalihkan ke monitoring...';
-        localStorage.setItem('pwa_verified', 'true');
-        setTimeout(() => {
-          window.location.href = '/monitoring';
-        }, 300);
-      };
 
       // Check periodically for standalone mode
       const checkInterval = setInterval(() => {
@@ -6413,26 +6395,17 @@ app.get('/monitoring', async (_req, res) => {
     // Disable right-click
     document.addEventListener('contextmenu', e => e.preventDefault());
 
-    // Cek akses - PWA atau sudah pernah akses dari PWA
+    // HANYA PWA yang bisa akses - tidak ada bypass
     (function checkPwaAccess() {
-      // Simple standalone detection
+      // Standalone detection
       const isStandalone = window.navigator.standalone === true
         || window.matchMedia('(display-mode: standalone)').matches
         || window.matchMedia('(display-mode: fullscreen)').matches;
 
-      if (isStandalone) {
-        // Mark as PWA user
-        localStorage.setItem('pwa_verified', 'true');
-        return; // Allow access
+      if (!isStandalone) {
+        // Bukan PWA - redirect ke install
+        window.location.href = '/install';
       }
-
-      // Check if previously verified as PWA user
-      if (localStorage.getItem('pwa_verified') === 'true') {
-        return; // Allow access
-      }
-
-      // Not PWA and not verified - redirect to install
-      window.location.href = '/install';
     })();
 
     // ==================== PUSH NOTIFICATION SUBSCRIPTION ====================
