@@ -452,12 +452,17 @@ async function addPriceHistory(buy, sell, prevBuy, prevSell, updatedAt) {
       return
     }
 
+    // Calculate spread percentage
+    const spread = ((sell - buy) / buy * 100).toFixed(2)
+
     const entry = {
       time: updatedAt,
       buy: buy,
       sell: sell,
       buyChange: buy - prevBuy,
-      sellChange: sell - prevSell
+      sellChange: sell - prevSell,
+      spread: spread,
+      usdIdr: cachedMarketData.usdIdr?.rate || 0
     }
 
     // Simpan ke Redis (entry + timestamp terakhir)
@@ -5095,22 +5100,25 @@ app.get('/monitoring', async (_req, res) => {
     .history-table {
       width: 100%;
       border-collapse: collapse;
+      min-width: 600px;
     }
     .history-table th {
       text-align: left;
-      padding: 12px 20px;
-      font-size: 0.75em;
+      padding: 10px 8px;
+      font-size: 0.7em;
       color: #71767b;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.3px;
       background: #15191e;
       font-weight: 600;
+      white-space: nowrap;
     }
     .history-table td {
-      padding: 14px 20px;
-      font-size: 0.9em;
+      padding: 10px 8px;
+      font-size: 0.8em;
       border-bottom: 1px solid #2f3640;
       color: #e7e9ea;
+      white-space: nowrap;
     }
     .history-table tr:last-child td {
       border-bottom: none;
@@ -5118,9 +5126,9 @@ app.get('/monitoring', async (_req, res) => {
     .history-table tr:hover {
       background: rgba(255,255,255,0.02);
     }
-    .history-table .price-up { color: #00c853; }
-    .history-table .price-down { color: #ff5252; }
-    .history-table .time-col { color: #71767b; font-family: monospace; }
+    .history-table .price-up { color: #00c853; font-weight: 600; }
+    .history-table .price-down { color: #ff5252; font-weight: 600; }
+    .history-table .time-col { color: #71767b; font-family: monospace; font-size: 0.75em; }
     .history-table .no-data {
       text-align: center;
       color: #71767b;
@@ -5408,19 +5416,25 @@ app.get('/monitoring', async (_req, res) => {
         <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Riwayat Perubahan Harga</h2>
         <span class="count" id="historyCount">0 records</span>
       </div>
+      <div style="overflow-x:auto;">
       <table class="history-table">
         <thead>
           <tr>
             <th>Waktu</th>
-            <th>Harga Beli</th>
-            <th>Harga Jual</th>
-            <th>Perubahan</th>
+            <th>Beli</th>
+            <th>Jual</th>
+            <th>Spread</th>
+            <th>USD/IDR</th>
+            <th>20jt</th>
+            <th>30jt</th>
+            <th>+/-</th>
           </tr>
         </thead>
         <tbody id="historyBody">
-          <tr><td colspan="4" class="no-data">Menunggu data...</td></tr>
+          <tr><td colspan="8" class="no-data">Menunggu data...</td></tr>
         </tbody>
       </table>
+      </div>
       <div class="history-pagination" id="historyPagination" style="display:none;">
         <button class="page-btn" id="prevPage" disabled>Sebelumnya</button>
         <span class="page-info" id="pageInfo">Halaman 1</span>
@@ -5459,7 +5473,7 @@ app.get('/monitoring', async (_req, res) => {
       const pagination = document.getElementById('historyPagination');
 
       if (!items || items.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="no-data">Belum ada data perubahan harga</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="no-data">Belum ada data perubahan harga</td></tr>';
         countEl.textContent = '0 records';
         pagination.style.display = 'none';
         return;
@@ -5472,15 +5486,29 @@ app.get('/monitoring', async (_req, res) => {
         const time = new Date(item.time);
         const timeStr = time.toTimeString().substring(0, 8);
         const buyChange = item.buyChange || 0;
-        const sellChange = item.sellChange || 0;
         const changeSign = buyChange >= 0 ? '+' : '';
-        const changeClass = buyChange >= 0 ? 'up' : 'down';
+        const changeClass = buyChange >= 0 ? 'price-up' : 'price-down';
+
+        // Calculate spread (if not in data, calculate it)
+        const spread = item.spread || ((item.sell - item.buy) / item.buy * 100).toFixed(2);
+        const spreadClass = parseFloat(spread) < 0 ? 'price-down' : '';
+
+        // USD/IDR
+        const usdIdr = item.usdIdr ? Math.round(item.usdIdr).toLocaleString('id-ID') : '-';
+
+        // Calculate gram for 20jt and 30jt based on buy price
+        const gram20jt = (20000000 / item.buy).toFixed(4);
+        const gram30jt = (30000000 / item.buy).toFixed(4);
 
         html += '<tr>' +
-          '<td>' + timeStr + '</td>' +
-          '<td>' + formatRupiah(item.buy) + '</td>' +
-          '<td>' + formatRupiah(item.sell) + '</td>' +
-          '<td class="' + changeClass + '">' + changeSign + buyChange.toLocaleString('id-ID') + '</td>' +
+          '<td class="time-col">' + timeStr + '</td>' +
+          '<td>' + formatRupiahShort(item.buy) + '</td>' +
+          '<td>' + formatRupiahShort(item.sell) + '</td>' +
+          '<td class="' + spreadClass + '">' + spread + '%</td>' +
+          '<td>' + usdIdr + '</td>' +
+          '<td>' + gram20jt + 'g</td>' +
+          '<td>' + gram30jt + 'g</td>' +
+          '<td class="' + changeClass + '">' + changeSign + formatChangeShort(buyChange) + '</td>' +
           '</tr>';
       });
       tbody.innerHTML = html;
@@ -5515,6 +5543,23 @@ app.get('/monitoring', async (_req, res) => {
 
     function formatRupiah(n) {
       return 'Rp ' + n.toLocaleString('id-ID');
+    }
+
+    function formatRupiahShort(n) {
+      // Format singkat: 2.325.000 -> 2,325jt
+      if (n >= 1000000) {
+        return (n / 1000000).toFixed(3).replace('.', ',') + 'jt';
+      }
+      return n.toLocaleString('id-ID');
+    }
+
+    function formatChangeShort(n) {
+      // Format singkat untuk perubahan
+      const abs = Math.abs(n);
+      if (abs >= 1000) {
+        return (n / 1000).toFixed(1) + 'rb';
+      }
+      return n.toLocaleString('id-ID');
     }
 
     function formatTime(date) {
