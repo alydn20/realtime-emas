@@ -20,7 +20,7 @@ const GLOBAL_THROTTLE = 3000
 const TYPING_DURATION = 2000
 
 // BROADCAST COOLDOWN
-const PRICE_CHECK_INTERVAL = 200 // 200ms - ultra responsif
+const PRICE_CHECK_INTERVAL = 50 // 50ms - super aggressive untuk 0 delay
 const MIN_PRICE_CHANGE = 1
 const BROADCAST_COOLDOWN = 50000 // 50 detik antar broadcast (atau ganti menit)
 
@@ -954,7 +954,7 @@ async function fetchTreasury() {
   const res = await fetch(TREASURY_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(1000) // 1 detik timeout
+    signal: AbortSignal.timeout(500) // 500ms timeout - fail fast
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const json = await res.json()
@@ -1228,20 +1228,17 @@ async function checkPriceUpdate() {
   }
 }
 
-// Dual interval: aggressive (100ms) di detik 0-10, normal (200ms) sisanya
-setInterval(() => {
-  if (shouldAggressiveCheck()) {
-    // Aggressive mode: check setiap 100ms di awal menit
-    checkPriceUpdate()
-  }
-}, 100)
+// Super aggressive: fetch terus menerus setiap 50ms
+setInterval(checkPriceUpdate, PRICE_CHECK_INTERVAL)
 
+// Tambahan: loop tanpa henti untuk detik 0-5 (saat Treasury pasti update)
 setInterval(() => {
-  if (!shouldAggressiveCheck()) {
-    // Normal mode: check setiap 200ms
+  const seconds = new Date().getSeconds()
+  if (seconds <= 5) {
+    // Burst mode: fetch sebanyak mungkin di awal menit
     checkPriceUpdate()
   }
-}, PRICE_CHECK_INTERVAL)
+}, 20) // 20ms = 50x per detik
 
 // ==================== STARTUP INFO ====================
 console.log(`\n╔════════════════════════════════════════════════════╗`)
