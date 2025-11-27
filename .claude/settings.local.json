@@ -10,7 +10,9 @@
       "WebFetch(domain:realtime-emas-production.up.railway.app)",
       "Bash(npx web-push:*)",
       "Bash(git checkout:*)",
-      "WebFetch(domain:treasury.muhamadaliyudin.xyz)"
+      "WebFetch(domain:treasury.muhamadaliyudin.xyz)",
+      "Bash(git pull:*)",
+      "Bash(md5sum:*)"
     ],
     "deny": [],
     "ask": []

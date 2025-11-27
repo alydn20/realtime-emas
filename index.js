@@ -1756,63 +1756,62 @@ async function checkPriceUpdate() {
 // setInterval(checkPriceUpdate, 100)
 
 // ==================== CONTINUOUS FAST POLLING ====================
-// Polling terus-menerus dengan 2 request paralel setiap 150ms
+// Polling terus-menerus untuk real-time update
 let isFastPolling = false
-let lastKnownTimestamp = 0 // Track timestamp terbaru yang sudah di-broadcast
+let lastKnownTimestamp = 0
+let consecutiveErrors = 0
 
 async function fastPoll() {
   if (isFastPolling) return
   isFastPolling = true
 
   try {
-    // Kirim 2 request paralel untuk meningkatkan chance dapat data baru
-    const results = await Promise.allSettled([
-      fetchTreasury(),
-      fetchTreasury()
-    ])
+    const treasuryData = await fetchTreasury()
 
-    // Cari hasil dengan updated_at terbaru
-    let newestData = null
-    let newestTime = 0
-
-    results.forEach((result) => {
-      if (result.status === 'fulfilled' && result.value?.data?.updated_at) {
-        const updateTime = new Date(result.value.data.updated_at).getTime()
-        if (updateTime > newestTime) {
-          newestTime = updateTime
-          newestData = result.value
-        }
-      }
-    })
-
-    // CRITICAL: Skip jika data TIDAK lebih baru dari yang sudah kita punya
-    if (!newestData || newestTime <= lastKnownTimestamp) {
+    if (!treasuryData?.data?.buying_rate) {
+      consecutiveErrors++
       return
     }
 
-    // Process the new data
+    consecutiveErrors = 0
+
     const currentPrice = {
-      buy: newestData.data.buying_rate,
-      sell: newestData.data.selling_rate,
-      updated_at: newestData.data.updated_at,
+      buy: treasuryData.data.buying_rate,
+      sell: treasuryData.data.selling_rate,
+      updated_at: treasuryData.data.updated_at,
       fetchedAt: Date.now()
     }
 
-    // Update timestamp tracker
-    lastKnownTimestamp = newestTime
-    lastApiUpdateTime = newestData.data.updated_at
+    const updateTime = new Date(treasuryData.data.updated_at).getTime()
+    const isNewTimestamp = updateTime > lastKnownTimestamp
+    const isPriceChanged = lastKnownPrice &&
+      (lastKnownPrice.buy !== currentPrice.buy || lastKnownPrice.sell !== currentPrice.sell)
 
-    if (lastKnownPrice && (lastKnownPrice.buy !== currentPrice.buy || lastKnownPrice.sell !== currentPrice.sell)) {
-      const prevPrice = { ...lastKnownPrice }
+    if (isNewTimestamp) {
+      lastKnownTimestamp = updateTime
+      lastApiUpdateTime = treasuryData.data.updated_at
+    }
+
+    const prevPrice = lastKnownPrice ? { ...lastKnownPrice } : null
+
+    if (!lastKnownPrice) {
       lastKnownPrice = currentPrice
-
-      // Update daily stats & history (skip jika updatedAt sudah pernah disimpan)
-      if (currentPrice.buy !== prevPrice.buy && currentPrice.updated_at !== lastAddedUpdatedAt) {
+      await updateDailyStats(currentPrice.buy)
+      broadcastSSE({
+        type: 'price',
+        buy: currentPrice.buy,
+        sell: currentPrice.sell,
+        updatedAt: currentPrice.updated_at,
+        usdIdr: cachedMarketData.usdIdr?.rate,
+        xauUsd: cachedMarketData.xauUsd,
+        serverTime: new Date().toISOString()
+      })
+    } else if (isPriceChanged) {
+      lastKnownPrice = currentPrice
+      if (currentPrice.updated_at !== lastAddedUpdatedAt) {
         await updateDailyStats(currentPrice.buy)
         await addPriceHistory(currentPrice.buy, currentPrice.sell, prevPrice.buy, prevPrice.sell, currentPrice.updated_at)
       }
-
-      // Instant SSE broadcast
       broadcastSSE({
         type: 'price',
         buy: currentPrice.buy,
@@ -1824,14 +1823,14 @@ async function fastPoll() {
         xauUsd: cachedMarketData.xauUsd,
         serverTime: new Date().toISOString()
       })
-
-    } else if (!lastKnownPrice) {
-      // Initial price
+    } else {
       lastKnownPrice = currentPrice
-      await updateDailyStats(currentPrice.buy)
     }
   } catch (e) {
-    // Silent fail
+    consecutiveErrors++
+    if (consecutiveErrors === 10) {
+      pushLog('TREASURY | 10 consecutive fetch errors: ' + e.message)
+    }
   } finally {
     isFastPolling = false
   }
@@ -1839,7 +1838,6 @@ async function fastPoll() {
 
 // Fast poll setiap 100ms (ultra real-time)
 setInterval(fastPoll, 100)
-
 // ==================== XAU/USD REAL-TIME ====================
 let lastXauUsdPrice = null
 let isXauFetching = false
