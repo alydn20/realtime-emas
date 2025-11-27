@@ -4257,8 +4257,6 @@ app.get('/install', (_req, res) => {
       localStorage.setItem('pwa_installed_v2', 'true');
       installedMsg.classList.add('show');
       installBtn.style.display = 'none';
-      continueBtn.style.display = 'block';
-      continueBtn.onclick = goToMonitoring;
       setTimeout(goToMonitoring, 2000);
     }
 
@@ -4278,6 +4276,30 @@ app.get('/install', (_req, res) => {
         goToMonitoring();
         return;
       }
+
+      // Auto reload after 3 seconds to re-detect PWA mode
+      // This helps when PWA just opened but detection failed on first load
+      const reloadKey = 'pwa_reload_attempt';
+      const reloadAttempt = parseInt(sessionStorage.getItem(reloadKey) || '0');
+
+      if (reloadAttempt < 2) {
+        // Show loading message
+        browserInfo.innerHTML = '<span style="color:#f7931a;">Mendeteksi aplikasi... (' + (3 - reloadAttempt) + ')</span>';
+        sessionStorage.setItem(reloadKey, (reloadAttempt + 1).toString());
+
+        setTimeout(() => {
+          // Re-check standalone before reload
+          if (checkStandalone()) {
+            goToMonitoring();
+          } else {
+            window.location.reload();
+          }
+        }, 2000);
+        return;
+      }
+
+      // Clear reload counter after max attempts
+      sessionStorage.removeItem(reloadKey);
 
       // Check if PWA is already installed
       pwaIsInstalled = await checkPwaInstalled();
