@@ -1332,12 +1332,13 @@ async function checkPriceUpdate() {
   }
 }
 
-// Polling dengan interval tercepat (100ms) untuk test semua
-setInterval(checkPriceUpdate, 100)
+// DISABLED: checkPriceUpdate - diganti dengan fastPoll untuk menghindari flip-flop
+// setInterval(checkPriceUpdate, 100)
 
 // ==================== CONTINUOUS FAST POLLING ====================
 // Polling terus-menerus dengan 2 request paralel setiap 150ms
 let isFastPolling = false
+let lastKnownTimestamp = 0 // Track timestamp terbaru yang sudah di-broadcast
 
 async function fastPoll() {
   if (isFastPolling) return
@@ -1364,39 +1365,47 @@ async function fastPoll() {
       }
     })
 
-    if (newestData && newestData.data.updated_at !== lastApiUpdateTime) {
-      const delayMs = Date.now() - newestTime
-      console.log(`🎯 FAST HIT | ${new Date().toISOString().substr(11, 12)} | Delay: ${(delayMs/1000).toFixed(2)}s | API: ${newestData.data.updated_at.substr(11, 8)}`)
+    // CRITICAL: Skip jika data TIDAK lebih baru dari yang sudah kita punya
+    if (!newestData || newestTime <= lastKnownTimestamp) {
+      return
+    }
 
-      // Process the new data
-      const currentPrice = {
-        buy: newestData.data.buying_rate,
-        sell: newestData.data.selling_rate,
-        updated_at: newestData.data.updated_at,
-        fetchedAt: Date.now()
-      }
+    const delayMs = Date.now() - newestTime
+    console.log(`🎯 FAST HIT | ${new Date().toISOString().substr(11, 12)} | Delay: ${(delayMs/1000).toFixed(2)}s | API: ${newestData.data.updated_at.substr(11, 8)}`)
 
-      lastApiUpdateTime = newestData.data.updated_at
+    // Process the new data
+    const currentPrice = {
+      buy: newestData.data.buying_rate,
+      sell: newestData.data.selling_rate,
+      updated_at: newestData.data.updated_at,
+      fetchedAt: Date.now()
+    }
 
-      if (lastKnownPrice && (lastKnownPrice.buy !== currentPrice.buy || lastKnownPrice.sell !== currentPrice.sell)) {
-        const prevPrice = { ...lastKnownPrice }
-        lastKnownPrice = currentPrice
+    // Update timestamp tracker
+    lastKnownTimestamp = newestTime
+    lastApiUpdateTime = newestData.data.updated_at
 
-        // Instant SSE broadcast
-        broadcastSSE({
-          type: 'price',
-          buy: currentPrice.buy,
-          sell: currentPrice.sell,
-          prevBuy: prevPrice.buy,
-          prevSell: prevPrice.sell,
-          updatedAt: currentPrice.updated_at,
-          usdIdr: cachedMarketData.usdIdr?.rate,
-          xauUsd: cachedMarketData.xauUsd,
-          serverTime: new Date().toISOString()
-        })
+    if (lastKnownPrice && (lastKnownPrice.buy !== currentPrice.buy || lastKnownPrice.sell !== currentPrice.sell)) {
+      const prevPrice = { ...lastKnownPrice }
+      lastKnownPrice = currentPrice
 
-        console.log(`🚀 SSE PUSH | ${sseClients.size} clients | Server delay: ${(delayMs/1000).toFixed(2)}s`)
-      }
+      // Instant SSE broadcast
+      broadcastSSE({
+        type: 'price',
+        buy: currentPrice.buy,
+        sell: currentPrice.sell,
+        prevBuy: prevPrice.buy,
+        prevSell: prevPrice.sell,
+        updatedAt: currentPrice.updated_at,
+        usdIdr: cachedMarketData.usdIdr?.rate,
+        xauUsd: cachedMarketData.xauUsd,
+        serverTime: new Date().toISOString()
+      })
+
+      console.log(`🚀 SSE PUSH | ${sseClients.size} clients | Server delay: ${(delayMs/1000).toFixed(2)}s`)
+    } else if (!lastKnownPrice) {
+      // Initial price
+      lastKnownPrice = currentPrice
     }
   } catch (e) {
     // Silent fail
