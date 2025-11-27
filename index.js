@@ -5384,6 +5384,7 @@ app.get('/monitoring', async (_req, res) => {
       min-height: 100vh;
       padding: 20px;
       color: #e7e9ea;
+      zoom: 1.25;
     }
     .container { max-width: 1100px; margin: 0 auto; }
 
