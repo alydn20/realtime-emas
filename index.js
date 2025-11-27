@@ -1360,10 +1360,9 @@ async function checkPriceUpdate() {
     const prevPrice = { ...lastKnownPrice }
     lastKnownPrice = currentPrice
 
-    // Update daily stats & history
+    // Update daily stats only (history handled by fastPoll)
     if (buyChanged) {
       await updateDailyStats(currentPrice.buy)
-      await addPriceHistory(currentPrice.buy, currentPrice.sell, prevPrice.buy, prevPrice.sell, currentPrice.updated_at)
     }
 
     // INSTANT SSE PUSH ke frontend monitoring
