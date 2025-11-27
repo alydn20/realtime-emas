@@ -20,7 +20,7 @@ const GLOBAL_THROTTLE = 3000
 const TYPING_DURATION = 2000
 
 // BROADCAST COOLDOWN
-const PRICE_CHECK_INTERVAL = 500 // 500ms - ULTRA REAL-TIME!
+const PRICE_CHECK_INTERVAL = 1000 // 1 detik
 const MIN_PRICE_CHANGE = 1
 const BROADCAST_COOLDOWN = 50000 // 50 detik antar broadcast (atau ganti menit)
 
@@ -954,7 +954,7 @@ async function fetchTreasury() {
   const res = await fetch(TREASURY_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(800) // Fast timeout for real-time
+    signal: AbortSignal.timeout(2000) // 2 detik timeout
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const json = await res.json()
@@ -1870,8 +1870,8 @@ app.get('/monitoring', async (_req, res) => {
     setInterval(updateClock, 100);
     updateClock();
 
-    // Fetch Treasury setiap 300ms untuk real-time
-    setInterval(fetchPrices, 300);
+    // Fetch Treasury setiap 1 detik untuk real-time
+    setInterval(fetchPrices, 1000);
     fetchPrices();
 
     // Fetch XAU/USD setiap 2 detik (real-time dari TradingView)
