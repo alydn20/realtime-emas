@@ -1546,7 +1546,7 @@ app.get('/monitoring', async (_req, res) => {
           "popup_width": "1000",
           "popup_height": "650",
           "container_id": "tv_chart",
-          "range": "1D",
+          "range": "1H",
           "details": true,
           "hotlist": true,
           "calendar": true,
