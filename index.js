@@ -1748,6 +1748,12 @@ app.get('/monitoring', async (_req, res) => {
       font-weight: 600;
       text-transform: uppercase;
     }
+    .tradingview-widget-container {
+      height: 500px;
+    }
+    .tradingview-widget-container__widget {
+      height: 100% !important;
+    }
 
     /* History Table */
     .history-section {
@@ -1868,11 +1874,117 @@ app.get('/monitoring', async (_req, res) => {
       100% { background: transparent; }
     }
 
-    /* Responsive */
-    @media (max-width: 600px) {
-      .header { flex-direction: column; text-align: center; gap: 12px; }
+    /* Responsive - Tablet */
+    @media (max-width: 768px) {
+      body { padding: 10px; }
+      .container { max-width: 100%; }
+      .header {
+        flex-direction: column;
+        text-align: center;
+        gap: 10px;
+        padding: 14px 16px;
+        margin-bottom: 16px;
+      }
+      .header-left h1 { font-size: 1.2em; }
       .header-right { text-align: center; }
-      .current-stats { justify-content: center; }
+      .clock { font-size: 1.6em; }
+      .chart-section { margin-bottom: 16px; border-radius: 10px; }
+      .chart-header { padding: 12px 14px; }
+      .chart-header h2 { font-size: 0.9em; }
+      .tradingview-widget-container { height: 400px; }
+      .history-section { border-radius: 10px; }
+      .history-header { padding: 12px 14px; }
+      .history-header h2 { font-size: 0.9em; }
+      .current-stats {
+        padding: 10px 12px;
+        gap: 6px;
+      }
+      .stat-item {
+        padding: 5px 8px;
+        gap: 4px;
+      }
+      .stat-item .stat-label { font-size: 0.65em; }
+      .stat-item .stat-value { font-size: 0.8em; }
+      .stat-item .stat-change { font-size: 0.65em; padding: 1px 4px; }
+      .history-table th { padding: 10px 12px; font-size: 0.7em; }
+      .history-table td { padding: 10px 12px; font-size: 0.8em; }
+      .history-pagination { padding: 12px; gap: 10px; }
+      .page-btn { padding: 6px 12px; font-size: 0.8em; }
+    }
+
+    /* Responsive - Mobile */
+    @media (max-width: 480px) {
+      body { padding: 8px; }
+      .header {
+        padding: 12px;
+        margin-bottom: 10px;
+        border-radius: 8px;
+      }
+      .header-left h1 { font-size: 1em; }
+      .header-left h1 svg { width: 18px; height: 18px; }
+      .header-left .subtitle { font-size: 0.75em; }
+      .clock { font-size: 1.4em; letter-spacing: 1px; }
+      .date-info { font-size: 0.7em; }
+
+      .chart-section {
+        margin-bottom: 10px;
+        border-radius: 8px;
+      }
+      .chart-header {
+        padding: 10px 12px;
+      }
+      .chart-header h2 { font-size: 0.85em; }
+      .chart-header h2 svg { width: 14px; height: 14px; }
+      .live-badge { font-size: 0.6em; padding: 3px 8px; }
+      .tradingview-widget-container { height: 350px; }
+
+      .history-section { border-radius: 8px; }
+      .history-header { padding: 10px 12px; }
+      .history-header h2 { font-size: 0.85em; }
+      .history-header h2 svg { width: 14px; height: 14px; }
+
+      .current-stats {
+        padding: 8px 10px;
+        gap: 5px;
+        justify-content: flex-start;
+      }
+      .stat-item {
+        padding: 4px 6px;
+        gap: 3px;
+        border-radius: 4px;
+      }
+      .stat-item .stat-label { font-size: 0.6em; }
+      .stat-item .stat-value { font-size: 0.75em; }
+      .stat-item .stat-change {
+        font-size: 0.6em;
+        padding: 1px 3px;
+        border-radius: 2px;
+      }
+
+      .history-table th {
+        padding: 8px 10px;
+        font-size: 0.65em;
+      }
+      .history-table td {
+        padding: 8px 10px;
+        font-size: 0.75em;
+      }
+      .history-pagination {
+        padding: 10px;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .page-btn { padding: 5px 10px; font-size: 0.75em; }
+      .page-info { font-size: 0.75em; }
+    }
+
+    /* Extra small screens */
+    @media (max-width: 360px) {
+      .header-left h1 { font-size: 0.9em; }
+      .clock { font-size: 1.2em; }
+      .stat-item .stat-value { font-size: 0.7em; }
+      .history-table th, .history-table td { padding: 6px 8px; }
+      .tradingview-widget-container { height: 300px; }
     }
   </style>
 </head>
