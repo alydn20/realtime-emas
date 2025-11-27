@@ -1547,29 +1547,39 @@ app.get('/monitoring', async (_req, res) => {
         <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-3 3"/></svg>XAU/USD Chart</h2>
         <span class="live-badge">Live</span>
       </div>
-      <div class="tradingview-widget-container">
+      <div class="tradingview-widget-container" style="height:500px;width:100%">
         <!-- TradingView Widget BEGIN -->
-        <div class="tradingview-widget-container__widget"></div>
-        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+        <div class="tradingview-widget-container__widget" style="height:100%;width:100%"></div>
+        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js" async>
         {
-          "autosize": true,
-          "height": "500",
-          "symbol": "OANDA:XAUUSD",
-          "interval": "1",
-          "timezone": "Asia/Jakarta",
-          "theme": "dark",
-          "style": "1",
+          "symbols": [["OANDA:XAUUSD|1"]],
+          "chartOnly": true,
+          "width": "100%",
+          "height": "100%",
           "locale": "en",
-          "backgroundColor": "#1a1f26",
-          "gridColor": "#2f3640",
-          "hide_top_toolbar": false,
-          "hide_legend": false,
-          "allow_symbol_change": false,
-          "save_image": false,
-          "calendar": false,
-          "hide_volume": true,
-          "support_host": "https://www.tradingview.com",
-          "range": "60"
+          "colorTheme": "dark",
+          "autosize": true,
+          "showVolume": false,
+          "showMA": false,
+          "hideDateRanges": true,
+          "hideMarketStatus": true,
+          "hideSymbolLogo": true,
+          "scalePosition": "right",
+          "scaleMode": "Normal",
+          "fontFamily": "-apple-system, BlinkMacSystemFont, Trebuchet MS, Roboto, Ubuntu, sans-serif",
+          "fontSize": "10",
+          "noTimeScale": false,
+          "valuesTracking": "1",
+          "changeMode": "price-and-percent",
+          "chartType": "candlesticks",
+          "lineType": 0,
+          "dateRanges": ["1h|1"],
+          "upColor": "#22ab94",
+          "downColor": "#f7525f",
+          "borderUpColor": "#22ab94",
+          "borderDownColor": "#f7525f",
+          "wickUpColor": "#22ab94",
+          "wickDownColor": "#f7525f"
         }
         </script>
         <!-- TradingView Widget END -->
