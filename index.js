@@ -3745,73 +3745,82 @@ app.get('/install', (_req, res) => {
     }
     .container {
       width: 100%;
-      max-width: 450px;
+      max-width: 500px;
       text-align: center;
     }
     .card {
       background: rgba(26, 31, 38, 0.95);
       border-radius: 20px;
-      padding: 40px 30px;
+      padding: 30px 25px;
       border: 1px solid #2f3640;
       box-shadow: 0 20px 60px rgba(0,0,0,0.5);
     }
     .icon {
-      width: 100px;
-      height: 100px;
-      margin: 0 auto 25px;
-      border-radius: 25px;
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 20px;
+      border-radius: 20px;
       overflow: hidden;
       box-shadow: 0 10px 30px rgba(247,147,26,0.3);
     }
     .icon img { width: 100%; height: 100%; }
     h1 {
       color: #f7931a;
-      font-size: 1.5em;
-      margin-bottom: 10px;
+      font-size: 1.4em;
+      margin-bottom: 8px;
     }
     .subtitle {
       color: #71767b;
-      font-size: 0.95em;
-      margin-bottom: 30px;
-      line-height: 1.5;
+      font-size: 0.9em;
+      margin-bottom: 20px;
+      line-height: 1.4;
     }
+    .browser-info {
+      background: rgba(247,147,26,0.1);
+      border: 1px solid rgba(247,147,26,0.3);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 20px;
+      font-size: 0.85em;
+    }
+    .browser-info strong { color: #f7931a; }
     .steps {
       text-align: left;
-      margin-bottom: 30px;
+      margin-bottom: 20px;
     }
     .step {
       display: flex;
       align-items: flex-start;
-      gap: 15px;
-      padding: 15px;
+      gap: 12px;
+      padding: 12px;
       background: #0f1419;
-      border-radius: 12px;
-      margin-bottom: 10px;
+      border-radius: 10px;
+      margin-bottom: 8px;
     }
     .step-num {
-      width: 30px;
-      height: 30px;
+      width: 26px;
+      height: 26px;
       background: linear-gradient(135deg, #f7931a 0%, #ff6b00 100%);
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: bold;
-      font-size: 0.9em;
+      font-size: 0.85em;
       flex-shrink: 0;
     }
     .step-text {
       color: #e7e9ea;
-      font-size: 0.9em;
+      font-size: 0.85em;
       line-height: 1.4;
     }
     .step-text strong { color: #f7931a; }
     .btn {
       width: 100%;
-      padding: 15px;
+      padding: 14px;
       border: none;
       border-radius: 12px;
-      font-size: 1.1em;
+      font-size: 1em;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s;
@@ -3842,15 +3851,17 @@ app.get('/install', (_req, res) => {
       margin-bottom: 20px;
     }
     .installed-msg.show { display: block; }
-    .skip-link {
-      color: #71767b;
-      font-size: 0.85em;
-      margin-top: 15px;
-      display: none;
+    .notice {
+      color:#ff6b6b;
+      margin-top:15px;
+      font-size:0.85em;
+      display:none;
+      padding: 10px;
+      background: rgba(255,107,107,0.1);
+      border-radius: 8px;
     }
-    .skip-link a { color: #f7931a; text-decoration: none; }
-    .android-steps, .ios-steps { display: none; }
-    .android-steps.show, .ios-steps.show { display: block; }
+    .manual-steps { display: none; }
+    .manual-steps.show { display: block; }
   </style>
 </head>
 <body>
@@ -3860,45 +3871,21 @@ app.get('/install', (_req, res) => {
         <img src="/icon.png" alt="Gold Monitor">
       </div>
       <h1>Install Aplikasi</h1>
-      <p class="subtitle">Install Gold Price Monitor untuk pengalaman terbaik dan menerima notifikasi harga emas real-time</p>
+      <p class="subtitle">Install Gold Price Monitor untuk pengalaman terbaik dengan notifikasi harga emas real-time</p>
 
       <div class="installed-msg" id="installedMsg">
-        Aplikasi sudah terinstall! Klik tombol di bawah untuk lanjut.
+        Aplikasi sudah terinstall! Mengalihkan ke monitoring...
       </div>
 
-      <div class="steps android-steps" id="androidSteps">
-        <div class="step">
-          <div class="step-num">1</div>
-          <div class="step-text">Tap tombol <strong>"Install Aplikasi"</strong> di bawah</div>
-        </div>
-        <div class="step">
-          <div class="step-num">2</div>
-          <div class="step-text">Pilih <strong>"Add to Home Screen"</strong> atau <strong>"Install"</strong></div>
-        </div>
-        <div class="step">
-          <div class="step-num">3</div>
-          <div class="step-text">Buka aplikasi dari home screen</div>
-        </div>
+      <div class="browser-info" id="browserInfo">
+        Mendeteksi browser...
       </div>
 
-      <div class="steps ios-steps" id="iosSteps">
-        <div class="step">
-          <div class="step-num">1</div>
-          <div class="step-text">Tap tombol <strong>Share</strong> di browser (ikon kotak dengan panah)</div>
-        </div>
-        <div class="step">
-          <div class="step-num">2</div>
-          <div class="step-text">Scroll dan pilih <strong>"Add to Home Screen"</strong></div>
-        </div>
-        <div class="step">
-          <div class="step-num">3</div>
-          <div class="step-text">Tap <strong>"Add"</strong> untuk konfirmasi</div>
-        </div>
-      </div>
+      <div class="steps manual-steps" id="manualSteps"></div>
 
       <button class="btn btn-primary" id="installBtn">Install Aplikasi</button>
       <button class="btn btn-secondary" id="continueBtn" style="display:none;">Lanjut ke Monitoring</button>
-      <p class="notice" id="notice" style="color:#ff6b6b;margin-top:15px;font-size:0.9em;display:none;">
+      <p class="notice" id="notice">
         Anda harus install aplikasi terlebih dahulu untuk mengakses monitoring harga emas.
       </p>
     </div>
@@ -3913,114 +3900,282 @@ app.get('/install', (_req, res) => {
     const continueBtn = document.getElementById('continueBtn');
     const installedMsg = document.getElementById('installedMsg');
     const notice = document.getElementById('notice');
+    const browserInfo = document.getElementById('browserInfo');
+    const manualSteps = document.getElementById('manualSteps');
 
-    // Detect platform - check multiple ways for standalone mode
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const isAndroid = /Android/.test(navigator.userAgent);
-    const isMobile = isIOS || isAndroid;
+    // Detect browser and platform
+    const ua = navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(ua);
+    const isAndroid = /Android/.test(ua);
+    const isSamsung = /SamsungBrowser/.test(ua);
+    const isChrome = /Chrome/.test(ua) && !/Edge|Edg|OPR|Opera|SamsungBrowser/.test(ua);
+    const isFirefox = /Firefox/.test(ua);
+    const isEdge = /Edg/.test(ua);
+    const isOpera = /OPR|Opera/.test(ua);
+    const isSafari = /Safari/.test(ua) && !/Chrome/.test(ua);
+    const isDesktop = !isIOS && !isAndroid;
+
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches
                       || window.navigator.standalone === true
                       || document.referrer.includes('android-app://')
                       || window.matchMedia('(display-mode: fullscreen)').matches;
 
-    // Go to monitoring after install
+    // Get browser name
+    function getBrowserName() {
+      if (isIOS && isSafari) return 'Safari (iOS)';
+      if (isIOS && isChrome) return 'Chrome (iOS)';
+      if (isIOS && isFirefox) return 'Firefox (iOS)';
+      if (isIOS) return 'Browser iOS';
+      if (isSamsung) return 'Samsung Internet';
+      if (isChrome && isAndroid) return 'Chrome (Android)';
+      if (isFirefox && isAndroid) return 'Firefox (Android)';
+      if (isOpera && isAndroid) return 'Opera (Android)';
+      if (isEdge && isAndroid) return 'Edge (Android)';
+      if (isChrome && isDesktop) return 'Chrome (Desktop)';
+      if (isFirefox && isDesktop) return 'Firefox (Desktop)';
+      if (isEdge && isDesktop) return 'Edge (Desktop)';
+      if (isOpera && isDesktop) return 'Opera (Desktop)';
+      if (isSafari && isDesktop) return 'Safari (Mac)';
+      return 'Browser';
+    }
+
+    // Get install instructions based on browser
+    function getInstallInstructions() {
+      // iOS Safari
+      if (isIOS && isSafari) {
+        return {
+          auto: false,
+          steps: [
+            'Tap ikon <strong>Share</strong> (kotak dengan panah ke atas) di bagian bawah browser',
+            'Scroll ke bawah dan tap <strong>"Add to Home Screen"</strong>',
+            'Tap <strong>"Add"</strong> di pojok kanan atas',
+            'Buka aplikasi dari Home Screen'
+          ]
+        };
+      }
+      // iOS Chrome/Firefox - redirect to Safari
+      if (isIOS && !isSafari) {
+        return {
+          auto: false,
+          steps: [
+            '<strong style="color:#ff6b6b;">Buka halaman ini di Safari</strong> untuk install PWA',
+            'Di Safari, tap ikon <strong>Share</strong> (kotak dengan panah)',
+            'Pilih <strong>"Add to Home Screen"</strong>',
+            'Buka aplikasi dari Home Screen'
+          ]
+        };
+      }
+      // Samsung Internet
+      if (isSamsung) {
+        return {
+          auto: true,
+          steps: [
+            'Tap tombol <strong>"Install Aplikasi"</strong> di bawah',
+            'Atau tap ikon <strong>menu (≡)</strong> di pojok kanan bawah',
+            'Pilih <strong>"Add page to" → "Home screen"</strong>',
+            'Buka aplikasi dari Home Screen'
+          ]
+        };
+      }
+      // Chrome Android
+      if (isChrome && isAndroid) {
+        return {
+          auto: true,
+          steps: [
+            'Tap tombol <strong>"Install Aplikasi"</strong> di bawah',
+            'Atau tap <strong>menu (⋮)</strong> di pojok kanan atas',
+            'Pilih <strong>"Install app"</strong> atau <strong>"Add to Home screen"</strong>',
+            'Buka aplikasi dari Home Screen'
+          ]
+        };
+      }
+      // Firefox Android
+      if (isFirefox && isAndroid) {
+        return {
+          auto: false,
+          steps: [
+            'Tap <strong>menu (⋮)</strong> di pojok kanan atas',
+            'Pilih <strong>"Install"</strong> atau <strong>"Add to Home screen"</strong>',
+            'Konfirmasi dengan tap <strong>"Add"</strong>',
+            'Buka aplikasi dari Home Screen'
+          ]
+        };
+      }
+      // Edge Android
+      if (isEdge && isAndroid) {
+        return {
+          auto: true,
+          steps: [
+            'Tap tombol <strong>"Install Aplikasi"</strong> di bawah',
+            'Atau tap <strong>menu (≡)</strong> di bagian bawah',
+            'Pilih <strong>"Add to phone"</strong>',
+            'Buka aplikasi dari Home Screen'
+          ]
+        };
+      }
+      // Opera Android
+      if (isOpera && isAndroid) {
+        return {
+          auto: true,
+          steps: [
+            'Tap tombol <strong>"Install Aplikasi"</strong> di bawah',
+            'Atau tap <strong>menu (⋮)</strong> di pojok kanan bawah',
+            'Pilih <strong>"Home screen"</strong>',
+            'Buka aplikasi dari Home Screen'
+          ]
+        };
+      }
+      // Chrome Desktop
+      if (isChrome && isDesktop) {
+        return {
+          auto: true,
+          steps: [
+            'Klik tombol <strong>"Install Aplikasi"</strong> di bawah',
+            'Atau klik ikon <strong>install (⊕)</strong> di address bar (pojok kanan)',
+            'Klik <strong>"Install"</strong> pada popup',
+            'Aplikasi akan terbuka di window baru'
+          ]
+        };
+      }
+      // Edge Desktop
+      if (isEdge && isDesktop) {
+        return {
+          auto: true,
+          steps: [
+            'Klik tombol <strong>"Install Aplikasi"</strong> di bawah',
+            'Atau klik <strong>menu (···)</strong> di pojok kanan atas',
+            'Pilih <strong>"Apps" → "Install this site as an app"</strong>',
+            'Klik <strong>"Install"</strong>'
+          ]
+        };
+      }
+      // Firefox Desktop
+      if (isFirefox && isDesktop) {
+        return {
+          auto: false,
+          steps: [
+            'Firefox Desktop tidak mendukung install PWA secara langsung',
+            'Gunakan <strong>Chrome</strong> atau <strong>Edge</strong> untuk install',
+            'Atau bookmark halaman ini untuk akses cepat'
+          ]
+        };
+      }
+      // Safari Mac
+      if (isSafari && isDesktop) {
+        return {
+          auto: false,
+          steps: [
+            'Di Safari 17+, klik <strong>File → Add to Dock</strong>',
+            'Atau gunakan <strong>Chrome/Edge</strong> untuk install PWA',
+            'Bookmark halaman ini untuk akses cepat'
+          ]
+        };
+      }
+      // Default Android
+      if (isAndroid) {
+        return {
+          auto: true,
+          steps: [
+            'Tap tombol <strong>"Install Aplikasi"</strong> di bawah',
+            'Atau buka menu browser dan pilih <strong>"Add to Home screen"</strong>',
+            'Konfirmasi instalasi',
+            'Buka aplikasi dari Home Screen'
+          ]
+        };
+      }
+      // Default Desktop
+      return {
+        auto: true,
+        steps: [
+          'Klik tombol <strong>"Install Aplikasi"</strong> di bawah',
+          'Atau cari opsi <strong>"Install"</strong> di menu browser',
+          'Konfirmasi instalasi',
+          'Aplikasi akan terbuka'
+        ]
+      };
+    }
+
     function goToMonitoring() {
       localStorage.setItem('pwa_installed_v2', 'true');
       window.location.replace('/monitoring');
     }
 
-    // Mark as installed and go to monitoring
     function markInstalled() {
       localStorage.setItem('pwa_installed_v2', 'true');
       installedMsg.classList.add('show');
       installBtn.style.display = 'none';
       continueBtn.style.display = 'block';
       continueBtn.onclick = goToMonitoring;
-      // Auto redirect after 2 seconds
       setTimeout(goToMonitoring, 2000);
     }
 
-    // ONLY allow access to monitoring if running as PWA (standalone mode)
-    // Browser biasa harus tetap di halaman install
+    function showManualSteps(instructions) {
+      let html = '';
+      instructions.steps.forEach((step, i) => {
+        html += '<div class="step"><div class="step-num">' + (i+1) + '</div><div class="step-text">' + step + '</div></div>';
+      });
+      manualSteps.innerHTML = html;
+      manualSteps.classList.add('show');
+    }
+
+    // Check if running as PWA
     if (isStandalone) {
-      // Running as PWA - go directly to monitoring
       goToMonitoring();
-    } else if (isIOS) {
-      // iOS Safari - must install manually
-      document.getElementById('iosSteps').classList.add('show');
-      installBtn.textContent = 'Lihat Cara Install';
-      installBtn.onclick = () => {
-        alert('Untuk install di iOS:\\n\\n1. Tap tombol Share di browser Safari (ikon kotak dengan panah)\\n\\n2. Scroll ke bawah dan pilih "Add to Home Screen"\\n\\n3. Tap "Add" untuk konfirmasi\\n\\nSetelah install, buka aplikasi dari home screen.');
-      };
+    } else {
+      // Show browser info and instructions
+      const browserName = getBrowserName();
+      const instructions = getInstallInstructions();
+
+      browserInfo.innerHTML = 'Browser: <strong>' + browserName + '</strong>';
+      showManualSteps(instructions);
       notice.style.display = 'block';
-      // Check periodically if user installed
+
+      // Handle install prompt
+      if (instructions.auto) {
+        window.addEventListener('beforeinstallprompt', (e) => {
+          e.preventDefault();
+          deferredPrompt = e;
+
+          // Auto prompt after 1 second
+          setTimeout(() => {
+            if (deferredPrompt) {
+              deferredPrompt.prompt();
+              deferredPrompt.userChoice.then((result) => {
+                if (result.outcome === 'accepted') {
+                  markInstalled();
+                }
+                deferredPrompt = null;
+              });
+            }
+          }, 1000);
+        });
+
+        installBtn.onclick = async () => {
+          if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+              markInstalled();
+            }
+            deferredPrompt = null;
+          } else {
+            alert('Install tidak tersedia secara otomatis.\\n\\nIkuti langkah manual di halaman ini untuk install aplikasi.');
+          }
+        };
+      } else {
+        // No auto install - show manual button
+        installBtn.textContent = 'Lihat Cara Install';
+        installBtn.onclick = () => {
+          manualSteps.scrollIntoView({ behavior: 'smooth' });
+        };
+      }
+
+      // Check periodically for standalone mode
       setInterval(() => {
         if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
           markInstalled();
         }
       }, 1000);
-    } else if (isAndroid) {
-      // Android - auto-prompt install
-      document.getElementById('androidSteps').classList.add('show');
-
-      window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-        // Auto-show install prompt on Android
-        setTimeout(() => {
-          if (deferredPrompt) {
-            deferredPrompt.prompt();
-            deferredPrompt.userChoice.then((result) => {
-              if (result.outcome === 'accepted') {
-                markInstalled();
-              } else {
-                notice.style.display = 'block';
-              }
-              deferredPrompt = null;
-            });
-          }
-        }, 1000);
-      });
-
-      installBtn.onclick = async () => {
-        if (deferredPrompt) {
-          deferredPrompt.prompt();
-          const { outcome } = await deferredPrompt.userChoice;
-          if (outcome === 'accepted') {
-            markInstalled();
-          } else {
-            notice.style.display = 'block';
-          }
-          deferredPrompt = null;
-        } else {
-          alert('Tap menu (titik 3) di pojok kanan atas browser, lalu pilih "Add to Home Screen" atau "Install App"');
-          notice.style.display = 'block';
-        }
-      };
-    } else {
-      // Desktop browser
-      document.getElementById('androidSteps').classList.add('show');
-
-      window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-      });
-
-      installBtn.onclick = async () => {
-        if (deferredPrompt) {
-          deferredPrompt.prompt();
-          const { outcome } = await deferredPrompt.userChoice;
-          if (outcome === 'accepted') {
-            markInstalled();
-          } else {
-            notice.style.display = 'block';
-          }
-          deferredPrompt = null;
-        } else {
-          alert('Klik ikon install di address bar browser (biasanya di sebelah kanan), atau gunakan menu browser > "Install Gold Price Monitor"');
-          notice.style.display = 'block';
-        }
-      };
     }
 
     window.addEventListener('appinstalled', () => {
@@ -4427,25 +4582,48 @@ app.get('/admin/users', (_req, res) => {
 
   <!-- Sound Settings -->
   <div class="card">
-    <div class="card-header">
-      <h3>🔊 Pengaturan Sound</h3>
-    </div>
-    <div class="card-body">
+    <h2>Pengaturan Sound Notifikasi</h2>
+    <p style="color:#71767b;font-size:0.85em;margin-bottom:15px;">Upload file audio dari perangkat atau masukkan URL. Max 500KB per file.</p>
+
+    <div class="result-msg" id="soundResult"></div>
+
+    <!-- Sound Harga Naik -->
+    <div style="background:#0f1419;padding:15px;border-radius:10px;margin-bottom:15px;">
+      <label style="color:#00ff88;font-weight:600;display:block;margin-bottom:10px;">Sound Harga Naik</label>
       <div class="form-group">
-        <label>Sound Harga Naik (URL MP3/WAV)</label>
+        <label>Upload File Audio</label>
+        <input type="file" id="soundUpFile" accept="audio/*" onchange="handleSoundUpload('up')" style="padding:8px;background:#1a1f26;">
+      </div>
+      <div class="form-group">
+        <label>Atau Masukkan URL</label>
         <input type="text" id="soundUpUrl" placeholder="https://example.com/naik.mp3">
-        <small style="color:#71767b;font-size:0.8em;">Kosongkan untuk sound default</small>
+      </div>
+      <div id="soundUpPreview" style="margin-top:10px;display:none;">
+        <audio id="soundUpAudio" controls style="width:100%;height:40px;"></audio>
+      </div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:10px;" onclick="testSound('up')">Test Sound Naik</button>
+    </div>
+
+    <!-- Sound Harga Turun -->
+    <div style="background:#0f1419;padding:15px;border-radius:10px;margin-bottom:15px;">
+      <label style="color:#ff6b6b;font-weight:600;display:block;margin-bottom:10px;">Sound Harga Turun</label>
+      <div class="form-group">
+        <label>Upload File Audio</label>
+        <input type="file" id="soundDownFile" accept="audio/*" onchange="handleSoundUpload('down')" style="padding:8px;background:#1a1f26;">
       </div>
       <div class="form-group">
-        <label>Sound Harga Turun (URL MP3/WAV)</label>
+        <label>Atau Masukkan URL</label>
         <input type="text" id="soundDownUrl" placeholder="https://example.com/turun.mp3">
-        <small style="color:#71767b;font-size:0.8em;">Kosongkan untuk sound default</small>
       </div>
-      <div style="display:flex;gap:10px;margin-top:15px;">
-        <button class="btn btn-secondary" style="flex:1;" onclick="testSound('up')">🔊 Test Naik</button>
-        <button class="btn btn-secondary" style="flex:1;" onclick="testSound('down')">🔊 Test Turun</button>
+      <div id="soundDownPreview" style="margin-top:10px;display:none;">
+        <audio id="soundDownAudio" controls style="width:100%;height:40px;"></audio>
       </div>
-      <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="saveSoundSettings()">Simpan Sound</button>
+      <button class="btn btn-secondary btn-sm" style="margin-top:10px;" onclick="testSound('down')">Test Sound Turun</button>
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-primary" style="flex:2;" onclick="saveSoundSettings()">Simpan Sound</button>
+      <button class="btn btn-danger" style="flex:1;" onclick="resetSounds()">Reset ke Default</button>
     </div>
   </div>
 
@@ -4492,13 +4670,72 @@ app.get('/admin/users', (_req, res) => {
             currentSoundDown = data.settings.soundDown || '';
             document.getElementById('soundUpUrl').value = currentSoundUp;
             document.getElementById('soundDownUrl').value = currentSoundDown;
+
+            // Show preview if sound exists
+            if (currentSoundUp) {
+              document.getElementById('soundUpPreview').style.display = 'block';
+              document.getElementById('soundUpAudio').src = currentSoundUp;
+            }
+            if (currentSoundDown) {
+              document.getElementById('soundDownPreview').style.display = 'block';
+              document.getElementById('soundDownAudio').src = currentSoundDown;
+            }
           }
         });
+    }
+
+    // Handle file upload - convert to base64 data URL
+    function handleSoundUpload(direction) {
+      const fileInput = document.getElementById(direction === 'up' ? 'soundUpFile' : 'soundDownFile');
+      const urlInput = document.getElementById(direction === 'up' ? 'soundUpUrl' : 'soundDownUrl');
+      const preview = document.getElementById(direction === 'up' ? 'soundUpPreview' : 'soundDownPreview');
+      const audio = document.getElementById(direction === 'up' ? 'soundUpAudio' : 'soundDownAudio');
+      const result = document.getElementById('soundResult');
+
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      // Check file size (max 500KB)
+      if (file.size > 500 * 1024) {
+        result.className = 'result-msg error';
+        result.textContent = 'File terlalu besar! Maksimal 500KB. File Anda: ' + Math.round(file.size/1024) + 'KB';
+        fileInput.value = '';
+        return;
+      }
+
+      // Check file type
+      if (!file.type.startsWith('audio/')) {
+        result.className = 'result-msg error';
+        result.textContent = 'File harus berformat audio (MP3, WAV, OGG, dll)';
+        fileInput.value = '';
+        return;
+      }
+
+      // Convert to base64
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const dataUrl = e.target.result;
+        urlInput.value = dataUrl;
+        audio.src = dataUrl;
+        preview.style.display = 'block';
+        result.className = 'result-msg success';
+        result.textContent = 'File "' + file.name + '" berhasil dimuat. Klik "Simpan Sound" untuk menyimpan.';
+        setTimeout(() => result.className = 'result-msg', 5000);
+      };
+      reader.onerror = function() {
+        result.className = 'result-msg error';
+        result.textContent = 'Gagal membaca file';
+      };
+      reader.readAsDataURL(file);
     }
 
     function saveSoundSettings() {
       const soundUp = document.getElementById('soundUpUrl').value.trim();
       const soundDown = document.getElementById('soundDownUrl').value.trim();
+      const result = document.getElementById('soundResult');
+
+      result.className = 'result-msg success';
+      result.textContent = 'Menyimpan...';
 
       fetch('/api/admin/sound-settings', {
         method: 'POST',
@@ -4510,10 +4747,50 @@ app.get('/admin/users', (_req, res) => {
         if (data.success) {
           currentSoundUp = soundUp;
           currentSoundDown = soundDown;
-          alert('Sound berhasil disimpan!');
+          result.className = 'result-msg success';
+          result.textContent = 'Sound berhasil disimpan! Semua client akan menerima update.';
         } else {
-          alert('Gagal: ' + data.error);
+          result.className = 'result-msg error';
+          result.textContent = 'Gagal: ' + data.error;
         }
+        setTimeout(() => result.className = 'result-msg', 5000);
+      })
+      .catch(e => {
+        result.className = 'result-msg error';
+        result.textContent = 'Error: ' + e.message;
+      });
+    }
+
+    function resetSounds() {
+      if (!confirm('Reset semua sound ke default? Sound kustom akan dihapus.')) return;
+
+      const result = document.getElementById('soundResult');
+      result.className = 'result-msg success';
+      result.textContent = 'Mereset sound...';
+
+      fetch('/api/admin/sound-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass, soundUp: '', soundDown: '' })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          currentSoundUp = '';
+          currentSoundDown = '';
+          document.getElementById('soundUpUrl').value = '';
+          document.getElementById('soundDownUrl').value = '';
+          document.getElementById('soundUpFile').value = '';
+          document.getElementById('soundDownFile').value = '';
+          document.getElementById('soundUpPreview').style.display = 'none';
+          document.getElementById('soundDownPreview').style.display = 'none';
+          result.className = 'result-msg success';
+          result.textContent = 'Sound berhasil direset ke default!';
+        } else {
+          result.className = 'result-msg error';
+          result.textContent = 'Gagal: ' + data.error;
+        }
+        setTimeout(() => result.className = 'result-msg', 5000);
       });
     }
 
