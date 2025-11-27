@@ -1423,7 +1423,7 @@ ${marketSection}
 🎁 20jt→${formatGrams(grams20M)}gr (+Rp${formatRupiah(Math.round(profit20M))}) | 30jt→${formatGrams(grams30M)}gr (+Rp${formatRupiah(Math.round(profit30M))})
 ${calendarSection}
 📊 Lihat Chart & Riwayat Lengkap:
-🔗 https://ts.muhamadaliyudin.xyz`
+🔗 https://realtime-emas-production.up.railway.app`
 }
 async function fetchTreasury() {
   const res = await fetch(TREASURY_URL, {
