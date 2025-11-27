@@ -1833,6 +1833,7 @@ app.get('/sse', (req, res) => {
 // Fungsi untuk broadcast ke semua SSE clients
 function broadcastSSE(data) {
   const message = `data: ${JSON.stringify(data)}\n\n`
+  console.log(`[BROADCAST] Type: ${data.type}, Clients: ${sseClients.size}`)
   sseClients.forEach(client => {
     try {
       client.write(message)
@@ -3058,11 +3059,20 @@ app.get('/monitoring', async (_req, res) => {
       try {
         lastDataTime = Date.now();
         const data = JSON.parse(event.data);
-        if (data.type === 'heartbeat') return;
+
+        // Log semua data yang masuk (kecuali heartbeat)
+        if (data.type !== 'heartbeat') {
+          console.log('SSE data received:', data.type, data);
+        }
+
+        if (data.type === 'heartbeat') {
+          console.log('\u{1F493} Heartbeat received');
+          return;
+        }
 
         // Handle notifikasi/promo dari admin
         if (data.type === 'notification') {
-          console.log('Received notification:', data);
+          console.log('\u{1F514} Notification received:', data);
           showPromoNotification(data);
           return;
         }
