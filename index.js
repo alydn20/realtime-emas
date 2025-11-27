@@ -134,7 +134,10 @@ const REDIS_KEYS = {
   WA_GROUP_ID: 'gold:wa_group_id', // String: ID grup WA yang di-monitor
   WA_AUTH: 'gold:wa_auth',       // Hash: key -> auth data (creds, keys) for persistent WA session
   OTP_CODES: 'gold:otp_codes',   // Hash: phone -> OTP code for registration verification
-  SOUND_SETTINGS: 'gold:sound_settings' // JSON: custom sound settings (soundUp, soundDown URLs)
+  SOUND_SETTINGS: 'gold:sound_settings', // JSON: custom sound settings (soundUp, soundDown URLs)
+  LOGIN_TOKENS: 'gold:login_tokens', // Hash: token -> { phone, expires }
+  LOGIN_ATTEMPTS: 'gold:login_attempts', // Hash: phone -> { attempts, lastAttempt }
+  BLOCKED_USERS: 'gold:blocked_users' // Hash: phone -> { blockedAt, reason }
 }
 
 // Admin password untuk akses admin panel
@@ -2100,7 +2103,7 @@ function getAuthCheckScript(redirectTo) {
 }
 
 app.get('/', (_req, res) => {
-  res.redirect('/install')
+  res.redirect('/login')
 })
 
 app.get('/health', (_req, res) => {
@@ -3102,6 +3105,70 @@ app.post('/api/logout', express.json(), async (req, res) => {
   res.json({ success: true })
 })
 
+// Helper: Generate login token
+function generateLoginToken() {
+  return Math.random().toString(36).substr(2, 12) + Date.now().toString(36)
+}
+
+// API: Request login link via WhatsApp
+app.post('/api/user/request-login', express.json(), async (req, res) => {
+  const { phone } = req.body
+  if (!phone) return res.json({ success: false, error: 'Nomor HP wajib diisi' })
+
+  const normalizedPhone = normalizePhone(phone)
+
+  // Check if user is blocked
+  const blocked = await redis.hget(REDIS_KEYS.BLOCKED_USERS, normalizedPhone)
+  if (blocked) {
+    return res.json({ success: false, error: 'Akun diblokir. Hubungi admin untuk membuka blokir.' })
+  }
+
+  // Check if user exists and valid
+  const check = await isUserValid(normalizedPhone)
+  if (!check.valid) {
+    if (check.reason === 'not_found') {
+      return res.json({ success: false, error: 'Nomor tidak terdaftar. Hubungi admin untuk mendaftar.' })
+    }
+    if (check.reason === 'expired') {
+      return res.json({ success: false, error: 'Akun sudah expired. Hubungi admin untuk perpanjang.' })
+    }
+    return res.json({ success: false, error: 'Terjadi kesalahan' })
+  }
+
+  // Check if WhatsApp is connected
+  if (!sock || !isReady) {
+    return res.json({ success: false, error: 'WhatsApp tidak terhubung. Coba lagi nanti.' })
+  }
+
+  // Generate login token (valid for 5 minutes)
+  const token = generateLoginToken()
+  const tokenData = {
+    phone: normalizedPhone,
+    expires: Date.now() + 5 * 60 * 1000 // 5 minutes
+  }
+
+  await redis.hset(REDIS_KEYS.LOGIN_TOKENS, { [token]: JSON.stringify(tokenData) })
+
+  // Get base URL from request
+  const protocol = req.headers['x-forwarded-proto'] || 'https'
+  const host = req.headers.host
+  const loginUrl = `${protocol}://${host}/auth/${token}`
+
+  // Send login link via WhatsApp
+  try {
+    const jid = `62${normalizedPhone}@s.whatsapp.net`
+    await sock.sendMessage(jid, {
+      text: `🔐 *Login Gold Price Monitor*\n\nHalo ${check.user?.name || 'User'}!\n\nKlik link berikut untuk masuk:\n${loginUrl}\n\n⏰ Link berlaku 5 menit.\n⚠️ Jangan bagikan link ini kepada siapapun.`
+    })
+
+    pushLog(`Auth | Login link sent to +62${normalizedPhone}`)
+    res.json({ success: true, message: 'Link login telah dikirim ke WhatsApp Anda' })
+  } catch (e) {
+    pushLog(`Auth | Failed to send login link to +62${normalizedPhone}: ${e.message}`)
+    res.json({ success: false, error: 'Gagal mengirim link. Pastikan nomor WhatsApp aktif.' })
+  }
+})
+
 // API: Save push subscription
 app.post('/api/push-subscribe', express.json(), async (req, res) => {
   const { session, subscription } = req.body
@@ -3127,16 +3194,21 @@ app.get('/api/admin/users', async (req, res) => {
   if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
 
   try {
-    const users = await redis.hgetall(REDIS_KEYS.USERS)
+    const [users, blockedUsers] = await Promise.all([
+      redis.hgetall(REDIS_KEYS.USERS),
+      redis.hgetall(REDIS_KEYS.BLOCKED_USERS)
+    ])
     const result = []
 
     for (const [phone, data] of Object.entries(users || {})) {
       const user = typeof data === 'string' ? JSON.parse(data) : data
       const hasPushSub = await redis.hget(REDIS_KEYS.PUSH_SUBS, phone)
+      const isBlocked = !!blockedUsers?.[phone]
       result.push({
         phone,
         ...user,
-        hasPushSubscription: !!hasPushSub
+        hasPushSubscription: !!hasPushSub,
+        isBlocked
       })
     }
 
@@ -3144,6 +3216,47 @@ app.get('/api/admin/users', async (req, res) => {
   } catch (e) {
     res.json({ success: false, error: e.message })
   }
+})
+
+// Admin: Block user
+app.post('/api/admin/users/block', express.json(), async (req, res) => {
+  const { password, phone, reason } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  if (!phone) return res.json({ success: false, error: 'Phone required' })
+
+  const normalizedPhone = normalizePhone(phone)
+  const blockData = {
+    blockedAt: Date.now(),
+    reason: reason || 'Blocked by admin'
+  }
+
+  await redis.hset(REDIS_KEYS.BLOCKED_USERS, { [normalizedPhone]: JSON.stringify(blockData) })
+
+  // Also remove all sessions for this user
+  const sessions = await redis.hgetall(REDIS_KEYS.SESSIONS)
+  for (const [sessId, sessPhone] of Object.entries(sessions || {})) {
+    if (sessPhone === normalizedPhone) {
+      await redis.hdel(REDIS_KEYS.SESSIONS, sessId)
+    }
+  }
+
+  pushLog(`Admin | Blocked user +62${normalizedPhone}`)
+  res.json({ success: true })
+})
+
+// Admin: Unblock user
+app.post('/api/admin/users/unblock', express.json(), async (req, res) => {
+  const { password, phone } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  if (!phone) return res.json({ success: false, error: 'Phone required' })
+
+  const normalizedPhone = normalizePhone(phone)
+  await redis.hdel(REDIS_KEYS.BLOCKED_USERS, normalizedPhone)
+
+  pushLog(`Admin | Unblocked user +62${normalizedPhone}`)
+  res.json({ success: true })
 })
 
 // Admin: Add user
@@ -3938,8 +4051,8 @@ app.get('/login', (_req, res) => {
   res.send(html);
 })
 
-// ==================== INSTALL PWA PAGE ====================
-app.get('/install', (_req, res) => {
+// ==================== LOGIN PAGE ====================
+app.get('/login', (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
   const html = `<!DOCTYPE html>
 <html>
@@ -3949,7 +4062,7 @@ app.get('/install', (_req, res) => {
   <meta name="theme-color" content="#0f1419">
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" href="/icon.png">
-  <title>Install App - Gold Price Monitor</title>
+  <title>Login - Gold Price Monitor</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -3964,7 +4077,7 @@ app.get('/install', (_req, res) => {
     }
     .container {
       width: 100%;
-      max-width: 500px;
+      max-width: 400px;
       text-align: center;
     }
     .card {
@@ -3991,49 +4104,36 @@ app.get('/install', (_req, res) => {
     .subtitle {
       color: #71767b;
       font-size: 0.9em;
-      margin-bottom: 20px;
+      margin-bottom: 25px;
       line-height: 1.4;
     }
-    .browser-info {
-      background: rgba(247,147,26,0.1);
-      border: 1px solid rgba(247,147,26,0.3);
-      border-radius: 10px;
-      padding: 12px;
-      margin-bottom: 20px;
-      font-size: 0.85em;
-    }
-    .browser-info strong { color: #f7931a; }
-    .steps {
+    .form-group {
+      margin-bottom: 15px;
       text-align: left;
-      margin-bottom: 20px;
     }
-    .step {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 12px;
-      background: #0f1419;
-      border-radius: 10px;
+    .form-group label {
+      display: block;
+      color: #71767b;
+      font-size: 0.85em;
       margin-bottom: 8px;
     }
-    .step-num {
-      width: 26px;
-      height: 26px;
-      background: linear-gradient(135deg, #f7931a 0%, #ff6b00 100%);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      font-size: 0.85em;
-      flex-shrink: 0;
-    }
-    .step-text {
+    .form-group input {
+      width: 100%;
+      padding: 14px 16px;
+      border: 1px solid #2f3640;
+      border-radius: 12px;
+      background: #0f1419;
       color: #e7e9ea;
-      font-size: 0.85em;
-      line-height: 1.4;
+      font-size: 1em;
+      transition: border-color 0.2s;
     }
-    .step-text strong { color: #f7931a; }
+    .form-group input:focus {
+      outline: none;
+      border-color: #f7931a;
+    }
+    .form-group input::placeholder {
+      color: #555;
+    }
     .btn {
       width: 100%;
       padding: 14px;
@@ -4049,38 +4149,94 @@ app.get('/install', (_req, res) => {
       background: linear-gradient(135deg, #f7931a 0%, #ff6b00 100%);
       color: white;
     }
-    .btn-primary:hover {
+    .btn-primary:hover:not(:disabled) {
       transform: translateY(-2px);
       box-shadow: 0 10px 30px rgba(247,147,26,0.3);
     }
-    .btn-secondary {
-      background: #2f3640;
-      color: #e7e9ea;
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
-    .btn-secondary:hover {
-      background: #3f4650;
-    }
-    .installed-msg {
+    .message {
+      padding: 12px;
+      border-radius: 10px;
+      margin-bottom: 15px;
+      font-size: 0.9em;
       display: none;
-      background: rgba(0,255,136,0.1);
+    }
+    .message.error {
+      background: rgba(255,107,107,0.15);
+      border: 1px solid #ff6b6b;
+      color: #ff6b6b;
+      display: block;
+    }
+    .message.success {
+      background: rgba(0,255,136,0.15);
       border: 1px solid #00ff88;
       color: #00ff88;
-      padding: 15px;
+      display: block;
+    }
+    .message.info {
+      background: rgba(247,147,26,0.15);
+      border: 1px solid #f7931a;
+      color: #f7931a;
+      display: block;
+    }
+    .phone-prefix {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .phone-prefix span {
+      background: #2f3640;
+      padding: 14px 12px;
       border-radius: 12px;
-      margin-bottom: 20px;
+      color: #f7931a;
+      font-weight: bold;
     }
-    .installed-msg.show { display: block; }
-    .notice {
-      color:#ff6b6b;
-      margin-top:15px;
-      font-size:0.85em;
-      display:none;
-      padding: 10px;
-      background: rgba(255,107,107,0.1);
-      border-radius: 8px;
+    .phone-prefix input {
+      flex: 1;
     }
-    .manual-steps { display: none; }
-    .manual-steps.show { display: block; }
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 1s ease-in-out infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .wait-msg {
+      display: none;
+      background: rgba(247,147,26,0.1);
+      border: 1px solid rgba(247,147,26,0.3);
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 20px;
+    }
+    .wait-msg.show { display: block; }
+    .wait-msg h3 { color: #f7931a; margin-bottom: 10px; }
+    .wait-msg p { color: #71767b; font-size: 0.9em; line-height: 1.5; }
+    .wa-icon { font-size: 40px; margin-bottom: 10px; }
+    .resend-btn {
+      background: none;
+      border: none;
+      color: #f7931a;
+      cursor: pointer;
+      font-size: 0.9em;
+      margin-top: 15px;
+      text-decoration: underline;
+    }
+    .resend-btn:disabled {
+      color: #555;
+      cursor: not-allowed;
+      text-decoration: none;
+    }
   </style>
 </head>
 <body>
@@ -4089,23 +4245,36 @@ app.get('/install', (_req, res) => {
       <div class="icon">
         <img src="/icon.png" alt="Gold Monitor">
       </div>
-      <h1>Install Aplikasi</h1>
-      <p class="subtitle">Install Gold Price Monitor untuk pengalaman terbaik dengan notifikasi harga emas real-time</p>
+      <h1>Gold Price Monitor</h1>
+      <p class="subtitle">Masuk dengan nomor HP yang terdaftar untuk monitoring harga emas real-time</p>
 
-      <div class="installed-msg" id="installedMsg">
-        Aplikasi sudah terinstall! Mengalihkan ke monitoring...
+      <div id="message" class="message"></div>
+
+      <div id="loginForm">
+        <div class="form-group">
+          <label>Nomor WhatsApp</label>
+          <div class="phone-prefix">
+            <span>+62</span>
+            <input type="tel" id="phoneInput" placeholder="8xxxxxxxxxx" maxlength="12" autocomplete="tel">
+          </div>
+        </div>
+        <button class="btn btn-primary" id="loginBtn" onclick="requestLogin()">
+          Masuk
+        </button>
       </div>
 
-      <div class="browser-info" id="browserInfo">
-        Mendeteksi browser...
+      <div class="wait-msg" id="waitMsg">
+        <div class="wa-icon">📱</div>
+        <h3>Cek WhatsApp Anda!</h3>
+        <p>Link login telah dikirim ke <strong id="phoneDisplay">+62xxx</strong></p>
+        <p style="margin-top:10px;">Klik link tersebut untuk masuk ke aplikasi.</p>
+        <button class="resend-btn" id="resendBtn" onclick="requestLogin()" disabled>
+          Kirim ulang (<span id="countdown">60</span>s)
+        </button>
+        <button class="btn" style="background:#2f3640;margin-top:15px;" onclick="resetForm()">
+          Ganti Nomor
+        </button>
       </div>
-
-      <div class="steps manual-steps" id="manualSteps"></div>
-
-      <button class="btn btn-primary" id="installBtn">Install Aplikasi</button>
-      <p class="notice" id="notice">
-        Anda harus install aplikasi terlebih dahulu untuk mengakses monitoring harga emas.
-      </p>
     </div>
   </div>
 
@@ -4113,327 +4282,119 @@ app.get('/install', (_req, res) => {
     // Disable right-click
     document.addEventListener('contextmenu', e => e.preventDefault());
 
-    let deferredPrompt;
-    let pwaIsInstalled = false;
-    const installBtn = document.getElementById('installBtn');
-    const installedMsg = document.getElementById('installedMsg');
-    const notice = document.getElementById('notice');
-    const browserInfo = document.getElementById('browserInfo');
-    const manualSteps = document.getElementById('manualSteps');
+    let currentPhone = '';
+    let resendTimer = null;
 
-    // Detect browser and platform
-    const ua = navigator.userAgent;
-    const isIOS = /iPad|iPhone|iPod/.test(ua);
-    const isAndroid = /Android/.test(ua);
-    const isSamsung = /SamsungBrowser/.test(ua);
-    const isChrome = /Chrome/.test(ua) && !/Edge|Edg|OPR|Opera|SamsungBrowser/.test(ua);
-    const isFirefox = /Firefox/.test(ua);
-    const isEdge = /Edg/.test(ua);
-    const isOpera = /OPR|Opera/.test(ua);
-    const isSafari = /Safari/.test(ua) && !/Chrome/.test(ua);
-    const isMobile = isIOS || isAndroid;
-
-    // Comprehensive standalone detection for Desktop PWA
-    function checkStandalone() {
-      // iOS Safari standalone
-      if (window.navigator.standalone === true) return true;
-      // Standard standalone mode
-      if (window.matchMedia('(display-mode: standalone)').matches) return true;
-      // Fullscreen mode
-      if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
-      // Minimal UI mode
-      if (window.matchMedia('(display-mode: minimal-ui)').matches) return true;
-      // Desktop PWA detection - no browser UI elements
-      if (window.matchMedia('(display-mode: window-controls-overlay)').matches) return true;
-      // Check if running in app window (no location bar visible)
-      if (!window.locationbar || !window.locationbar.visible) return true;
-      // Check if menubar is hidden (typical for PWA)
-      if (!window.menubar || !window.menubar.visible) return true;
-      return false;
+    // Check if already logged in
+    const existingSession = localStorage.getItem('goldmonitor_session');
+    if (existingSession) {
+      fetch('/api/verify-session?session=' + existingSession)
+        .then(r => r.json())
+        .then(data => {
+          if (data.valid) {
+            window.location.replace('/monitoring');
+          } else {
+            localStorage.removeItem('goldmonitor_session');
+          }
+        })
+        .catch(() => {});
     }
 
-    const isStandalone = checkStandalone();
-
-    // Debug - log detection result
-    console.log('PWA Detection:', {
-      standalone: isStandalone,
-      navigatorStandalone: window.navigator.standalone,
-      displayModeStandalone: window.matchMedia('(display-mode: standalone)').matches,
-      displayModeFullscreen: window.matchMedia('(display-mode: fullscreen)').matches,
-      displayModeMinimalUI: window.matchMedia('(display-mode: minimal-ui)').matches,
-      locationbarVisible: window.locationbar?.visible,
-      menubarVisible: window.menubar?.visible
-    });
-
-    // Check if PWA is already installed using getInstalledRelatedApps API
-    async function checkPwaInstalled() {
-      if ('getInstalledRelatedApps' in navigator) {
-        try {
-          const apps = await navigator.getInstalledRelatedApps();
-          return apps.length > 0;
-        } catch (e) {
-          return false;
-        }
-      }
-      return false;
+    function showMessage(text, type) {
+      const msg = document.getElementById('message');
+      msg.textContent = text;
+      msg.className = 'message ' + type;
     }
 
-    // Get browser name
-    function getBrowserName() {
-      if (isIOS && isSafari) return 'Safari (iOS)';
-      if (isIOS && isChrome) return 'Chrome (iOS)';
-      if (isIOS && isFirefox) return 'Firefox (iOS)';
-      if (isIOS) return 'Browser iOS';
-      if (isSamsung) return 'Samsung Internet';
-      if (isChrome && isAndroid) return 'Chrome (Android)';
-      if (isFirefox && isAndroid) return 'Firefox (Android)';
-      if (isOpera && isAndroid) return 'Opera (Android)';
-      if (isEdge && isAndroid) return 'Edge (Android)';
-      if (isAndroid) return 'Browser Android';
-      if (isChrome) return 'Chrome';
-      if (isFirefox) return 'Firefox';
-      if (isEdge) return 'Edge';
-      if (isOpera) return 'Opera';
-      if (isSafari) return 'Safari';
-      return 'Browser';
+    function hideMessage() {
+      document.getElementById('message').className = 'message';
     }
 
-    // Universal install instructions - support ALL browsers
-    function getInstallInstructions() {
-      const steps = [];
-
-      if (isIOS) {
-        // All iOS browsers
-        steps.push('Tap ikon <strong>Share</strong> (kotak dengan panah ke atas) di bagian bawah browser');
-        steps.push('Scroll dan tap <strong>"Add to Home Screen"</strong>');
-        steps.push('Tap <strong>"Add"</strong> untuk konfirmasi');
-        steps.push('Buka aplikasi dari <strong>Home Screen</strong> Anda');
-        if (!isSafari) {
-          steps.unshift('<span style="color:#ffaa00;">Tip: Untuk hasil terbaik, buka di Safari</span>');
-        }
-        return { auto: false, steps };
-      }
-
-      if (isAndroid) {
-        steps.push('Tap tombol <strong>"Install Aplikasi"</strong> di bawah');
-        if (isSamsung) {
-          steps.push('Atau tap <strong>menu (≡)</strong> → <strong>"Add page to"</strong> → <strong>"Home screen"</strong>');
-        } else if (isFirefox) {
-          steps.push('Atau tap <strong>menu (⋮)</strong> → <strong>"Install"</strong>');
-        } else if (isOpera) {
-          steps.push('Atau tap <strong>menu</strong> → <strong>"Home screen"</strong>');
-        } else {
-          steps.push('Atau tap <strong>menu (⋮)</strong> → <strong>"Install app"</strong> / <strong>"Add to Home screen"</strong>');
-        }
-        steps.push('Konfirmasi instalasi');
-        steps.push('Buka aplikasi dari <strong>Home Screen</strong> Anda');
-        return { auto: true, steps };
-      }
-
-      // Desktop
-      steps.push('Klik tombol <strong>"Install Aplikasi"</strong> di bawah');
-      if (isChrome) {
-        steps.push('Atau klik ikon <strong>Install (⊕)</strong> di address bar');
-      } else if (isEdge) {
-        steps.push('Atau klik <strong>menu (···)</strong> → <strong>"Apps"</strong> → <strong>"Install"</strong>');
-      } else if (isFirefox) {
-        steps.push('<span style="color:#ffaa00;">Firefox: Gunakan Chrome/Edge untuk install PWA</span>');
-      } else if (isSafari) {
-        steps.push('Atau klik <strong>File</strong> → <strong>"Add to Dock"</strong> (Safari 17+)');
+    function setLoading(loading) {
+      const btn = document.getElementById('loginBtn');
+      if (loading) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="loading"></span>Mengirim...';
       } else {
-        steps.push('Atau cari opsi <strong>"Install"</strong> di menu browser');
+        btn.disabled = false;
+        btn.textContent = 'Masuk';
       }
-      steps.push('Konfirmasi instalasi');
-      steps.push('Aplikasi akan terbuka secara terpisah');
-      return { auto: true, steps };
     }
 
-    function goToMonitoring() {
-      localStorage.setItem('pwa_installed_v2', 'true');
-      window.location.replace('/monitoring');
+    function resetForm() {
+      document.getElementById('loginForm').style.display = 'block';
+      document.getElementById('waitMsg').classList.remove('show');
+      document.getElementById('phoneInput').value = '';
+      hideMessage();
+      if (resendTimer) clearInterval(resendTimer);
     }
 
-    function markInstalled() {
-      localStorage.setItem('pwa_installed_v2', 'true');
-      installedMsg.classList.add('show');
-      installBtn.style.display = 'none';
-      setTimeout(goToMonitoring, 2000);
+    function startResendTimer() {
+      let seconds = 60;
+      const resendBtn = document.getElementById('resendBtn');
+      const countdown = document.getElementById('countdown');
+
+      resendBtn.disabled = true;
+      countdown.textContent = seconds;
+
+      if (resendTimer) clearInterval(resendTimer);
+
+      resendTimer = setInterval(() => {
+        seconds--;
+        countdown.textContent = seconds;
+
+        if (seconds <= 0) {
+          clearInterval(resendTimer);
+          resendBtn.disabled = false;
+          resendBtn.innerHTML = 'Kirim ulang link';
+        }
+      }, 1000);
     }
 
-    function showManualSteps(instructions) {
-      let html = '';
-      instructions.steps.forEach((step, i) => {
-        html += '<div class="step"><div class="step-num">' + (i+1) + '</div><div class="step-text">' + step + '</div></div>';
-      });
-      manualSteps.innerHTML = html;
-      manualSteps.classList.add('show');
-    }
+    async function requestLogin() {
+      const phoneInput = document.getElementById('phoneInput');
+      let phone = phoneInput.value.replace(/\\D/g, '');
 
-    // Main initialization
-    async function init() {
-      // Check if running as PWA - redirect immediately
-      if (isStandalone) {
-        goToMonitoring();
+      // Remove leading 0 or 62 if present
+      if (phone.startsWith('62')) phone = phone.substring(2);
+      if (phone.startsWith('0')) phone = phone.substring(1);
+
+      if (!phone || phone.length < 9) {
+        showMessage('Masukkan nomor HP yang valid', 'error');
         return;
       }
 
-      // Auto reload after 3 seconds to re-detect PWA mode
-      // This helps when PWA just opened but detection failed on first load
-      const reloadKey = 'pwa_reload_attempt';
-      const reloadAttempt = parseInt(sessionStorage.getItem(reloadKey) || '0');
+      currentPhone = phone;
+      setLoading(true);
 
-      if (reloadAttempt < 2) {
-        // Show loading message
-        browserInfo.innerHTML = '<span style="color:#f7931a;">Mendeteksi aplikasi... (' + (3 - reloadAttempt) + ')</span>';
-        sessionStorage.setItem(reloadKey, (reloadAttempt + 1).toString());
+      try {
+        const res = await fetch('/api/user/request-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone })
+        });
 
-        setTimeout(() => {
-          // Re-check standalone before reload
-          if (checkStandalone()) {
-            goToMonitoring();
-          } else {
-            window.location.reload();
-          }
-        }, 2000);
-        return;
-      }
+        const data = await res.json();
 
-      // Clear reload counter after max attempts
-      sessionStorage.removeItem(reloadKey);
-
-      // Check if PWA is already installed
-      pwaIsInstalled = await checkPwaInstalled();
-
-      // Show browser info and instructions
-      const browserName = getBrowserName();
-      const instructions = getInstallInstructions();
-
-      browserInfo.innerHTML = 'Browser: <strong>' + browserName + '</strong>' + (isMobile ? ' (Mobile)' : ' (Desktop)');
-
-      if (pwaIsInstalled) {
-        // PWA sudah terinstall - tampilkan panah besar berkedip
-        browserInfo.innerHTML += '<br><span style="color:#00ff88;">✓ Aplikasi sudah terinstall!</span>';
-
-        // CSS untuk animasi panah berkedip
-        const arrowStyle = '<style>' +
-          '@keyframes blink { 0%,100%{opacity:1;transform:translateY(0)} 50%{opacity:0.3;transform:translateY(-10px)} }' +
-          '@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.1)} }' +
-          '.blink-arrow { animation: blink 1s ease-in-out infinite; }' +
-          '.pulse-text { animation: pulse 1.5s ease-in-out infinite; }' +
-          '</style>';
-
-        // Petunjuk berbeda untuk setiap browser dengan PANAH BESAR BERKEDIP
-        let openPwaGuide = arrowStyle;
-
-        if (isChrome && !isMobile) {
-          openPwaGuide += '<div style="position:fixed;top:10px;right:80px;z-index:9999;text-align:center;" class="blink-arrow">' +
-            '<div style="font-size:80px;color:#f7931a;text-shadow:0 0 20px #f7931a;">↗</div>' +
-            '<div style="background:#f7931a;color:#000;padding:8px 15px;border-radius:8px;font-weight:bold;font-size:14px;">KLIK DISINI</div>' +
-            '</div>' +
-            '<div style="background:#1a2332;padding:20px;border-radius:12px;margin:20px 0;text-align:center;">' +
-            '<p class="pulse-text" style="color:#00ff88;font-weight:bold;font-size:1.3em;margin-bottom:15px;">📱 Klik ikon di Address Bar!</p>' +
-            '<p style="color:#e7e9ea;margin-bottom:10px;">Klik ikon <strong style="color:#f7931a;font-size:1.2em;">⊕</strong> atau <strong style="color:#f7931a;">🖥️</strong> di pojok kanan atas</p>' +
-            '<p style="color:#71767b;font-size:0.9em;">Untuk membuka aplikasi Gold Monitor</p>' +
-            '</div>';
-        } else if (isEdge && !isMobile) {
-          openPwaGuide += '<div style="position:fixed;top:10px;right:120px;z-index:9999;text-align:center;" class="blink-arrow">' +
-            '<div style="font-size:80px;color:#f7931a;text-shadow:0 0 20px #f7931a;">↗</div>' +
-            '<div style="background:#f7931a;color:#000;padding:8px 15px;border-radius:8px;font-weight:bold;font-size:14px;">KLIK DISINI</div>' +
-            '</div>' +
-            '<div style="background:#1a2332;padding:20px;border-radius:12px;margin:20px 0;text-align:center;">' +
-            '<p class="pulse-text" style="color:#00ff88;font-weight:bold;font-size:1.3em;margin-bottom:15px;">📱 Klik ikon di Address Bar!</p>' +
-            '<p style="color:#e7e9ea;margin-bottom:10px;">Klik ikon <strong style="color:#f7931a;font-size:1.2em;">App available</strong> di address bar</p>' +
-            '<p style="color:#71767b;font-size:0.9em;">Atau menu ··· → Apps → Gold Price Monitor</p>' +
-            '</div>';
-        } else if (isMobile && isAndroid) {
-          openPwaGuide += '<div style="background:#1a2332;padding:20px;border-radius:12px;margin:20px 0;text-align:center;">' +
-            '<div class="blink-arrow" style="font-size:60px;margin-bottom:15px;">🏠</div>' +
-            '<p class="pulse-text" style="color:#00ff88;font-weight:bold;font-size:1.3em;margin-bottom:15px;">Buka dari Home Screen!</p>' +
-            '<p style="color:#e7e9ea;margin-bottom:10px;">Tekan tombol <strong style="color:#f7931a;">Home</strong> dan cari ikon <strong style="color:#f7931a;">Gold Monitor</strong></p>' +
-            '<p style="color:#71767b;font-size:0.9em;">Atau buka App Drawer dan cari aplikasinya</p>' +
-            '</div>';
-        } else if (isMobile && isIOS) {
-          openPwaGuide += '<div style="background:#1a2332;padding:20px;border-radius:12px;margin:20px 0;text-align:center;">' +
-            '<div class="blink-arrow" style="font-size:60px;margin-bottom:15px;">🏠</div>' +
-            '<p class="pulse-text" style="color:#00ff88;font-weight:bold;font-size:1.3em;margin-bottom:15px;">Buka dari Home Screen!</p>' +
-            '<p style="color:#e7e9ea;margin-bottom:10px;">Swipe ke Home Screen dan tap ikon <strong style="color:#f7931a;">Gold Monitor</strong></p>' +
-            '</div>';
+        if (data.success) {
+          document.getElementById('loginForm').style.display = 'none';
+          document.getElementById('phoneDisplay').textContent = '+62' + phone.substring(0, 3) + '****' + phone.substring(phone.length - 3);
+          document.getElementById('waitMsg').classList.add('show');
+          startResendTimer();
+          hideMessage();
         } else {
-          openPwaGuide += '<div style="background:#1a2332;padding:20px;border-radius:12px;margin:20px 0;text-align:center;">' +
-            '<div class="blink-arrow" style="font-size:60px;margin-bottom:15px;">🔍</div>' +
-            '<p class="pulse-text" style="color:#00ff88;font-weight:bold;font-size:1.3em;margin-bottom:15px;">Cari Aplikasi Gold Monitor!</p>' +
-            '<p style="color:#e7e9ea;">Di Desktop, Start Menu, atau Home Screen</p>' +
-            '</div>';
+          showMessage(data.error || 'Gagal mengirim link login', 'error');
         }
-
-        manualSteps.innerHTML = openPwaGuide;
-        manualSteps.classList.add('show');
-
-        installBtn.style.display = 'none'; // Sembunyikan tombol install
-        notice.innerHTML = '<span class="pulse-text" style="color:#f7931a;font-weight:bold;">👆 Ikuti panah di atas untuk membuka aplikasi!</span>';
-      } else {
-        showManualSteps(instructions);
-        notice.style.display = 'block';
+      } catch (e) {
+        showMessage('Terjadi kesalahan. Coba lagi.', 'error');
       }
 
-      // Handle install prompt for browsers that support it
-      window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
-
-        // Jika PWA belum terinstall, auto prompt setelah 1.5 detik
-        if (!pwaIsInstalled) {
-          setTimeout(() => {
-            if (deferredPrompt) {
-              deferredPrompt.prompt();
-              deferredPrompt.userChoice.then((result) => {
-                if (result.outcome === 'accepted') {
-                  markInstalled();
-                }
-                deferredPrompt = null;
-              });
-            }
-          }, 1500);
-        }
-      });
-
-      // Install button - trigger install atau buka app
-      if (!pwaIsInstalled) {
-        installBtn.onclick = async () => {
-          if (deferredPrompt) {
-            deferredPrompt.prompt();
-            const { outcome } = await deferredPrompt.userChoice;
-            if (outcome === 'accepted') {
-              markInstalled();
-            }
-            deferredPrompt = null;
-          } else {
-            // Show alert with specific instructions
-            if (isIOS) {
-              alert('Cara Install di iOS:\\n\\n1. Tap tombol Share (kotak dengan panah)\\n2. Scroll dan pilih "Add to Home Screen"\\n3. Tap "Add"\\n\\nSetelah itu buka dari Home Screen.');
-            } else if (isAndroid) {
-              alert('Cara Install di Android:\\n\\n1. Tap menu (⋮) di pojok kanan atas\\n2. Pilih "Install app" atau "Add to Home screen"\\n3. Konfirmasi\\n\\nSetelah itu buka dari Home Screen.');
-            } else {
-              alert('Cara Install:\\n\\n1. Cari opsi "Install" di menu browser\\n2. Atau klik ikon install di address bar\\n3. Konfirmasi instalasi');
-            }
-          }
-        };
-      }
-
-      // Check periodically for standalone mode
-      const checkInterval = setInterval(() => {
-        if (checkStandalone()) {
-          clearInterval(checkInterval);
-          markInstalled();
-        }
-      }, 500);
+      setLoading(false);
     }
 
-    // Start initialization
-    init();
-
-    window.addEventListener('appinstalled', () => {
-      markInstalled();
+    // Enter key handler
+    document.getElementById('phoneInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') requestLogin();
     });
 
     // Register Service Worker
@@ -4444,6 +4405,193 @@ app.get('/install', (_req, res) => {
 </body>
 </html>`;
   res.send(html);
+})
+
+// ==================== LOGIN VIA LINK ====================
+app.get('/auth/:token', async (req, res) => {
+  const { token } = req.params
+
+  try {
+    // Get token data from Redis
+    const tokenData = await redis.hget(REDIS_KEYS.LOGIN_TOKENS, token)
+    if (!tokenData) {
+      return res.send(getLoginErrorPage('Link login tidak valid atau sudah kadaluarsa.'))
+    }
+
+    const data = typeof tokenData === 'string' ? JSON.parse(tokenData) : tokenData
+
+    // Check expiry (5 minutes)
+    if (Date.now() > data.expires) {
+      await redis.hdel(REDIS_KEYS.LOGIN_TOKENS, token)
+      return res.send(getLoginErrorPage('Link login sudah kadaluarsa. Silakan minta link baru.'))
+    }
+
+    const phone = data.phone
+
+    // Check if user is blocked
+    const blocked = await redis.hget(REDIS_KEYS.BLOCKED_USERS, phone)
+    if (blocked) {
+      return res.send(getLoginErrorPage('Akun Anda diblokir. Hubungi admin untuk membuka blokir.'))
+    }
+
+    // Check if user is valid
+    const check = await isUserValid(phone)
+    if (!check.valid) {
+      if (check.reason === 'expired') {
+        return res.send(getLoginErrorPage('Akun sudah expired. Hubungi admin untuk perpanjang.'))
+      }
+      return res.send(getLoginErrorPage('Akun tidak ditemukan atau tidak valid.'))
+    }
+
+    // Check existing sessions for this user (max 2 devices)
+    const allSessions = await redis.hgetall(REDIS_KEYS.SESSIONS) || {}
+    const userSessions = []
+    for (const [sessId, sessPhone] of Object.entries(allSessions)) {
+      if (sessPhone === phone) {
+        userSessions.push(sessId)
+      }
+    }
+
+    // If already 2 sessions, remove the oldest one
+    if (userSessions.length >= 2) {
+      await redis.hdel(REDIS_KEYS.SESSIONS, userSessions[0])
+      pushLog('Auth | User +62' + phone + ' exceeded 2 devices, oldest session removed')
+    }
+
+    // Create new session
+    const sessionId = generateSessionId()
+    await redis.hset(REDIS_KEYS.SESSIONS, { [sessionId]: phone })
+
+    // Delete used token
+    await redis.hdel(REDIS_KEYS.LOGIN_TOKENS, token)
+
+    pushLog('Auth | User +62' + phone + ' logged in via link')
+
+    // Return success page that saves session and redirects
+    const userName = check.user?.name || 'User'
+    res.send('<!DOCTYPE html>' +
+'<html>' +
+'<head>' +
+'  <meta charset="UTF-8">' +
+'  <meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+'  <meta name="theme-color" content="#0f1419">' +
+'  <link rel="icon" href="/icon.png">' +
+'  <title>Login Berhasil</title>' +
+'  <style>' +
+'    body {' +
+'      font-family: "Segoe UI", sans-serif;' +
+'      background: linear-gradient(135deg, #0f1419, #1a1f26);' +
+'      min-height: 100vh;' +
+'      display: flex;' +
+'      align-items: center;' +
+'      justify-content: center;' +
+'      margin: 0;' +
+'      color: #e7e9ea;' +
+'    }' +
+'    .card {' +
+'      background: rgba(26, 31, 38, 0.95);' +
+'      border-radius: 20px;' +
+'      padding: 40px;' +
+'      text-align: center;' +
+'      border: 1px solid #2f3640;' +
+'      max-width: 400px;' +
+'    }' +
+'    .success-icon { font-size: 60px; margin-bottom: 20px; }' +
+'    h1 { color: #00ff88; margin-bottom: 10px; }' +
+'    p { color: #71767b; }' +
+'    .loading {' +
+'      display: inline-block;' +
+'      width: 30px;' +
+'      height: 30px;' +
+'      border: 3px solid #2f3640;' +
+'      border-radius: 50%;' +
+'      border-top-color: #f7931a;' +
+'      animation: spin 1s linear infinite;' +
+'      margin-top: 20px;' +
+'    }' +
+'    @keyframes spin { to { transform: rotate(360deg); } }' +
+'  </style>' +
+'</head>' +
+'<body>' +
+'  <div class="card">' +
+'    <div class="success-icon">✅</div>' +
+'    <h1>Login Berhasil!</h1>' +
+'    <p>Selamat datang, ' + userName + '</p>' +
+'    <p style="margin-top:10px;">Mengalihkan ke monitoring...</p>' +
+'    <div class="loading"></div>' +
+'  </div>' +
+'  <script>' +
+'    localStorage.setItem("goldmonitor_session", "' + sessionId + '");' +
+'    setTimeout(function() {' +
+'      window.location.replace("/monitoring");' +
+'    }, 1500);' +
+'  </script>' +
+'</body>' +
+'</html>')
+
+  } catch (e) {
+    pushLog('Auth | Login link error: ' + e.message)
+    res.send(getLoginErrorPage('Terjadi kesalahan. Silakan coba lagi.'))
+  }
+})
+
+// Helper: Login error page
+function getLoginErrorPage(message) {
+  return '<!DOCTYPE html>' +
+'<html>' +
+'<head>' +
+'  <meta charset="UTF-8">' +
+'  <meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+'  <meta name="theme-color" content="#0f1419">' +
+'  <link rel="icon" href="/icon.png">' +
+'  <title>Login Gagal</title>' +
+'  <style>' +
+'    body {' +
+'      font-family: "Segoe UI", sans-serif;' +
+'      background: linear-gradient(135deg, #0f1419, #1a1f26);' +
+'      min-height: 100vh;' +
+'      display: flex;' +
+'      align-items: center;' +
+'      justify-content: center;' +
+'      margin: 0;' +
+'      color: #e7e9ea;' +
+'    }' +
+'    .card {' +
+'      background: rgba(26, 31, 38, 0.95);' +
+'      border-radius: 20px;' +
+'      padding: 40px;' +
+'      text-align: center;' +
+'      border: 1px solid #2f3640;' +
+'      max-width: 400px;' +
+'    }' +
+'    .error-icon { font-size: 60px; margin-bottom: 20px; }' +
+'    h1 { color: #ff6b6b; margin-bottom: 10px; }' +
+'    p { color: #71767b; margin-bottom: 20px; }' +
+'    a {' +
+'      display: inline-block;' +
+'      background: linear-gradient(135deg, #f7931a, #ff6b00);' +
+'      color: white;' +
+'      padding: 12px 30px;' +
+'      border-radius: 10px;' +
+'      text-decoration: none;' +
+'      font-weight: bold;' +
+'    }' +
+'  </style>' +
+'</head>' +
+'<body>' +
+'  <div class="card">' +
+'    <div class="error-icon">❌</div>' +
+'    <h1>Login Gagal</h1>' +
+'    <p>' + message + '</p>' +
+'    <a href="/login">Coba Lagi</a>' +
+'  </div>' +
+'</body>' +
+'</html>'
+}
+
+// Redirect /install to /login
+app.get('/install', (_req, res) => {
+  res.redirect('/login');
 })
 
 // ==================== ADMIN PANEL - USER MANAGEMENT ====================
@@ -4581,6 +4729,7 @@ ${authScript}
     .status-active { background: rgba(0,255,136,0.2); color: #00ff88; }
     .status-expired { background: rgba(255,68,68,0.2); color: #ff4444; }
     .status-lifetime { background: rgba(247,147,26,0.2); color: #f7931a; }
+    .status-blocked { background: rgba(255,82,82,0.3); color: #ff5252; }
 
     .push-badge {
       width: 10px;
@@ -5265,7 +5414,10 @@ ${authScript}
 
           tbody.innerHTML = users.map(u => {
             let status, statusClass;
-            if (!u.expired) {
+            if (u.isBlocked) {
+              status = 'Blocked';
+              statusClass = 'status-blocked';
+            } else if (!u.expired) {
               status = 'Lifetime';
               statusClass = 'status-lifetime';
             } else if (u.expired > now) {
@@ -5277,8 +5429,11 @@ ${authScript}
             }
 
             const expDate = u.expired ? new Date(u.expired).toLocaleDateString('id-ID') : '-';
+            const blockBtn = u.isBlocked
+              ? '<button class="btn btn-sm" style="background:#00c853;" onclick="unblockUser(\\'' + u.phone + '\\')">Unblock</button> '
+              : '<button class="btn btn-sm" style="background:#ff5252;" onclick="blockUser(\\'' + u.phone + '\\')">Block</button> ';
 
-            return '<tr>' +
+            return '<tr' + (u.isBlocked ? ' style="opacity:0.6;background:rgba(255,82,82,0.1);"' : '') + '>' +
               '<td>+62' + u.phone + '</td>' +
               '<td>' + (u.name || '-') + '</td>' +
               '<td><span class="status-badge ' + statusClass + '">' + status + '</span></td>' +
@@ -5287,6 +5442,7 @@ ${authScript}
               '<td>' +
                 '<button class="btn btn-sm" onclick="editUser(\\'' + u.phone + '\\',\\'' + (u.name||'') + '\\')">Edit</button> ' +
                 '<button class="btn btn-sm" onclick="openPushModal(\\'' + u.phone + '\\')">Push</button> ' +
+                blockBtn +
                 '<button class="btn btn-sm btn-danger" onclick="deleteUser(\\'' + u.phone + '\\')">Hapus</button> ' +
                 '<button class="btn btn-sm" style="background:#ff6600;" onclick="kickUser(\\'' + u.phone + '\\')">Kick</button>' +
               '</td>' +
@@ -5413,6 +5569,44 @@ ${authScript}
       .then(data => {
         if (data.success) loadUsers();
         else alert(data.error);
+      });
+    }
+
+    function blockUser(phone) {
+      if (!confirm('Blokir user +62' + phone + '?\\nUser tidak bisa login sampai di-unblock.')) return;
+
+      fetch('/api/admin/users/block', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass, phone })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          alert('User berhasil diblokir');
+          loadUsers();
+        } else {
+          alert(data.error);
+        }
+      });
+    }
+
+    function unblockUser(phone) {
+      if (!confirm('Buka blokir user +62' + phone + '?')) return;
+
+      fetch('/api/admin/users/unblock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass, phone })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          alert('User berhasil di-unblock');
+          loadUsers();
+        } else {
+          alert(data.error);
+        }
       });
     }
 
@@ -5571,6 +5765,25 @@ app.get('/monitoring', async (_req, res) => {
     .install-btn svg {
       width: 14px;
       height: 14px;
+    }
+
+    /* Logout Button */
+    .logout-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6px;
+      background: #ff5252;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 8px;
+    }
+    .logout-btn:hover {
+      background: #ff1744;
+      transform: scale(1.05);
     }
 
     /* Stat Items */
@@ -5995,6 +6208,9 @@ app.get('/monitoring', async (_req, res) => {
       <div class="header-right">
         <div class="clock" id="clock">--:--:--</div>
         <div class="date-info" id="dateInfo">Loading...</div>
+        <button class="logout-btn" id="logoutBtn" onclick="logout()" title="Logout">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
       </div>
     </div>
 
@@ -6492,39 +6708,6 @@ app.get('/monitoring', async (_req, res) => {
     // Disable right-click
     document.addEventListener('contextmenu', e => e.preventDefault());
 
-    // HANYA PWA yang bisa akses - tidak ada bypass
-    (function checkPwaAccess() {
-      // Comprehensive standalone detection
-      function isStandaloneMode() {
-        // iOS Safari standalone
-        if (window.navigator.standalone === true) return true;
-        // Standard standalone mode
-        if (window.matchMedia('(display-mode: standalone)').matches) return true;
-        // Fullscreen mode
-        if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
-        // Minimal UI mode
-        if (window.matchMedia('(display-mode: minimal-ui)').matches) return true;
-        // Desktop PWA - window controls overlay
-        if (window.matchMedia('(display-mode: window-controls-overlay)').matches) return true;
-        // Check if running in app window (no location bar visible)
-        if (!window.locationbar || !window.locationbar.visible) return true;
-        // Check if menubar is hidden (typical for PWA)
-        if (!window.menubar || !window.menubar.visible) return true;
-        return false;
-      }
-
-      console.log('Monitoring PWA Check:', {
-        isStandalone: isStandaloneMode(),
-        locationbar: window.locationbar?.visible,
-        menubar: window.menubar?.visible
-      });
-
-      if (!isStandaloneMode()) {
-        // Bukan PWA - redirect ke install
-        window.location.href = '/install';
-      }
-    })();
-
     // ==================== PUSH NOTIFICATION SUBSCRIPTION ====================
     async function subscribeToPush() {
       if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -6611,6 +6794,43 @@ app.get('/monitoring', async (_req, res) => {
       document.getElementById('installBtn').style.display = 'none';
       deferredPrompt = null;
     });
+
+    // Logout function
+    async function logout() {
+      if (!confirm('Yakin ingin keluar?')) return;
+
+      const session = localStorage.getItem('goldmonitor_session');
+      if (session) {
+        try {
+          await fetch('/api/logout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session })
+          });
+        } catch (e) {}
+        localStorage.removeItem('goldmonitor_session');
+      }
+      window.location.replace('/login');
+    }
+
+    // Check session validity on page load
+    (function checkSession() {
+      const session = localStorage.getItem('goldmonitor_session');
+      if (!session) {
+        window.location.replace('/login');
+        return;
+      }
+
+      fetch('/api/verify-session?session=' + session)
+        .then(r => r.json())
+        .then(data => {
+          if (!data.valid) {
+            localStorage.removeItem('goldmonitor_session');
+            window.location.replace('/login');
+          }
+        })
+        .catch(() => {});
+    })();
 
     // Offset waktu server vs browser (dalam ms)
     let serverTimeOffset = 0;
@@ -6904,9 +7124,9 @@ app.get('/monitoring/api', async (_req, res) => {
 })
 
 // ==================== CATCH-ALL ROUTE ====================
-// Semua route yang tidak terdaftar akan redirect ke /install
+// Semua route yang tidak terdaftar akan redirect ke /login
 app.get('*', (_req, res) => {
-  res.redirect('/install')
+  res.redirect('/login')
 })
 
 app.listen(PORT, () => {
