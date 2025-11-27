@@ -1634,6 +1634,52 @@ setInterval(() => {
   console.log(`📊 Status: ${sseClients.size} SSE clients | Last API: ${lastApiUpdateTime || 'N/A'} | Polling: active`)
 }, 30000)
 
+// PWA Manifest
+app.get('/manifest.json', (_req, res) => {
+  res.json({
+    name: 'Gold Price Monitor',
+    short_name: 'Gold Monitor',
+    description: 'Real-time Treasury Gold Price Monitor',
+    start_url: '/monitoring',
+    display: 'standalone',
+    background_color: '#0f1419',
+    theme_color: '#f7931a',
+    icons: [
+      {
+        src: 'https://cdn-icons-png.flaticon.com/512/2150/2150150.png',
+        sizes: '192x192',
+        type: 'image/png'
+      },
+      {
+        src: 'https://cdn-icons-png.flaticon.com/512/2150/2150150.png',
+        sizes: '512x512',
+        type: 'image/png'
+      }
+    ]
+  })
+})
+
+// Service Worker for PWA
+app.get('/sw.js', (_req, res) => {
+  res.setHeader('Content-Type', 'application/javascript')
+  res.send(`
+    self.addEventListener('install', (e) => {
+      e.waitUntil(
+        caches.open('gold-monitor-v1').then((cache) => {
+          return cache.addAll(['/monitoring']);
+        })
+      );
+    });
+    self.addEventListener('fetch', (e) => {
+      e.respondWith(
+        caches.match(e.request).then((response) => {
+          return response || fetch(e.request);
+        })
+      );
+    });
+  `)
+})
+
 // MONITORING PAGE - Professional Gold Price Dashboard
 app.get('/monitoring', async (_req, res) => {
   const html = `<!DOCTYPE html>
@@ -1641,6 +1687,11 @@ app.get('/monitoring', async (_req, res) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f7931a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2150/2150150.png">
   <title>Gold Price Monitor</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1776,6 +1827,41 @@ app.get('/monitoring', async (_req, res) => {
       align-items: center;
       justify-content: center;
     }
+    .daily-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.2);
+      border-top: 1px solid #2f3640;
+    }
+    .daily-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      background: #151920;
+      border-radius: 4px;
+      font-size: 0.7em;
+    }
+    .daily-item .daily-label {
+      color: #71767b;
+      text-transform: uppercase;
+      font-size: 0.85em;
+    }
+    .daily-item .daily-value {
+      color: #e7e9ea;
+      font-weight: 600;
+    }
+    .daily-item .daily-value.high { color: #00c853; }
+    .daily-item .daily-value.low { color: #ff5252; }
+    .daily-item.sound-toggle {
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .daily-item.sound-toggle:hover { background: #2f3640; }
     .tradingview-widget-container {
       height: 500px;
     }
@@ -2041,6 +2127,33 @@ app.get('/monitoring', async (_req, res) => {
             <span class="stat-change up" id="profit30">-</span>
           </div>
         </div>
+        <!-- Daily Stats Row -->
+        <div class="daily-stats">
+          <div class="daily-item">
+            <span class="daily-label">Open</span>
+            <span class="daily-value" id="dayOpen">-</span>
+          </div>
+          <div class="daily-item">
+            <span class="daily-label">High</span>
+            <span class="daily-value high" id="dayHigh">-</span>
+          </div>
+          <div class="daily-item">
+            <span class="daily-label">Low</span>
+            <span class="daily-value low" id="dayLow">-</span>
+          </div>
+          <div class="daily-item">
+            <span class="daily-label">Avg</span>
+            <span class="daily-value" id="dayAvg">-</span>
+          </div>
+          <div class="daily-item">
+            <span class="daily-label">Change</span>
+            <span class="daily-value" id="dayChange">-</span>
+          </div>
+          <div class="daily-item sound-toggle" id="soundToggle" onclick="toggleSound()">
+            <span class="daily-label">Sound</span>
+            <span class="daily-value" id="soundStatus">🔔 ON</span>
+          </div>
+        </div>
       </div>
       <div class="tradingview-widget-container">
         <!-- TradingView Widget BEGIN - FULL FEATURES -->
@@ -2161,6 +2274,117 @@ app.get('/monitoring', async (_req, res) => {
       const m = date.getMinutes().toString().padStart(2, '0');
       const s = date.getSeconds().toString().padStart(2, '0');
       return h + ':' + m + ':' + s;
+    }
+
+    // Daily Statistics
+    let dayOpen = null;
+    let dayHigh = null;
+    let dayLow = null;
+    let dayPrices = [];
+    const DAILY_STORAGE_KEY = 'goldDailyStats';
+
+    function loadDailyStats() {
+      try {
+        const saved = localStorage.getItem(DAILY_STORAGE_KEY);
+        if (saved) {
+          const data = JSON.parse(saved);
+          const today = new Date().toDateString();
+          if (data.date === today) {
+            dayOpen = data.open;
+            dayHigh = data.high;
+            dayLow = data.low;
+            dayPrices = data.prices || [];
+            updateDailyDisplay();
+          }
+        }
+      } catch (e) {}
+    }
+
+    function saveDailyStats() {
+      try {
+        localStorage.setItem(DAILY_STORAGE_KEY, JSON.stringify({
+          date: new Date().toDateString(),
+          open: dayOpen,
+          high: dayHigh,
+          low: dayLow,
+          prices: dayPrices.slice(-1440) // Keep last 24h
+        }));
+      } catch (e) {}
+    }
+
+    function updateDailyStats(buy) {
+      if (!buy) return;
+
+      // Reset at midnight
+      const today = new Date().toDateString();
+      const savedDate = localStorage.getItem(DAILY_STORAGE_KEY);
+      if (savedDate) {
+        const data = JSON.parse(savedDate);
+        if (data.date !== today) {
+          dayOpen = null;
+          dayHigh = null;
+          dayLow = null;
+          dayPrices = [];
+        }
+      }
+
+      if (dayOpen === null) dayOpen = buy;
+      if (dayHigh === null || buy > dayHigh) dayHigh = buy;
+      if (dayLow === null || buy < dayLow) dayLow = buy;
+      dayPrices.push(buy);
+
+      saveDailyStats();
+      updateDailyDisplay();
+    }
+
+    function updateDailyDisplay() {
+      if (dayOpen) document.getElementById('dayOpen').textContent = formatRupiah(dayOpen);
+      if (dayHigh) document.getElementById('dayHigh').textContent = formatRupiah(dayHigh);
+      if (dayLow) document.getElementById('dayLow').textContent = formatRupiah(dayLow);
+
+      if (dayPrices.length > 0) {
+        const avg = Math.round(dayPrices.reduce((a, b) => a + b, 0) / dayPrices.length);
+        document.getElementById('dayAvg').textContent = formatRupiah(avg);
+      }
+
+      if (dayOpen && dayPrices.length > 0) {
+        const current = dayPrices[dayPrices.length - 1];
+        const change = current - dayOpen;
+        const changePct = ((change / dayOpen) * 100).toFixed(2);
+        const sign = change >= 0 ? '+' : '';
+        const el = document.getElementById('dayChange');
+        el.textContent = sign + changePct + '%';
+        el.className = 'daily-value ' + (change >= 0 ? 'high' : 'low');
+      }
+    }
+
+    loadDailyStats();
+
+    // Sound Notification
+    let soundEnabled = localStorage.getItem('soundEnabled') !== 'false';
+    const notificationSound = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2QkYyHh4yOkI2Mjo+Oj4mMkJGJiIiLkZCKiIePjoeGh4qMi4eCg4WLjIuGgoKGi4yKhYKBhYqLiYWDgYSIi4qGhIGDhoqKh4WDgoWHiYmHhYODhYeIiIaFhIOFhoiIh4WEg4SGh4eGhYSDhIWGhoeGhYSDhIWGhoaFhYSEhYWGhoWFhISEhYWFhYWFhISEhIWFhYWFhISDhISFhYWFhISDg4SEhYWFhYSEg4ODhISFhYWEhIODg4SEhISEhISDg4ODhISEhISEg4ODg4ODhISEhISDg4ODg4OEhISEhIODg4ODg4SEhISEg4ODg4KDg4SEhISEg4OCgoKDg4SEhISDg4KCgoKDg4OEhISDgoKCgoKDg4OEhIODgoKCgoKDg4ODg4OCgoKBgoKDg4ODg4OCgoGBgoKDg4ODg4KCgYGBgoKDg4ODgoKBgYGBgoKCg4OCgoGBgYGBgoKCgoKCgYGBgYGBgoKCgoKBgYGBgYGBgoKCgoGBgYGAgYGBgoKCgYGBgYCAgYGBgoKBgYGBgICAgYGBgYGBgYGAgICAgYGBgYGBgICAgICAgYGBgYGAgICAgICAgYGBgYCAgICAgICAgYGBgYCAgICAgICAgYGBgICAgICAgH+AgYGBgICAgIB/f4CAgYGAgICAgH9/f4CAgYCAgICAf39/f4CAgICAgIB/f39/f4CAgICAgH9/f39/f4CAgICAf39/f39/f4CAgIB/f39/f39/f4CAgIB/f39/f39/f4CAgH9/f39/f39/f4CAf39/f39/f35/f4CAf39/f39/fn5/f4B/f39/f39+fn5/f39/f39/f35+fn5/f39/f39/fn5+fn9/f39/f35+fn5+f39/f39/fn5+fn5+f39/f39+fn5+fn5+f39/f35+fn5+fn5+f39/fn5+fn5+fn5+f39/fn5+fn5+fn5+fn9/fn5+fn5+fn5+fn5/fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fX5+fn5+fn5+fn5+fX1+fn5+fn5+fn59fX5+fn5+fn5+fn19fX5+fn5+fn5+fX19fn5+fn5+fn59fX19fn5+fn5+fn19fX1+fn5+fn59fX19fX5+fn5+fn19fX19fX5+fn5+fX19fX19fn5+fn59fX19fX19fn5+fn19fX19fX19fn5+fX19fX19fX1+fn59fX19fX19fX5+fn19fX19fX19fX5+fX19fX19fX19fn59fX19fX19fX1+fn19fX19fX19fX5+fX19fX19fX19fn19fX19fX19fX1+fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fX19fXx9fX19fX19fX19fXx8fX19fX19fX18fHx9fX19fX19fHx8fH19fX19fXx8fHx8fX19fX18fHx8fHx9fX19fHx8fHx8fH19fX18fHx8fHx8fX19fHx8fHx8fHx9fX18fHx8fHx8fH19fHx8fHx8fHx8fX18fHx8fHx8fHx9fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8e3x8fHx8fHx8fHt7fHx8fHx8fHt7e3x8fHx8fHt7e3t8fHx8fHx7e3t7e3x8fHx8e3t7e3t7fHx8fHt7e3t7e3t8fHx7e3t7e3t7e3x8fHt7e3t7e3t7fHx7e3t7e3t7e3t8e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3p7e3t7e3t7e3t6ent7e3t7e3t6enp7e3t7e3t6enp6e3t7e3t7enp6ent7e3t7enp6enp7e3t7e3p6enp6e3t7e3p6enp6ent7e3p6enp6enp7e3p6enp6enp6e3t6enp6enp6ent6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6');
+
+    function toggleSound() {
+      soundEnabled = !soundEnabled;
+      localStorage.setItem('soundEnabled', soundEnabled);
+      document.getElementById('soundStatus').textContent = soundEnabled ? '🔔 ON' : '🔕 OFF';
+    }
+
+    function playNotificationSound() {
+      if (soundEnabled) {
+        notificationSound.currentTime = 0;
+        notificationSound.play().catch(() => {});
+      }
+    }
+
+    // Update sound status on load
+    document.getElementById('soundStatus').textContent = soundEnabled ? '🔔 ON' : '🔕 OFF';
+
+    // Register Service Worker for PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then(() => {
+        console.log('%c📱 PWA Service Worker registered', 'color: #9c27b0');
+      }).catch(() => {});
     }
 
     // Offset waktu server vs browser (dalam ms)
@@ -2446,6 +2670,8 @@ app.get('/monitoring', async (_req, res) => {
           // Update harga beli
           if (data.buy) {
             document.getElementById('buyPrice').textContent = formatRupiah(data.buy);
+            updateDailyStats(data.buy); // Update daily stats
+
             if (data.prevBuy && data.buy !== data.prevBuy) {
               const change = data.buy - data.prevBuy;
               const sign = change > 0 ? '+' : '';
@@ -2454,6 +2680,9 @@ app.get('/monitoring', async (_req, res) => {
               const priceCls = change > 0 ? 'price-up' : 'price-down';
               document.getElementById('buyChange').textContent = sign + change.toLocaleString('id-ID');
               document.getElementById('buyChange').className = 'stat-change ' + cls;
+
+              // Play notification sound
+              playNotificationSound();
 
               const buyCard = document.getElementById('buyCard');
               // Reset dan tambahkan class warna permanen + animasi
