@@ -1001,12 +1001,20 @@ async function checkPriceUpdate() {
 
   // Selalu fetch price untuk monitoring web, broadcast hanya jika ada subscriber
   try {
+    const fetchStart = Date.now()
     const treasuryData = await fetchTreasury()
+    const fetchTime = Date.now() - fetchStart
     const currentPrice = {
       buy: treasuryData?.data?.buying_rate,
       sell: treasuryData?.data?.selling_rate,
       updated_at: treasuryData?.data?.updated_at,
       fetchedAt: Date.now()
+    }
+
+    // Log setiap detik 0-5 untuk debug
+    const sec = new Date().getSeconds()
+    if (sec <= 5) {
+      console.log(`FETCH | ${new Date().toISOString().substr(11, 12)} | ${fetchTime}ms | Buy: ${currentPrice.buy} | API: ${currentPrice.updated_at?.substr(11, 8)}`)
     }
 
     if (!lastKnownPrice) {
@@ -1087,7 +1095,7 @@ async function checkPriceUpdate() {
 
     // 🚀 INSTANT SSE PUSH ke frontend monitoring
     if (buyChanged || sellChanged) {
-      broadcastSSE({
+      const sseData = {
         type: 'price',
         buy: currentPrice.buy,
         sell: currentPrice.sell,
@@ -1097,7 +1105,13 @@ async function checkPriceUpdate() {
         usdIdr: cachedMarketData.usdIdr?.rate,
         xauUsd: cachedMarketData.xauUsd,
         serverTime: new Date().toISOString()
+      }
+      console.log(`SSE | 📤 Broadcasting to ${sseClients.size} clients:`, {
+        buy: currentPrice.buy,
+        prevBuy: prevPrice.buy,
+        change: currentPrice.buy - prevPrice.buy
       })
+      broadcastSSE(sseData)
     }
 
     if (!buyChanged && !sellChanged) {
