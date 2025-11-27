@@ -179,6 +179,8 @@ async function useRedisAuthState() {
     creds = initAuthCreds()
     await writeData('creds', creds)
     pushLog('WA | New credentials initialized')
+  } else {
+    pushLog('WA | Loaded existing credentials from Redis')
   }
 
   return {
@@ -215,6 +217,7 @@ async function useRedisAuthState() {
     },
     saveCreds: async () => {
       await writeData('creds', creds)
+      pushLog('WA | Credentials saved to Redis')
     }
   }
 }
@@ -6218,7 +6221,13 @@ async function start() {
   await loadFromRedis()
   await loadMonitoredGroup()
 
-  // Use Redis-based auth (persistent across deploys)
+  // Check if auth needs reset (set via /qr-reset or env var)
+  const forceReset = process.env.RESET_WA_AUTH === 'true'
+  if (forceReset) {
+    await clearRedisAuth()
+    pushLog('WA | Force reset auth (RESET_WA_AUTH=true)')
+  }
+
   const { state, saveCreds } = await useRedisAuthState()
   const { version } = await fetchLatestBaileysVersion()
 
