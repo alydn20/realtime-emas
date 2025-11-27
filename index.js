@@ -1670,15 +1670,7 @@ app.get('/monitoring', async (_req, res) => {
       margin-top: 4px;
     }
 
-    /* Current Stats - Inside History Section */
-    .current-stats {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      padding: 12px 16px;
-      border-bottom: 1px solid #2f3640;
-      background: rgba(0,0,0,0.2);
-    }
+    /* Stat Items */
     .stat-item {
       display: flex;
       align-items: center;
@@ -1728,25 +1720,41 @@ app.get('/monitoring', async (_req, res) => {
       margin-bottom: 24px;
     }
     .chart-header {
-      padding: 16px 20px;
+      padding: 12px 16px;
       border-bottom: 1px solid #2f3640;
       display: flex;
-      justify-content: space-between;
+      flex-direction: column;
       align-items: center;
+      gap: 10px;
+    }
+    .chart-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      justify-content: center;
     }
     .chart-header h2 {
       font-size: 1em;
       font-weight: 600;
       color: #e7e9ea;
+      margin: 0;
     }
     .chart-header .live-badge {
       background: #00c853;
       color: #fff;
-      font-size: 0.7em;
-      padding: 4px 10px;
+      font-size: 0.65em;
+      padding: 3px 8px;
       border-radius: 20px;
       font-weight: 600;
       text-transform: uppercase;
+    }
+    .chart-stats {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      justify-content: center;
     }
     .tradingview-widget-container {
       height: 500px;
@@ -1883,29 +1891,23 @@ app.get('/monitoring', async (_req, res) => {
         text-align: center;
         gap: 10px;
         padding: 14px 16px;
-        margin-bottom: 16px;
+        margin-bottom: 12px;
       }
       .header-left h1 { font-size: 1.2em; }
       .header-right { text-align: center; }
       .clock { font-size: 1.6em; }
-      .chart-section { margin-bottom: 16px; border-radius: 10px; }
-      .chart-header { padding: 12px 14px; }
+      .chart-section { margin-bottom: 12px; border-radius: 10px; }
+      .chart-header { padding: 10px 12px; gap: 8px; }
       .chart-header h2 { font-size: 0.9em; }
+      .chart-stats { gap: 5px; }
+      .stat-item { padding: 4px 8px; gap: 4px; }
+      .stat-item .stat-label { font-size: 0.6em; }
+      .stat-item .stat-value { font-size: 0.75em; }
+      .stat-item .stat-change { font-size: 0.6em; padding: 1px 4px; }
       .tradingview-widget-container { height: 400px; }
       .history-section { border-radius: 10px; }
       .history-header { padding: 12px 14px; }
       .history-header h2 { font-size: 0.9em; }
-      .current-stats {
-        padding: 10px 12px;
-        gap: 6px;
-      }
-      .stat-item {
-        padding: 5px 8px;
-        gap: 4px;
-      }
-      .stat-item .stat-label { font-size: 0.65em; }
-      .stat-item .stat-value { font-size: 0.8em; }
-      .stat-item .stat-change { font-size: 0.65em; padding: 1px 4px; }
       .history-table th { padding: 10px 12px; font-size: 0.7em; }
       .history-table td { padding: 10px 12px; font-size: 0.8em; }
       .history-pagination { padding: 12px; gap: 10px; }
@@ -1914,77 +1916,59 @@ app.get('/monitoring', async (_req, res) => {
 
     /* Responsive - Mobile */
     @media (max-width: 480px) {
-      body { padding: 8px; }
+      body { padding: 6px; }
       .header {
-        padding: 12px;
-        margin-bottom: 10px;
+        padding: 10px;
+        margin-bottom: 8px;
         border-radius: 8px;
       }
-      .header-left h1 { font-size: 1em; }
+      .header-left h1 { font-size: 0.95em; }
       .header-left h1 svg { width: 18px; height: 18px; }
-      .header-left .subtitle { font-size: 0.75em; }
-      .clock { font-size: 1.4em; letter-spacing: 1px; }
-      .date-info { font-size: 0.7em; }
+      .header-left .subtitle { font-size: 0.7em; }
+      .clock { font-size: 1.3em; letter-spacing: 1px; }
+      .date-info { font-size: 0.65em; }
 
       .chart-section {
-        margin-bottom: 10px;
+        margin-bottom: 8px;
         border-radius: 8px;
       }
-      .chart-header {
-        padding: 10px 12px;
-      }
-      .chart-header h2 { font-size: 0.85em; }
-      .chart-header h2 svg { width: 14px; height: 14px; }
-      .live-badge { font-size: 0.6em; padding: 3px 8px; }
+      .chart-header { padding: 8px 10px; gap: 6px; }
+      .chart-title { gap: 6px; }
+      .chart-header h2 { font-size: 0.8em; }
+      .chart-header h2 svg { width: 12px; height: 12px; }
+      .live-badge { font-size: 0.55em; padding: 2px 6px; }
+      .chart-stats { gap: 4px; }
+      .stat-item { padding: 3px 5px; gap: 3px; border-radius: 4px; }
+      .stat-item .stat-label { font-size: 0.55em; }
+      .stat-item .stat-value { font-size: 0.7em; }
+      .stat-item .stat-change { font-size: 0.55em; padding: 1px 3px; border-radius: 2px; }
       .tradingview-widget-container { height: 350px; }
 
       .history-section { border-radius: 8px; }
       .history-header { padding: 10px 12px; }
-      .history-header h2 { font-size: 0.85em; }
-      .history-header h2 svg { width: 14px; height: 14px; }
-
-      .current-stats {
-        padding: 8px 10px;
-        gap: 5px;
-        justify-content: flex-start;
-      }
-      .stat-item {
-        padding: 4px 6px;
-        gap: 3px;
-        border-radius: 4px;
-      }
-      .stat-item .stat-label { font-size: 0.6em; }
-      .stat-item .stat-value { font-size: 0.75em; }
-      .stat-item .stat-change {
-        font-size: 0.6em;
-        padding: 1px 3px;
-        border-radius: 2px;
-      }
-
-      .history-table th {
-        padding: 8px 10px;
-        font-size: 0.65em;
-      }
-      .history-table td {
-        padding: 8px 10px;
-        font-size: 0.75em;
-      }
-      .history-pagination {
-        padding: 10px;
-        gap: 8px;
-        flex-wrap: wrap;
-      }
+      .history-header h2 { font-size: 0.8em; }
+      .history-header h2 svg { width: 12px; height: 12px; }
+      .history-table th { padding: 8px 10px; font-size: 0.6em; }
+      .history-table td { padding: 8px 10px; font-size: 0.7em; }
+      .history-pagination { padding: 10px; gap: 8px; flex-wrap: wrap; }
       .page-btn { padding: 5px 10px; font-size: 0.75em; }
-      .page-info { font-size: 0.75em; }
+      .page-info { font-size: 0.7em; }
     }
 
     /* Extra small screens */
     @media (max-width: 360px) {
-      .header-left h1 { font-size: 0.9em; }
-      .clock { font-size: 1.2em; }
-      .stat-item .stat-value { font-size: 0.7em; }
-      .history-table th, .history-table td { padding: 6px 8px; }
-      .tradingview-widget-container { height: 300px; }
+      body { padding: 4px; }
+      .header { padding: 8px; margin-bottom: 6px; }
+      .header-left h1 { font-size: 0.85em; }
+      .clock { font-size: 1.1em; }
+      .chart-header { padding: 6px 8px; gap: 5px; }
+      .chart-header h2 { font-size: 0.75em; }
+      .stat-item { padding: 2px 4px; gap: 2px; }
+      .stat-item .stat-label { font-size: 0.5em; }
+      .stat-item .stat-value { font-size: 0.65em; }
+      .stat-item .stat-change { font-size: 0.5em; }
+      .tradingview-widget-container { height: 280px; }
+      .history-table th, .history-table td { padding: 6px 8px; font-size: 0.6em; }
     }
   </style>
 </head>
@@ -2003,8 +1987,40 @@ app.get('/monitoring', async (_req, res) => {
 
     <div class="chart-section">
       <div class="chart-header">
-        <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-3 3"/></svg>XAU/USD Chart</h2>
-        <span class="live-badge">Live</span>
+        <div class="chart-title">
+          <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-3 3"/></svg>XAU/USD Chart</h2>
+          <span class="live-badge">Live</span>
+        </div>
+        <div class="chart-stats">
+          <div class="stat-item" id="buyCard">
+            <span class="stat-label">Beli</span>
+            <span class="stat-value" id="buyPrice">-</span>
+            <span class="stat-change" id="buyChange"></span>
+          </div>
+          <div class="stat-item" id="sellCard">
+            <span class="stat-label">Jual</span>
+            <span class="stat-value" id="sellPrice">-</span>
+            <span class="stat-change" id="sellChange"></span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Spread</span>
+            <span class="stat-value green" id="spreadPercent">-</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">USD/IDR</span>
+            <span class="stat-value blue" id="usdIdr">-</span>
+          </div>
+          <div class="stat-item invest">
+            <span class="stat-label">20jt</span>
+            <span class="stat-value" id="gram20">-</span>
+            <span class="stat-change up" id="profit20">-</span>
+          </div>
+          <div class="stat-item invest">
+            <span class="stat-label">30jt</span>
+            <span class="stat-value" id="gram30">-</span>
+            <span class="stat-change up" id="profit30">-</span>
+          </div>
+        </div>
       </div>
       <div class="tradingview-widget-container">
         <!-- TradingView Widget BEGIN - FULL FEATURES -->
@@ -2049,39 +2065,6 @@ app.get('/monitoring', async (_req, res) => {
         <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Riwayat Perubahan Harga</h2>
         <span class="count" id="historyCount">0 records</span>
       </div>
-
-      <!-- Current Price Stats -->
-      <div class="current-stats">
-        <div class="stat-item" id="buyCard">
-          <span class="stat-label">Beli</span>
-          <span class="stat-value" id="buyPrice">-</span>
-          <span class="stat-change" id="buyChange"></span>
-        </div>
-        <div class="stat-item" id="sellCard">
-          <span class="stat-label">Jual</span>
-          <span class="stat-value" id="sellPrice">-</span>
-          <span class="stat-change" id="sellChange"></span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Spread</span>
-          <span class="stat-value green" id="spreadPercent">-</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">USD/IDR</span>
-          <span class="stat-value blue" id="usdIdr">-</span>
-        </div>
-        <div class="stat-item invest">
-          <span class="stat-label">20jt</span>
-          <span class="stat-value" id="gram20">-</span>
-          <span class="stat-change up" id="profit20">-</span>
-        </div>
-        <div class="stat-item invest">
-          <span class="stat-label">30jt</span>
-          <span class="stat-value" id="gram30">-</span>
-          <span class="stat-change up" id="profit30">-</span>
-        </div>
-      </div>
-
       <table class="history-table">
         <thead>
           <tr>
