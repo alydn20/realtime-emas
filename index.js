@@ -1,4 +1,4 @@
-// index.js
+// index.js - Gold Price Monitor v2.0
 import makeWASocket, {
   DisconnectReason,
   fetchLatestBaileysVersion,
