@@ -1907,7 +1907,7 @@ app.use(express.json())
 
 // ==================== SUPER ADMIN LOGIN ====================
 // Login page untuk akses /qr dan /admin
-app.get('/login', (req, res) => {
+app.get('/admin-login', (req, res) => {
   const { redirect } = req.query
   res.send(`<!DOCTYPE html>
 <html>
@@ -2080,7 +2080,7 @@ function getAuthCheckScript(redirectTo) {
     (async function() {
       const token = localStorage.getItem('super_admin_token');
       if (!token) {
-        window.location.href = '/login?redirect=${encodeURIComponent(redirectTo)}';
+        window.location.href = '/admin-login?redirect=${encodeURIComponent(redirectTo)}';
         return;
       }
 
@@ -2093,10 +2093,10 @@ function getAuthCheckScript(redirectTo) {
         const data = await res.json();
         if (!data.success) {
           localStorage.removeItem('super_admin_token');
-          window.location.href = '/login?redirect=${encodeURIComponent(redirectTo)}';
+          window.location.href = '/admin-login?redirect=${encodeURIComponent(redirectTo)}';
         }
       } catch (e) {
-        window.location.href = '/login?redirect=${encodeURIComponent(redirectTo)}';
+        window.location.href = '/admin-login?redirect=${encodeURIComponent(redirectTo)}';
       }
     })();
   </script>`
@@ -3755,300 +3755,6 @@ app.post('/api/admin/wa-groups/sync', express.json(), async (req, res) => {
     pushLog(`WA | Sync error: ${e.message}`)
     res.json({ success: false, error: e.message })
   }
-})
-
-// ==================== LOGIN PAGE ====================
-app.get('/login', (_req, res) => {
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
-  const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <meta name="theme-color" content="#0f1419">
-  <link rel="manifest" href="/manifest.json">
-  <link rel="icon" href="/icon.png">
-  <title>Login - Gold Price Monitor</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: linear-gradient(135deg, #0f1419 0%, #1a1f26 100%);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      color: #e7e9ea;
-    }
-    .login-container {
-      width: 100%;
-      max-width: 400px;
-    }
-    .login-card {
-      background: rgba(26, 31, 38, 0.95);
-      border-radius: 20px;
-      padding: 40px 30px;
-      border: 1px solid #2f3640;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-    }
-    .logo {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-    .logo img {
-      width: 80px;
-      height: 80px;
-      border-radius: 20px;
-    }
-    .logo h1 {
-      color: #f7931a;
-      font-size: 1.5em;
-      margin-top: 15px;
-    }
-    .logo p {
-      color: #71767b;
-      font-size: 0.9em;
-      margin-top: 5px;
-    }
-    .form-group {
-      margin-bottom: 20px;
-    }
-    .form-group label {
-      display: block;
-      color: #71767b;
-      font-size: 0.85em;
-      margin-bottom: 8px;
-    }
-    .input-wrapper {
-      position: relative;
-    }
-    .input-wrapper .prefix {
-      position: absolute;
-      left: 15px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: #71767b;
-      font-size: 1em;
-    }
-    .form-group input {
-      width: 100%;
-      padding: 15px 15px 15px 50px;
-      border: 2px solid #2f3640;
-      border-radius: 12px;
-      background: #0f1419;
-      color: #e7e9ea;
-      font-size: 1.1em;
-      transition: border-color 0.2s;
-    }
-    .form-group input:focus {
-      outline: none;
-      border-color: #f7931a;
-    }
-    .form-group input::placeholder {
-      color: #555;
-    }
-    .btn {
-      width: 100%;
-      padding: 15px;
-      border: none;
-      border-radius: 12px;
-      font-size: 1.1em;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .btn-primary {
-      background: linear-gradient(135deg, #f7931a 0%, #ff6b00 100%);
-      color: white;
-    }
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 30px rgba(247,147,26,0.3);
-    }
-    .btn-primary:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none;
-    }
-    .error-msg {
-      background: rgba(255,68,68,0.1);
-      border: 1px solid #ff4444;
-      color: #ff4444;
-      padding: 12px;
-      border-radius: 10px;
-      margin-bottom: 20px;
-      font-size: 0.9em;
-      display: none;
-    }
-    .error-msg.show { display: block; }
-    .footer-text {
-      text-align: center;
-      margin-top: 20px;
-      color: #71767b;
-      font-size: 0.8em;
-    }
-    .btn-install {
-      width: 100%;
-      padding: 12px;
-      border: 2px solid #f7931a;
-      border-radius: 12px;
-      font-size: 1em;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      background: transparent;
-      color: #f7931a;
-      margin-top: 15px;
-      display: none;
-    }
-    .btn-install:hover {
-      background: rgba(247,147,26,0.1);
-    }
-    .btn-install.show { display: block; }
-    .install-badge {
-      display: inline-block;
-      background: #00ff88;
-      color: #0f1419;
-      padding: 2px 8px;
-      border-radius: 10px;
-      font-size: 0.7em;
-      margin-left: 8px;
-      font-weight: bold;
-    }
-  </style>
-</head>
-<body>
-  <div class="login-container">
-    <div class="login-card">
-      <div class="logo">
-        <img src="/icon.png" alt="Gold Monitor">
-        <h1>Gold Price Monitor</h1>
-        <p>Masuk dengan nomor HP langganan</p>
-      </div>
-
-      <div class="error-msg" id="errorMsg"></div>
-
-      <form id="loginForm">
-        <div class="form-group">
-          <label>Nomor HP Langganan</label>
-          <div class="input-wrapper">
-            <span class="prefix">+62</span>
-            <input type="tel" id="phone" placeholder="812xxxxxxxx" required pattern="[0-9]{9,13}" inputmode="numeric">
-          </div>
-        </div>
-        <button type="submit" class="btn btn-primary" id="loginBtn">Masuk</button>
-      </form>
-
-      <button class="btn-install" id="installBtn">
-        Install Aplikasi <span class="install-badge">Recommended</span>
-      </button>
-    </div>
-  </div>
-
-  <script>
-    // PWA Install prompt
-    let deferredPrompt = null;
-    const installBtn = document.getElementById('installBtn');
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-
-    // Show install button if not already installed as PWA
-    if (!isStandalone) {
-      installBtn.classList.add('show');
-    }
-
-    // Capture the install prompt
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      // Show install button
-      installBtn.classList.add('show');
-    });
-
-    // Handle install button click
-    installBtn.addEventListener('click', async () => {
-      if (deferredPrompt) {
-        // Show the install prompt
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') {
-          localStorage.setItem('pwa_installed_v2', 'true');
-          installBtn.style.display = 'none';
-        }
-        deferredPrompt = null;
-      } else {
-        // For iOS or browsers that don't support beforeinstallprompt
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-        if (isIOS) {
-          alert('Untuk install di iPhone/iPad:\\n\\n1. Tap icon Share (kotak dengan panah ke atas)\\n2. Scroll ke bawah, tap "Add to Home Screen"\\n3. Tap "Add"');
-        } else {
-          alert('Untuk install aplikasi:\\n\\n1. Tap menu (titik 3) di pojok kanan atas\\n2. Pilih "Install App" atau "Add to Home Screen"');
-        }
-      }
-    });
-
-    // Hide install button when app is installed
-    window.addEventListener('appinstalled', () => {
-      localStorage.setItem('pwa_installed_v2', 'true');
-      installBtn.style.display = 'none';
-    });
-
-    // Register Service Worker
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
-    }
-
-    // Check existing session
-    const existingSession = localStorage.getItem('goldmonitor_session');
-    if (existingSession) {
-      fetch('/api/verify-session?session=' + existingSession)
-        .then(r => r.json())
-        .then(data => {
-          if (data.valid) {
-            window.location.href = '/monitoring';
-          }
-        });
-    }
-
-    document.getElementById('loginForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const phone = document.getElementById('phone').value.trim();
-      const btn = document.getElementById('loginBtn');
-      const errorMsg = document.getElementById('errorMsg');
-
-      btn.disabled = true;
-      btn.textContent = 'Memproses...';
-      errorMsg.classList.remove('show');
-
-      try {
-        const res = await fetch('/api/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: '62' + phone })
-        });
-        const data = await res.json();
-
-        if (data.success) {
-          localStorage.setItem('goldmonitor_session', data.sessionId);
-          localStorage.setItem('goldmonitor_user', JSON.stringify(data.user));
-          window.location.href = '/monitoring';
-        } else {
-          errorMsg.textContent = data.error;
-          errorMsg.classList.add('show');
-        }
-      } catch (err) {
-        errorMsg.textContent = 'Terjadi kesalahan. Coba lagi.';
-        errorMsg.classList.add('show');
-      }
-
-      btn.disabled = false;
-      btn.textContent = 'Masuk';
-    });
-  </script>
-</body>
-</html>`;
-  res.send(html);
 })
 
 // ==================== LOGIN PAGE ====================
