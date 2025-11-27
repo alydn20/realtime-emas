@@ -1728,13 +1728,22 @@ app.get('/monitoring', async (_req, res) => {
       color: #ff5252;
       background: rgba(255, 82, 82, 0.15);
     }
-    .price-card.highlight { border-color: #f7931a; }
-    .price-card.highlight .value { color: #f7931a; }
+    .price-card.highlight { border-color: #2f3640; }
+    .price-card.highlight .value { color: #e7e9ea; }
 
-    /* Info row - Spread dan USD/IDR */
+    /* Warna card berdasarkan arah harga terakhir */
+    .price-card.price-up { border-color: #00c853; }
+    .price-card.price-up .value { color: #00c853; }
+    .price-card.price-up::before { background: linear-gradient(90deg, #00c853, #4caf50); opacity: 1; }
+
+    .price-card.price-down { border-color: #ff5252; }
+    .price-card.price-down .value { color: #ff5252; }
+    .price-card.price-down::before { background: linear-gradient(90deg, #ff5252, #f44336); opacity: 1; }
+
+    /* Info row - Spread % dan USD/IDR */
     .info-row {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(2, 1fr);
       gap: 16px;
       margin-bottom: 24px;
     }
@@ -1945,34 +1954,22 @@ app.get('/monitoring', async (_req, res) => {
     @keyframes highlight-up {
       0%, 30% {
         background: linear-gradient(145deg, rgba(0, 200, 83, 0.3), rgba(0, 200, 83, 0.15));
-        border-color: #00c853;
         box-shadow: 0 0 20px rgba(0, 200, 83, 0.3);
       }
       100% {
         background: linear-gradient(145deg, #1a1f26, #151920);
-        border-color: #f7931a;
         box-shadow: none;
       }
     }
     @keyframes highlight-down {
       0%, 30% {
         background: linear-gradient(145deg, rgba(255, 82, 82, 0.3), rgba(255, 82, 82, 0.15));
-        border-color: #ff5252;
         box-shadow: 0 0 20px rgba(255, 82, 82, 0.3);
       }
       100% {
         background: linear-gradient(145deg, #1a1f26, #151920);
-        border-color: #f7931a;
         box-shadow: none;
       }
-    }
-    @keyframes value-up {
-      0%, 30% { color: #00c853; }
-      100% { color: #f7931a; }
-    }
-    @keyframes value-down {
-      0%, 30% { color: #ff5252; }
-      100% { color: #f7931a; }
     }
     @keyframes highlight {
       0% { background: rgba(247, 147, 26, 0.3); }
@@ -2027,10 +2024,6 @@ app.get('/monitoring', async (_req, res) => {
     </div>
 
     <div class="info-row">
-      <div class="info-card">
-        <div class="info-label">Spread</div>
-        <div class="info-value gold" id="spread">-</div>
-      </div>
       <div class="info-card">
         <div class="info-label">Spread %</div>
         <div class="info-value green" id="spreadPercent">-</div>
@@ -2449,13 +2442,15 @@ app.get('/monitoring', async (_req, res) => {
               const sign = change > 0 ? '+' : '';
               const cls = change > 0 ? 'up' : 'down';
               const animCls = change > 0 ? 'updated-up' : 'updated-down';
+              const priceCls = change > 0 ? 'price-up' : 'price-down';
               document.getElementById('buyChange').textContent = sign + change.toLocaleString('id-ID');
               document.getElementById('buyChange').className = 'change ' + cls;
 
               const buyCard = document.getElementById('buyCard');
-              buyCard.classList.remove('updated', 'updated-up', 'updated-down');
+              // Reset dan tambahkan class warna permanen + animasi
+              buyCard.classList.remove('updated', 'updated-up', 'updated-down', 'price-up', 'price-down');
               void buyCard.offsetWidth;
-              buyCard.classList.add(animCls);
+              buyCard.classList.add(animCls, priceCls);
 
               // Update stats
               updateCount++;
@@ -2535,13 +2530,15 @@ app.get('/monitoring', async (_req, res) => {
               const sign = change > 0 ? '+' : '';
               const cls = change > 0 ? 'up' : 'down';
               const animCls = change > 0 ? 'updated-up' : 'updated-down';
+              const priceCls = change > 0 ? 'price-up' : 'price-down';
               document.getElementById('sellChange').textContent = sign + change.toLocaleString('id-ID');
               document.getElementById('sellChange').className = 'change ' + cls;
 
               const sellCard = document.getElementById('sellCard');
-              sellCard.classList.remove('updated', 'updated-up', 'updated-down');
+              // Reset dan tambahkan class warna permanen + animasi
+              sellCard.classList.remove('updated', 'updated-up', 'updated-down', 'price-up', 'price-down');
               void sellCard.offsetWidth;
-              sellCard.classList.add(animCls);
+              sellCard.classList.add(animCls, priceCls);
             }
             lastSell = data.sell;
           }
@@ -2551,11 +2548,9 @@ app.get('/monitoring', async (_req, res) => {
             document.getElementById('usdIdr').textContent = 'Rp ' + Math.round(data.usdIdr).toLocaleString('id-ID');
           }
 
-          // Update Spread (sama dengan WA: (sell - buy) / buy * 100)
+          // Update Spread % (sama dengan WA: (sell - buy) / buy * 100)
           if (data.buy && data.sell) {
-            const spread = data.buy - data.sell;
             const spreadPct = ((data.sell - data.buy) / data.buy * 100).toFixed(2);
-            document.getElementById('spread').textContent = 'Rp ' + spread.toLocaleString('id-ID');
             document.getElementById('spreadPercent').textContent = spreadPct + '%';
 
             // Update Simulasi Investasi (sama dengan WA)
