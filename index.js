@@ -1615,10 +1615,10 @@ function broadcastSSE(data) {
   })
 }
 
-// SSE Heartbeat - kirim ping setiap 15 detik untuk menjaga koneksi aktif
+// SSE Heartbeat - kirim ping setiap 10 detik untuk menjaga koneksi aktif
 setInterval(() => {
   if (sseClients.size > 0) {
-    const heartbeat = `data: ${JSON.stringify({ type: 'heartbeat', time: Date.now() })}\n\n`
+    const heartbeat = `data: ${JSON.stringify({ type: 'heartbeat', time: Date.now(), clients: sseClients.size })}\n\n`
     sseClients.forEach(client => {
       try {
         client.write(heartbeat)
@@ -1627,7 +1627,12 @@ setInterval(() => {
       }
     })
   }
-}, 15000)
+}, 10000)
+
+// Log status setiap 30 detik
+setInterval(() => {
+  console.log(`📊 Status: ${sseClients.size} SSE clients | Last API: ${lastApiUpdateTime || 'N/A'} | Polling: active`)
+}, 30000)
 
 // MONITORING PAGE - Professional Gold Price Dashboard
 app.get('/monitoring', async (_req, res) => {
@@ -2419,6 +2424,13 @@ app.get('/monitoring', async (_req, res) => {
       try {
         lastDataTime = Date.now(); // Update waktu terakhir dapat data
         const data = JSON.parse(event.data);
+
+        // Handle heartbeat
+        if (data.type === 'heartbeat') {
+          console.log('%c💓 Heartbeat received', 'color: #9c27b0');
+          return;
+        }
+
         if (data.type === 'price') {
           const now = new Date();
           const browserTime = now.toTimeString().substring(0, 12); // Include ms
