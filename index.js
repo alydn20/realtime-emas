@@ -2071,7 +2071,8 @@ app.get('/monitoring', async (_req, res) => {
           "popup_width": "1000",
           "popup_height": "650",
           "studies": [
-            "MASimple@tv-basicstudies"
+            "MASimple@tv-basicstudies",
+            "BB@tv-basicstudies"
           ],
           "support_host": "https://www.tradingview.com"
         }
