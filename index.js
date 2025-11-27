@@ -1951,18 +1951,39 @@ app.get('/manifest.json', (_req, res) => {
   })
 })
 
-// Service Worker for PWA
+// Service Worker for PWA - v2 dengan cache busting
 app.get('/sw.js', (_req, res) => {
   res.setHeader('Content-Type', 'application/javascript')
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
   res.send(`
+    const CACHE_VERSION = 'gold-monitor-v3';
+
     self.addEventListener('install', (e) => {
+      self.skipWaiting();
       e.waitUntil(
-        caches.open('gold-monitor-v1').then((cache) => {
-          return cache.addAll(['/monitoring']);
+        caches.open(CACHE_VERSION).then((cache) => {
+          return cache.addAll(['/icon.png']);
         })
       );
     });
+
+    self.addEventListener('activate', (e) => {
+      e.waitUntil(
+        caches.keys().then((keys) => {
+          return Promise.all(
+            keys.filter(k => k !== CACHE_VERSION).map(k => caches.delete(k))
+          );
+        }).then(() => self.clients.claim())
+      );
+    });
+
     self.addEventListener('fetch', (e) => {
+      // Jangan cache HTML - selalu fetch fresh
+      if (e.request.mode === 'navigate' || e.request.url.includes('/monitoring')) {
+        e.respondWith(fetch(e.request));
+        return;
+      }
+      // Cache hanya untuk assets (icon, manifest)
       e.respondWith(
         caches.match(e.request).then((response) => {
           return response || fetch(e.request);
@@ -1974,6 +1995,9 @@ app.get('/sw.js', (_req, res) => {
 
 // MONITORING PAGE - Professional Gold Price Dashboard
 app.get('/monitoring', async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+  res.setHeader('Pragma', 'no-cache')
+  res.setHeader('Expires', '0')
   const html = `<!DOCTYPE html>
 <html>
 <head>
