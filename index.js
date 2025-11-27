@@ -1400,6 +1400,7 @@ ${marketSection}
 
 🎁 20jt→${formatGrams(grams20M)}gr (+Rp${formatRupiah(Math.round(profit20M))}) | 30jt→${formatGrams(grams30M)}gr (+Rp${formatRupiah(Math.round(profit30M))})
 ${calendarSection}
+📊 Chart: treasury.muhamadaliyudin.xyz
 ⚡ Auto-update`
 }
 async function fetchTreasury() {
