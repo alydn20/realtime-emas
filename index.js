@@ -3000,6 +3000,42 @@ app.post('/api/admin/wa-groups/set', express.json(), async (req, res) => {
   }
 })
 
+// Admin: Debug - get group members raw data
+app.get('/api/admin/wa-groups/debug', async (req, res) => {
+  const { password } = req.query
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  if (!sock || !isReady) {
+    return res.json({ success: false, error: 'WhatsApp not connected' })
+  }
+
+  if (!monitoredGroupId) {
+    return res.json({ success: false, error: 'Belum ada grup yang dipilih' })
+  }
+
+  try {
+    const groupMeta = await sock.groupMetadata(monitoredGroupId)
+    const participants = groupMeta.participants || []
+
+    // Show first 5 participants raw data for debugging
+    const sample = participants.slice(0, 5).map(p => ({
+      id: p.id,
+      admin: p.admin,
+      notify: p.notify
+    }))
+
+    res.json({
+      success: true,
+      groupId: monitoredGroupId,
+      groupName: groupMeta.subject,
+      totalParticipants: participants.length,
+      sampleParticipants: sample
+    })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
 // Admin: Sync all members from monitored group
 app.post('/api/admin/wa-groups/sync', express.json(), async (req, res) => {
   const { password } = req.body
@@ -3017,16 +3053,33 @@ app.post('/api/admin/wa-groups/sync', express.json(), async (req, res) => {
     const groupMeta = await sock.groupMetadata(monitoredGroupId)
     const participants = groupMeta.participants || []
 
+    pushLog(`WA | Syncing ${participants.length} members from group`)
+
     // Get all existing users in one call
     const existingUsers = await redis.hgetall(REDIS_KEYS.USERS) || {}
 
     let added = 0
     let skipped = 0
     let errors = 0
+    const addedPhones = []
 
     for (const p of participants) {
-      const phone = extractPhoneFromJid(p.id)
-      if (!phone) continue
+      // Extract phone number from JID (format: 62xxx@s.whatsapp.net)
+      if (!p.id) continue
+
+      // Get full phone number from JID
+      const jidMatch = p.id.match(/^(\d+)@/)
+      if (!jidMatch) continue
+
+      const fullPhone = jidMatch[1] // e.g., "628123456789"
+
+      // Remove leading 62 for storage (Indonesian format)
+      const phone = fullPhone.startsWith('62') ? fullPhone.substring(2) : fullPhone
+
+      if (!phone || phone.length < 9) {
+        pushLog(`WA | Skip invalid phone: ${p.id}`)
+        continue
+      }
 
       // Check if already exists
       if (existingUsers[phone]) {
@@ -3034,24 +3087,25 @@ app.post('/api/admin/wa-groups/sync', express.json(), async (req, res) => {
         continue
       }
 
-      // Add user one by one (more reliable with Upstash)
+      // Add user one by one
       try {
         const userData = JSON.stringify({
-          name: p.notify || 'Member ' + phone,
+          name: p.notify || p.verifiedName || 'Member ' + phone,
           createdAt: Date.now(),
           expired: null,
           source: 'whatsapp_group'
         })
-        // Use object format for Upstash Redis hset
+
         await redis.hset(REDIS_KEYS.USERS, { [phone]: userData })
         added++
+        if (addedPhones.length < 3) addedPhones.push(phone) // Sample for logging
       } catch (err) {
         errors++
         pushLog(`WA | Sync error for ${phone}: ${err.message}`)
       }
     }
 
-    pushLog(`WA | Sync completed: ${added} added, ${skipped} skipped, ${errors} errors`)
+    pushLog(`WA | Sync completed: ${added} added, ${skipped} skipped, ${errors} errors. Sample: ${addedPhones.join(', ')}`)
     res.json({ success: true, added, skipped, errors, total: participants.length })
   } catch (e) {
     pushLog(`WA | Sync error: ${e.message}`)
