@@ -2180,70 +2180,70 @@ app.get('/monitoring', async (_req, res) => {
     }
     .daily-item.sound-toggle:hover { background: #2f3640; }
 
-    /* Promo/Notification Popup */
-    .promo-popup {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      width: 320px;
-      max-width: 90vw;
-      background: linear-gradient(135deg, #1a1f26 0%, #2f3640 100%);
-      border-radius: 12px;
-      padding: 15px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-      z-index: 10000;
-      animation: slideIn 0.3s ease;
-      border-left: 4px solid #3498db;
-    }
-    .promo-popup.promo { border-left-color: #f7931a; }
-    .promo-popup.warning { border-left-color: #f39c12; }
-    .promo-popup.urgent { border-left-color: #e74c3c; }
-    .promo-popup.info { border-left-color: #3498db; }
-    .promo-popup.fade-out { animation: fadeOut 0.5s ease forwards; }
-    .promo-header {
+    /* Notification Banner */
+    #notifContainer {
       display: flex;
-      justify-content: space-between;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    .notif-banner {
+      background: linear-gradient(135deg, #1a1f26 0%, #2f3640 100%);
+      border-radius: 10px;
+      padding: 12px 15px;
+      display: flex;
       align-items: center;
-      margin-bottom: 10px;
+      gap: 12px;
+      border-left: 4px solid #3498db;
+      animation: slideDown 0.3s ease;
     }
-    .promo-type {
-      font-size: 11px;
-      font-weight: bold;
-      padding: 3px 8px;
-      border-radius: 4px;
-      background: #f7931a;
-      color: #000;
+    .notif-banner.promo { border-left-color: #f7931a; background: linear-gradient(135deg, #2a2010 0%, #3a3020 100%); }
+    .notif-banner.warning { border-left-color: #f39c12; background: linear-gradient(135deg, #2a2510 0%, #3a3520 100%); }
+    .notif-banner.urgent { border-left-color: #e74c3c; background: linear-gradient(135deg, #2a1515 0%, #3a2020 100%); }
+    .notif-banner.info { border-left-color: #3498db; background: linear-gradient(135deg, #152025 0%, #203035 100%); }
+    .notif-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 18px;
     }
-    .promo-popup.info .promo-type { background: #3498db; color: #fff; }
-    .promo-popup.warning .promo-type { background: #f39c12; color: #000; }
-    .promo-popup.urgent .promo-type { background: #e74c3c; color: #fff; }
-    .promo-close {
-      background: none;
-      border: none;
-      color: #888;
-      font-size: 20px;
-      cursor: pointer;
-      padding: 0 5px;
+    .notif-banner.promo .notif-icon { background: #f7931a; }
+    .notif-banner.warning .notif-icon { background: #f39c12; }
+    .notif-banner.urgent .notif-icon { background: #e74c3c; }
+    .notif-banner.info .notif-icon { background: #3498db; }
+    .notif-content {
+      flex: 1;
+      min-width: 0;
     }
-    .promo-close:hover { color: #fff; }
-    .promo-title {
-      font-size: 16px;
+    .notif-title {
+      font-size: 14px;
       font-weight: bold;
       color: #fff;
-      margin-bottom: 8px;
+      margin-bottom: 2px;
     }
-    .promo-message {
-      font-size: 14px;
+    .notif-message {
+      font-size: 13px;
       color: #b0b0b0;
-      line-height: 1.4;
+      line-height: 1.3;
     }
-    @keyframes slideIn {
-      from { transform: translateX(100%); opacity: 0; }
-      to { transform: translateX(0); opacity: 1; }
+    .notif-close {
+      background: rgba(255,255,255,0.1);
+      border: none;
+      color: #888;
+      font-size: 18px;
+      cursor: pointer;
+      padding: 5px 10px;
+      border-radius: 5px;
+      transition: all 0.2s;
     }
-    @keyframes fadeOut {
-      from { opacity: 1; }
-      to { opacity: 0; transform: translateY(-20px); }
+    .notif-close:hover { background: rgba(255,255,255,0.2); color: #fff; }
+    @keyframes slideDown {
+      from { transform: translateY(-20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
     }
 
     .tradingview-widget-container {
@@ -2479,6 +2479,9 @@ app.get('/monitoring', async (_req, res) => {
         <div class="date-info" id="dateInfo">Loading...</div>
       </div>
     </div>
+
+    <!-- Notification Banner Container -->
+    <div id="notifContainer"></div>
 
     <div class="chart-section">
       <div class="chart-header">
@@ -2817,29 +2820,36 @@ app.get('/monitoring', async (_req, res) => {
       return false;
     }
 
-    // Promo/Info Notification Popup
+    // Promo/Info Notification Banner
     function showPromoNotification(data) {
-      // Buat elemen popup
-      const popup = document.createElement('div');
-      popup.className = 'promo-popup ' + (data.notifType || 'info');
-      popup.innerHTML = \`
-        <div class="promo-header">
-          <span class="promo-type">\${data.notifType === 'promo' ? 'PROMO' : data.notifType === 'warning' ? 'PERINGATAN' : data.notifType === 'urgent' ? 'PENTING' : 'INFO'}</span>
-          <button class="promo-close" onclick="this.parentElement.parentElement.remove()">&times;</button>
+      console.log('showPromoNotification called:', data);
+      const container = document.getElementById('notifContainer');
+      console.log('notifContainer element:', container);
+      if (!container) {
+        console.error('notifContainer not found!');
+        return;
+      }
+
+      // Icon berdasarkan type
+      const icons = {
+        promo: '\u{1F381}',
+        warning: '\u26A0\uFE0F',
+        urgent: '\u{1F6A8}',
+        info: '\u{1F4E2}'
+      };
+
+      const banner = document.createElement('div');
+      banner.className = 'notif-banner ' + (data.notifType || 'info');
+      banner.innerHTML = \`
+        <div class="notif-icon">\${icons[data.notifType] || icons.info}</div>
+        <div class="notif-content">
+          <div class="notif-title">\${data.title}</div>
+          <div class="notif-message">\${data.message}</div>
         </div>
-        <div class="promo-title">\${data.title}</div>
-        <div class="promo-message">\${data.message}</div>
+        <button class="notif-close" onclick="this.parentElement.remove()">&times;</button>
       \`;
 
-      document.body.appendChild(popup);
-
-      // Auto remove setelah 10 detik
-      setTimeout(() => {
-        if (popup.parentElement) {
-          popup.classList.add('fade-out');
-          setTimeout(() => popup.remove(), 500);
-        }
-      }, 10000);
+      container.insertBefore(banner, container.firstChild);
 
       // Browser notification juga
       if (notifEnabled && Notification.permission === 'granted') {
@@ -3052,6 +3062,7 @@ app.get('/monitoring', async (_req, res) => {
 
         // Handle notifikasi/promo dari admin
         if (data.type === 'notification') {
+          console.log('Received notification:', data);
           showPromoNotification(data);
           return;
         }
