@@ -1633,41 +1633,41 @@ app.get('/monitoring', async (_req, res) => {
     }
     .container { max-width: 1100px; margin: 0 auto; }
 
-    /* Header */
+    /* Header - Compact */
     .header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 24px;
-      padding: 20px 24px;
+      margin-bottom: 12px;
+      padding: 10px 14px;
       background: #1a1f26;
-      border-radius: 12px;
+      border-radius: 10px;
       border: 1px solid #2f3640;
     }
     .header-left h1 {
-      font-size: 1.4em;
+      font-size: 0.95em;
       font-weight: 600;
       color: #e7e9ea;
-      margin-bottom: 4px;
+      margin-bottom: 2px;
     }
     .header-left .subtitle {
-      font-size: 0.85em;
+      font-size: 0.65em;
       color: #71767b;
     }
     .header-right {
       text-align: right;
     }
     .clock {
-      font-size: 2em;
+      font-size: 1.2em;
       font-weight: 700;
       color: #f7931a;
       font-family: 'SF Mono', 'Consolas', monospace;
-      letter-spacing: 2px;
+      letter-spacing: 1px;
     }
     .date-info {
-      font-size: 0.8em;
+      font-size: 0.6em;
       color: #71767b;
-      margin-top: 4px;
+      margin-top: 2px;
     }
 
     /* Stat Items */
