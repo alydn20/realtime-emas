@@ -2900,9 +2900,49 @@ app.post('/api/admin/users', express.json(), async (req, res) => {
     expired: expired
   }
 
-  await redis.hset(REDIS_KEYS.USERS, normalizedPhone, JSON.stringify(userData))
+  await redis.hset(REDIS_KEYS.USERS, { [normalizedPhone]: JSON.stringify(userData) })
 
   res.json({ success: true, user: { phone: normalizedPhone, ...userData } })
+})
+
+// Admin: Bulk import users
+app.post('/api/admin/users/bulk', express.json(), async (req, res) => {
+  const { password, phones } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  if (!phones || !Array.isArray(phones)) return res.json({ success: false, error: 'phones array required' })
+
+  let added = 0
+  let skipped = 0
+  const now = Date.now()
+
+  for (const phone of phones) {
+    const normalizedPhone = normalizePhone(phone)
+    if (!normalizedPhone || normalizedPhone.length < 9) {
+      skipped++
+      continue
+    }
+
+    // Check if exists
+    const existing = await redis.hget(REDIS_KEYS.USERS, normalizedPhone)
+    if (existing) {
+      skipped++
+      continue
+    }
+
+    const userData = JSON.stringify({
+      name: 'Member ' + normalizedPhone,
+      createdAt: now,
+      expired: null,
+      source: 'bulk_import'
+    })
+
+    await redis.hset(REDIS_KEYS.USERS, { [normalizedPhone]: userData })
+    added++
+  }
+
+  pushLog(`Admin | Bulk import: ${added} added, ${skipped} skipped`)
+  res.json({ success: true, added, skipped, total: phones.length })
 })
 
 // Admin: Update user
