@@ -274,7 +274,7 @@ async function autoRegisterGroupMember(phone, name = null) {
   }
 }
 
-// Remove member dari database saat keluar grup
+// Remove member dari database saat keluar/kick dari grup
 async function removeGroupMember(phone) {
   if (!phone) return
 
@@ -282,25 +282,21 @@ async function removeGroupMember(phone) {
     const existing = await redis.hget(REDIS_KEYS.USERS, phone)
     if (!existing) return
 
-    const user = typeof existing === 'string' ? JSON.parse(existing) : existing
+    // Hapus user apapun source-nya (baik dari whatsapp_group, manual, OTP, dll)
+    await Promise.all([
+      redis.hdel(REDIS_KEYS.USERS, phone),
+      redis.hdel(REDIS_KEYS.PUSH_SUBS, phone)
+    ])
 
-    // Hanya hapus jika source dari whatsapp_group
-    if (user.source === 'whatsapp_group') {
-      await Promise.all([
-        redis.hdel(REDIS_KEYS.USERS, phone),
-        redis.hdel(REDIS_KEYS.PUSH_SUBS, phone)
-      ])
-
-      // Hapus semua session user ini
-      const sessions = await redis.hgetall(REDIS_KEYS.SESSIONS)
-      for (const [sessId, sessPhone] of Object.entries(sessions || {})) {
-        if (sessPhone === phone) {
-          await redis.hdel(REDIS_KEYS.SESSIONS, sessId)
-        }
+    // Hapus semua session user ini
+    const sessions = await redis.hgetall(REDIS_KEYS.SESSIONS)
+    for (const [sessId, sessPhone] of Object.entries(sessions || {})) {
+      if (sessPhone === phone) {
+        await redis.hdel(REDIS_KEYS.SESSIONS, sessId)
       }
-
-      pushLog('WA | Removed member: +62' + phone)
     }
+
+    pushLog('WA | Auto-removed member (kicked/left): +62' + phone)
   } catch (e) {
     pushLog('WA | Remove member failed: ' + e.message)
   }
@@ -1822,8 +1818,8 @@ async function fastPoll() {
   }
 }
 
-// Fast poll setiap 150ms (continuous)
-setInterval(fastPoll, 150)
+// Fast poll setiap 100ms (ultra real-time)
+setInterval(fastPoll, 100)
 
 // ==================== XAU/USD REAL-TIME ====================
 let lastXauUsdPrice = null
@@ -1860,6 +1856,29 @@ async function checkXauUpdate() {
 // XAU/USD polling setiap 1 detik
 setInterval(checkXauUpdate, 1000)
 checkXauUpdate() // Initial fetch
+
+// ==================== PERIODIC PRICE BROADCAST ====================
+// Kirim update harga setiap 10 detik meskipun harga tidak berubah
+// Ini memastikan client selalu mendapat data terbaru dan timestamp update
+let lastPeriodicBroadcast = 0
+setInterval(() => {
+  if (lastKnownPrice && sseClients.size > 0) {
+    const now = Date.now()
+    // Broadcast setiap 10 detik
+    if (now - lastPeriodicBroadcast >= 10000) {
+      lastPeriodicBroadcast = now
+      broadcastSSE({
+        type: 'price',
+        buy: lastKnownPrice.buy,
+        sell: lastKnownPrice.sell,
+        updatedAt: lastKnownPrice.updated_at,
+        usdIdr: cachedMarketData.usdIdr?.rate,
+        xauUsd: cachedMarketData.xauUsd,
+        serverTime: new Date().toISOString()
+      })
+    }
+  }
+}, 2000) // Check setiap 2 detik
 
 // ==================== STARTUP INFO ====================
 console.log(`[GOLD] Bot started | Price check: ${PRICE_CHECK_INTERVAL/1000}s | Stale alert: ${STALE_PRICE_THRESHOLD/60000}min`)
@@ -2187,7 +2206,7 @@ app.get('/send-notif', (req, res) => {
   })
 })
 
-// SSE Heartbeat - kirim ping setiap 10 detik untuk menjaga koneksi aktif
+// SSE Heartbeat - kirim ping setiap 5 detik untuk menjaga koneksi aktif dan responsif
 setInterval(() => {
   if (sseClients.size > 0) {
     const heartbeat = `data: ${JSON.stringify({ type: 'heartbeat', time: Date.now(), clients: sseClients.size })}\n\n`
@@ -2199,7 +2218,7 @@ setInterval(() => {
       }
     })
   }
-}, 10000)
+}, 5000)
 
 // Log status setiap 30 detik
 // Status log every 30s (silent - available via /stats)
@@ -2996,6 +3015,68 @@ app.delete('/api/admin/users', express.json(), async (req, res) => {
   res.json({ success: true })
 })
 
+// Admin: Kick user from WhatsApp group AND delete from database
+app.post('/api/admin/users/kick', express.json(), async (req, res) => {
+  const { password, phone } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  if (!phone) return res.json({ success: false, error: 'Nomor wajib diisi' })
+
+  const normalizedPhone = normalizePhone(phone)
+  const jid = `62${normalizedPhone}@s.whatsapp.net`
+
+  try {
+    // Check if we have a monitored group
+    if (!monitoredGroupId) {
+      return res.json({ success: false, error: 'Belum ada grup yang di-monitor. Set grup terlebih dahulu.' })
+    }
+
+    // Check if WhatsApp is connected
+    if (!sock) {
+      return res.json({ success: false, error: 'WhatsApp tidak terhubung' })
+    }
+
+    // Try to kick from WhatsApp group
+    let kickedFromGroup = false
+    try {
+      await sock.groupParticipantsUpdate(monitoredGroupId, [jid], 'remove')
+      kickedFromGroup = true
+      pushLog(`WA | Kicked +62${normalizedPhone} from group`)
+    } catch (kickError) {
+      // User might not be in group, or bot is not admin
+      pushLog(`WA | Failed to kick +62${normalizedPhone}: ${kickError.message}`)
+      // Continue to delete user even if kick fails
+    }
+
+    // Delete user from database
+    await Promise.all([
+      redis.hdel(REDIS_KEYS.USERS, normalizedPhone),
+      redis.hdel(REDIS_KEYS.PUSH_SUBS, normalizedPhone)
+    ])
+
+    // Remove all sessions for this user
+    const sessions = await redis.hgetall(REDIS_KEYS.SESSIONS)
+    for (const [sessId, sessPhone] of Object.entries(sessions || {})) {
+      if (sessPhone === normalizedPhone) {
+        await redis.hdel(REDIS_KEYS.SESSIONS, sessId)
+      }
+    }
+
+    pushLog(`Admin | User +62${normalizedPhone} deleted (kicked: ${kickedFromGroup})`)
+
+    res.json({
+      success: true,
+      kickedFromGroup,
+      message: kickedFromGroup
+        ? 'User berhasil di-kick dari grup dan dihapus dari database'
+        : 'User dihapus dari database (gagal kick dari grup - mungkin bukan admin atau user tidak di grup)'
+    })
+  } catch (e) {
+    pushLog(`Admin | Kick error: ${e.message}`)
+    res.json({ success: false, error: e.message })
+  }
+})
+
 // Admin: Clear invalid users (LID format or invalid Indonesian phone numbers)
 app.post('/api/admin/users/clear-invalid', express.json(), async (req, res) => {
   const { password } = req.body
@@ -3694,49 +3775,64 @@ app.get('/install-pwa', (_req, res) => {
     const continueBtn = document.getElementById('continueBtn');
     const installedMsg = document.getElementById('installedMsg');
 
-    // Detect iOS
+    // Detect platform
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isAndroid = /Android/.test(navigator.userAgent);
+    const isMobile = isIOS || isAndroid;
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
 
-    // Mark as installed in localStorage
+    // Mark as installed
     function markInstalled() {
       localStorage.setItem('pwa_installed', 'true');
       installedMsg.classList.add('show');
       installBtn.style.display = 'none';
       continueBtn.style.display = 'block';
+      continueBtn.textContent = 'Lanjut ke Aplikasi';
       continueBtn.onclick = () => window.location.href = '/login';
     }
 
+    // Continue without install
+    function continueWithoutInstall() {
+      localStorage.setItem('pwa_installed', 'skipped');
+      window.location.href = '/login';
+    }
+
     if (isStandalone) {
-      // Already running as PWA
-      markInstalled();
-    } else if (localStorage.getItem('pwa_installed') === 'true') {
-      // Previously installed
-      installedMsg.textContent = 'Aplikasi sudah terinstall! Buka dari home screen untuk pengalaman terbaik.';
-      markInstalled();
+      // Already running as PWA - go directly to login
+      window.location.href = '/login';
+    } else if (localStorage.getItem('pwa_installed')) {
+      // Previously installed or skipped - go to login
+      window.location.href = '/login';
     } else if (isIOS) {
+      // iOS Safari
       document.getElementById('iosSteps').classList.add('show');
-      installBtn.textContent = 'Panduan Install iOS';
+      installBtn.textContent = 'Cara Install (iOS)';
       installBtn.onclick = () => {
-        alert('1. Tap tombol Share di browser Safari\\n2. Scroll dan pilih "Add to Home Screen"\\n3. Tap "Add"\\n\\nSetelah install, buka aplikasi dari home screen.');
+        alert('1. Tap tombol Share di browser Safari\\n2. Scroll dan pilih "Add to Home Screen"\\n3. Tap "Add"');
       };
-      // Show continue button for iOS after some time
-      setTimeout(() => {
-        continueBtn.style.display = 'block';
-        continueBtn.textContent = 'Sudah Install? Lanjut Login';
-        continueBtn.onclick = () => {
-          localStorage.setItem('pwa_installed', 'true');
-          window.location.href = '/login';
-        };
-      }, 3000);
-    } else {
+      // Show continue button immediately
+      continueBtn.style.display = 'block';
+      continueBtn.textContent = 'Lanjut Tanpa Install';
+      continueBtn.onclick = continueWithoutInstall;
+    } else if (isAndroid) {
+      // Android - try to auto-prompt install
       document.getElementById('androidSteps').classList.add('show');
 
       window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
-        installBtn.style.display = 'block';
+        // Auto-show install prompt on Android
+        setTimeout(() => {
+          if (deferredPrompt) {
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then((result) => {
+              if (result.outcome === 'accepted') {
+                markInstalled();
+              }
+              deferredPrompt = null;
+            });
+          }
+        }, 1000);
       });
 
       installBtn.onclick = async () => {
@@ -3748,21 +3844,41 @@ app.get('/install-pwa', (_req, res) => {
           }
           deferredPrompt = null;
         } else {
-          alert('Gunakan Chrome/Edge untuk install, atau pilih menu (titik 3) > "Add to Home Screen" / "Install App"');
+          // Try menu install
+          alert('Tap menu (titik 3) di pojok kanan atas browser, lalu pilih "Add to Home Screen" atau "Install App"');
         }
       };
 
-      // Show continue button after some time for users who can't install
-      setTimeout(() => {
-        if (!localStorage.getItem('pwa_installed')) {
-          continueBtn.style.display = 'block';
-          continueBtn.textContent = 'Sudah Install? Lanjut Login';
-          continueBtn.onclick = () => {
-            localStorage.setItem('pwa_installed', 'true');
-            window.location.href = '/login';
-          };
+      // Show continue button immediately for flexibility
+      continueBtn.style.display = 'block';
+      continueBtn.textContent = 'Lanjut Tanpa Install';
+      continueBtn.onclick = continueWithoutInstall;
+    } else {
+      // Desktop browser
+      document.getElementById('androidSteps').classList.add('show');
+
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+      });
+
+      installBtn.onclick = async () => {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          if (outcome === 'accepted') {
+            markInstalled();
+          }
+          deferredPrompt = null;
+        } else {
+          continueWithoutInstall();
         }
-      }, 5000);
+      };
+
+      // Desktop - show continue button immediately
+      continueBtn.style.display = 'block';
+      continueBtn.textContent = 'Lanjut di Browser';
+      continueBtn.onclick = continueWithoutInstall;
     }
 
     window.addEventListener('appinstalled', () => {
@@ -4385,7 +4501,8 @@ app.get('/admin/users', (_req, res) => {
               '<td>' +
                 '<button class="btn btn-sm" onclick="editUser(\\'' + u.phone + '\\',\\'' + (u.name||'') + '\\')">Edit</button> ' +
                 '<button class="btn btn-sm" onclick="openPushModal(\\'' + u.phone + '\\')">Push</button> ' +
-                '<button class="btn btn-sm btn-danger" onclick="deleteUser(\\'' + u.phone + '\\')">Hapus</button>' +
+                '<button class="btn btn-sm btn-danger" onclick="deleteUser(\\'' + u.phone + '\\')">Hapus</button> ' +
+                '<button class="btn btn-sm" style="background:#ff6600;" onclick="kickUser(\\'' + u.phone + '\\')">Kick</button>' +
               '</td>' +
             '</tr>';
           }).join('');
@@ -4510,6 +4627,32 @@ app.get('/admin/users', (_req, res) => {
       .then(data => {
         if (data.success) loadUsers();
         else alert(data.error);
+      });
+    }
+
+    function kickUser(phone) {
+      if (!confirm('⚠️ KICK +62' + phone + ' dari grup WhatsApp?\\n\\nUser akan di-kick dari grup DAN dihapus dari database!')) return;
+
+      const result = document.getElementById('syncResult');
+      result.className = 'result-msg success';
+      result.textContent = 'Mengeluarkan user dari grup...';
+
+      fetch('/api/admin/users/kick', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass, phone })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          result.className = 'result-msg success';
+          result.textContent = data.message;
+          loadUsers();
+        } else {
+          result.className = 'result-msg error';
+          result.textContent = 'Error: ' + data.error;
+        }
+        setTimeout(() => result.className = 'result-msg', 5000);
       });
     }
 
@@ -5747,19 +5890,13 @@ app.get('/monitoring', async (_req, res) => {
         lastDataTime = Date.now();
         const data = JSON.parse(event.data);
 
-        // Log semua data yang masuk (kecuali heartbeat)
-        if (data.type !== 'heartbeat') {
-          console.log('SSE data received:', data.type, data);
-        }
-
+        // Skip heartbeat silently
         if (data.type === 'heartbeat') {
-          console.log('\u{1F493} Heartbeat received');
           return;
         }
 
         // Handle notifikasi/promo dari admin
         if (data.type === 'notification') {
-          console.log('\u{1F514} Notification received:', data);
           showPromoNotification(data);
           return;
         }
