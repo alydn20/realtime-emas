@@ -3884,10 +3884,11 @@ app.get('/install', (_req, res) => {
       <div class="steps manual-steps" id="manualSteps"></div>
 
       <button class="btn btn-primary" id="installBtn">Install Aplikasi</button>
-      <button class="btn btn-secondary" id="continueBtn" style="display:none;">Lanjut ke Monitoring</button>
+      <button class="btn btn-secondary" id="continueBtn">Lanjutkan</button>
       <p class="notice" id="notice">
         Anda harus install aplikasi terlebih dahulu untuk mengakses monitoring harga emas.
       </p>
+      <p class="status-msg" id="statusMsg" style="color:#71767b;font-size:0.85em;margin-top:10px;display:none;"></p>
     </div>
   </div>
 
@@ -4070,6 +4071,7 @@ app.get('/install', (_req, res) => {
         }, 1500);
       });
 
+      // Install button - trigger install
       installBtn.onclick = async () => {
         if (deferredPrompt) {
           deferredPrompt.prompt();
@@ -4086,6 +4088,53 @@ app.get('/install', (_req, res) => {
             alert('Cara Install di Android:\\n\\n1. Tap menu (⋮) di pojok kanan atas\\n2. Pilih "Install app" atau "Add to Home screen"\\n3. Konfirmasi\\n\\nSetelah itu buka dari Home Screen.');
           } else {
             alert('Cara Install:\\n\\n1. Cari opsi "Install" di menu browser\\n2. Atau klik ikon install di address bar\\n3. Konfirmasi instalasi');
+          }
+        }
+      };
+
+      // Continue button - check if installed, if yes go to monitoring, if no trigger install
+      const statusMsg = document.getElementById('statusMsg');
+      continueBtn.onclick = async () => {
+        statusMsg.style.display = 'block';
+        statusMsg.style.color = '#f7931a';
+        statusMsg.textContent = 'Memeriksa instalasi...';
+
+        // Check if already standalone
+        if (checkStandalone()) {
+          statusMsg.style.color = '#00ff88';
+          statusMsg.textContent = 'PWA terdeteksi! Mengalihkan...';
+          setTimeout(goToMonitoring, 500);
+          return;
+        }
+
+        // Not standalone - try to install
+        if (deferredPrompt) {
+          statusMsg.textContent = 'Memulai instalasi...';
+          try {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+              statusMsg.style.color = '#00ff88';
+              statusMsg.textContent = 'Instalasi berhasil! Mengalihkan...';
+              markInstalled();
+            } else {
+              statusMsg.style.color = '#ff6b6b';
+              statusMsg.textContent = 'Instalasi dibatalkan. Silakan install terlebih dahulu.';
+            }
+            deferredPrompt = null;
+          } catch (e) {
+            statusMsg.style.color = '#ff6b6b';
+            statusMsg.textContent = 'Error: ' + e.message;
+          }
+        } else {
+          // No install prompt available - show instructions
+          statusMsg.style.color = '#ff6b6b';
+          if (isIOS) {
+            statusMsg.innerHTML = 'PWA belum terinstall. Tap <strong>Share</strong> → <strong>Add to Home Screen</strong>';
+          } else if (isAndroid) {
+            statusMsg.innerHTML = 'PWA belum terinstall. Tap <strong>menu (⋮)</strong> → <strong>Install app</strong>';
+          } else {
+            statusMsg.innerHTML = 'PWA belum terinstall. Gunakan menu browser untuk install.';
           }
         }
       };
