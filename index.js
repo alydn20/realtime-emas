@@ -8,6 +8,12 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys'
 import pino from 'pino'
 import express from 'express'
+import http from 'http'
+import https from 'https'
+
+// HTTP Keep-Alive agents untuk koneksi lebih cepat
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 10 })
 
 // ------ CONFIG ------
 const PORT = process.env.PORT || 8000
@@ -953,8 +959,12 @@ ${calendarSection}
 async function fetchTreasury() {
   const res = await fetch(TREASURY_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(2000) // 2 detik timeout
+    headers: {
+      'Content-Type': 'application/json',
+      'Connection': 'keep-alive'
+    },
+    agent: httpsAgent, // Reuse TCP connection
+    signal: AbortSignal.timeout(1500) // 1.5 detik timeout (lebih agresif)
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const json = await res.json()
@@ -1325,25 +1335,26 @@ async function checkPriceUpdate() {
 // Polling dengan interval tercepat (100ms) untuk test semua
 setInterval(checkPriceUpdate, 100)
 
-// ==================== BURST POLLING ====================
-// Kirim 5 request paralel saat detik 00-05 setiap menit untuk catch update lebih cepat
+// ==================== AGGRESSIVE BURST POLLING ====================
+// Burst polling dari detik 00-10, retry sampai dapat data baru
 let lastBurstMinute = -1
+let burstGotNewData = false
 
 async function burstPoll() {
   const now = new Date()
   const currentMinute = now.getMinutes()
   const currentSecond = now.getSeconds()
 
-  // Hanya burst di detik 00-03 dan belum burst di menit ini
-  if (currentSecond <= 3 && currentMinute !== lastBurstMinute) {
+  // Reset flag saat menit baru
+  if (currentMinute !== lastBurstMinute) {
+    burstGotNewData = false
     lastBurstMinute = currentMinute
+  }
 
-    // Kirim 5 request paralel
-    console.log(`🚀 BURST POLL | ${now.toISOString().substr(11, 8)} | Sending 5 parallel requests...`)
-
+  // Burst di detik 00-10, stop jika sudah dapat data baru
+  if (currentSecond <= 10 && !burstGotNewData) {
+    // Kirim 3 request paralel (lebih sedikit tapi lebih sering)
     const results = await Promise.allSettled([
-      fetchTreasury(),
-      fetchTreasury(),
       fetchTreasury(),
       fetchTreasury(),
       fetchTreasury()
@@ -1353,7 +1364,7 @@ async function burstPoll() {
     let newestData = null
     let newestTime = 0
 
-    results.forEach((result, i) => {
+    results.forEach((result) => {
       if (result.status === 'fulfilled' && result.value?.data?.updated_at) {
         const updateTime = new Date(result.value.data.updated_at).getTime()
         if (updateTime > newestTime) {
@@ -1364,8 +1375,9 @@ async function burstPoll() {
     })
 
     if (newestData && newestData.data.updated_at !== lastApiUpdateTime) {
+      burstGotNewData = true // Stop burst untuk menit ini
       const delayMs = Date.now() - newestTime
-      console.log(`🎯 BURST HIT | New data found! Delay: ${(delayMs/1000).toFixed(2)}s | API: ${newestData.data.updated_at.substr(11, 8)}`)
+      console.log(`🎯 BURST HIT | ${now.toISOString().substr(11, 12)} | Delay: ${(delayMs/1000).toFixed(2)}s | API: ${newestData.data.updated_at.substr(11, 8)}`)
 
       // Process the new data
       const currentPrice = {
@@ -1394,14 +1406,14 @@ async function burstPoll() {
           serverTime: new Date().toISOString()
         })
 
-        console.log(`🚀 BURST SSE | Broadcasted to ${sseClients.size} clients`)
+        console.log(`🚀 BURST SSE | Broadcasted to ${sseClients.size} clients | Server delay: ${(delayMs/1000).toFixed(2)}s`)
       }
     }
   }
 }
 
-// Burst poll setiap 500ms
-setInterval(burstPoll, 500)
+// Burst poll setiap 200ms (lebih agresif)
+setInterval(burstPoll, 200)
 
 // ==================== XAU/USD REAL-TIME ====================
 let lastXauUsdPrice = null
