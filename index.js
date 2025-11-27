@@ -2092,22 +2092,18 @@ app.get('/monitoring', async (_req, res) => {
           "hide_legend": false,
           "allow_symbol_change": true,
           "save_image": true,
-          "calendar": true,
+          "calendar": false,
           "hide_volume": false,
-          "hide_side_toolbar": false,
-          "withdateranges": true,
-          "details": true,
-          "hotlist": true,
+          "hide_side_toolbar": true,
+          "withdateranges": false,
+          "details": false,
+          "hotlist": false,
           "show_popup_button": true,
           "popup_width": "1000",
           "popup_height": "650",
-          "watchlist": ["OANDA:XAUUSD", "OANDA:XAGUSD", "FX_IDC:USDIDR", "FOREXCOM:DXY", "TVC:GOLD", "COMEX:GC1!"],
           "studies": [
             "MASimple@tv-basicstudies",
-            "RSI@tv-basicstudies",
-            "MACD@tv-basicstudies",
-            "Volume@tv-basicstudies",
-            "BB@tv-basicstudies"
+            "Volume@tv-basicstudies"
           ],
           "support_host": "https://www.tradingview.com"
         }
