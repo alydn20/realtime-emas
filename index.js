@@ -2301,7 +2301,7 @@ app.get('/sw.js', (_req, res) => {
   res.setHeader('Content-Type', 'application/javascript')
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
   res.send(`
-    const CACHE_VERSION = 'gold-monitor-v4';
+    const CACHE_VERSION = 'gold-monitor-v5';
 
     self.addEventListener('install', (e) => {
       self.skipWaiting();
@@ -3640,7 +3640,7 @@ app.get('/login', (_req, res) => {
         deferredPrompt.prompt();
         const { outcome } = await deferredPrompt.userChoice;
         if (outcome === 'accepted') {
-          localStorage.setItem('pwa_installed', 'true');
+          localStorage.setItem('pwa_installed_v2', 'true');
           installBtn.style.display = 'none';
         }
         deferredPrompt = null;
@@ -3657,7 +3657,7 @@ app.get('/login', (_req, res) => {
 
     // Hide install button when app is installed
     window.addEventListener('appinstalled', () => {
-      localStorage.setItem('pwa_installed', 'true');
+      localStorage.setItem('pwa_installed_v2', 'true');
       installBtn.style.display = 'none';
     });
 
@@ -3924,7 +3924,7 @@ app.get('/install', (_req, res) => {
 
     // Mark as installed and go to monitoring
     function markInstalled() {
-      localStorage.setItem('pwa_installed', 'true');
+      localStorage.setItem('pwa_installed_v2', 'true');
       installedMsg.classList.add('show');
       installBtn.style.display = 'none';
       continueBtn.style.display = 'block';
@@ -3936,7 +3936,7 @@ app.get('/install', (_req, res) => {
     if (isStandalone) {
       // Already running as PWA - go directly to monitoring
       goToMonitoring();
-    } else if (localStorage.getItem('pwa_installed') === 'true') {
+    } else if (localStorage.getItem('pwa_installed_v2') === 'true') {
       // Previously installed - go to monitoring
       goToMonitoring();
     } else if (isIOS) {
@@ -5951,7 +5951,17 @@ app.get('/monitoring', async (_req, res) => {
       }, 3000);
     }
 
-    // Auth removed - direct access to monitoring without login
+    // Check if PWA installed - redirect to install page if not
+    (function checkPwaInstalled() {
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+      const isInstalled = localStorage.getItem('pwa_installed_v2') === 'true';
+
+      if (!isStandalone && !isInstalled) {
+        // Not installed - redirect to install page
+        window.location.href = '/install';
+        return;
+      }
+    })();
 
     // ==================== PUSH NOTIFICATION SUBSCRIPTION ====================
     async function subscribeToPush() {
