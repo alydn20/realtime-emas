@@ -1897,7 +1897,7 @@ const app = express()
 app.use(express.json())
 
 app.get('/', (_req, res) => {
-  res.redirect('/login')
+  res.redirect('/monitoring')
 })
 
 app.get('/health', (_req, res) => {
