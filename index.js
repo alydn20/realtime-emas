@@ -2142,8 +2142,35 @@ app.get('/monitoring', async (_req, res) => {
       return h + ':' + m + ':' + s;
     }
 
+    // Offset waktu server vs browser (dalam ms)
+    let serverTimeOffset = 0;
+    let timeInitialized = false;
+
+    // Ambil waktu akurat dari WorldTimeAPI
+    async function fetchServerTime() {
+      try {
+        const res = await fetch('https://worldtimeapi.org/api/timezone/Asia/Jakarta');
+        const data = await res.json();
+        const serverTime = new Date(data.datetime).getTime();
+        const browserTime = Date.now();
+        serverTimeOffset = serverTime - browserTime;
+        timeInitialized = true;
+        console.log('Server time synced, offset:', serverTimeOffset, 'ms');
+      } catch (e) {
+        console.warn('Failed to sync time, using browser time');
+      }
+    }
+
+    // Sync waktu setiap 5 menit
+    fetchServerTime();
+    setInterval(fetchServerTime, 5 * 60 * 1000);
+
+    function getAccurateTime() {
+      return new Date(Date.now() + serverTimeOffset);
+    }
+
     function updateClock() {
-      const now = new Date();
+      const now = getAccurateTime();
       document.getElementById('clock').textContent = formatTime(now);
       const dayName = days[now.getDay()];
       const date = now.getDate();
