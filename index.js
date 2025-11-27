@@ -1993,6 +1993,320 @@ app.get('/sw.js', (_req, res) => {
   `)
 })
 
+// ADMIN PAGE - Broadcast Notifications
+app.get('/admin/monitoring', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Gold Price Monitor</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0f1419;
+      min-height: 100vh;
+      padding: 20px;
+      color: #e7e9ea;
+    }
+    .container { max-width: 600px; margin: 0 auto; }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      padding: 20px;
+      background: linear-gradient(135deg, #1a1f26 0%, #2f3640 100%);
+      border-radius: 15px;
+      border: 1px solid #f7931a;
+    }
+    .header h1 {
+      color: #f7931a;
+      font-size: 1.5em;
+      margin-bottom: 5px;
+    }
+    .header p { color: #71767b; font-size: 0.9em; }
+
+    .stats-bar {
+      display: flex;
+      justify-content: space-around;
+      background: #1a1f26;
+      padding: 15px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      border: 1px solid #2f3640;
+    }
+    .stat-item { text-align: center; }
+    .stat-value { font-size: 1.5em; font-weight: bold; color: #f7931a; }
+    .stat-label { font-size: 0.75em; color: #71767b; }
+
+    .card {
+      background: #1a1f26;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid #2f3640;
+    }
+    .card h2 {
+      color: #e7e9ea;
+      font-size: 1.1em;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #2f3640;
+    }
+
+    .form-group { margin-bottom: 15px; }
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      color: #71767b;
+      font-size: 0.85em;
+    }
+    .form-group input, .form-group textarea, .form-group select {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #2f3640;
+      border-radius: 8px;
+      background: #0f1419;
+      color: #e7e9ea;
+      font-size: 1em;
+    }
+    .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+      outline: none;
+      border-color: #f7931a;
+    }
+    .form-group textarea { resize: vertical; min-height: 80px; }
+
+    .type-buttons {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    .type-btn {
+      padding: 10px;
+      border: 2px solid #2f3640;
+      border-radius: 8px;
+      background: #0f1419;
+      color: #71767b;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .type-btn:hover { border-color: #f7931a; }
+    .type-btn.active { border-color: #f7931a; color: #f7931a; background: rgba(247,147,26,0.1); }
+    .type-btn .icon { font-size: 1.5em; display: block; margin-bottom: 3px; }
+    .type-btn .label { font-size: 0.75em; }
+
+    .btn {
+      width: 100%;
+      padding: 15px;
+      border: none;
+      border-radius: 10px;
+      font-size: 1em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #f7931a 0%, #ff6b00 100%);
+      color: white;
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(247,147,26,0.3); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .result {
+      margin-top: 15px;
+      padding: 15px;
+      border-radius: 8px;
+      display: none;
+    }
+    .result.success { display: block; background: rgba(0,255,136,0.1); border: 1px solid #00ff88; color: #00ff88; }
+    .result.error { display: block; background: rgba(255,68,68,0.1); border: 1px solid #ff4444; color: #ff4444; }
+
+    .history { max-height: 300px; overflow-y: auto; }
+    .history-item {
+      padding: 12px;
+      background: #0f1419;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      border-left: 3px solid #f7931a;
+    }
+    .history-item .time { font-size: 0.75em; color: #71767b; }
+    .history-item .title { font-weight: 600; color: #e7e9ea; }
+    .history-item .message { font-size: 0.9em; color: #71767b; margin-top: 3px; }
+    .history-item.promo { border-left-color: #00ff88; }
+    .history-item.warning { border-left-color: #ffaa00; }
+    .history-item.urgent { border-left-color: #ff4444; }
+
+    .empty-state { text-align: center; color: #71767b; padding: 30px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Admin Panel</h1>
+      <p>Gold Price Monitor - Broadcast Notifications</p>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat-item">
+        <div class="stat-value" id="clientCount">-</div>
+        <div class="stat-label">Online Users</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="sentCount">0</div>
+        <div class="stat-label">Sent Today</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Kirim Notifikasi</h2>
+      <form id="notifForm">
+        <div class="form-group">
+          <label>Tipe Notifikasi</label>
+          <div class="type-buttons">
+            <div class="type-btn active" data-type="info">
+              <span class="icon">📢</span>
+              <span class="label">Info</span>
+            </div>
+            <div class="type-btn" data-type="promo">
+              <span class="icon">🎁</span>
+              <span class="label">Promo</span>
+            </div>
+            <div class="type-btn" data-type="warning">
+              <span class="icon">⚠️</span>
+              <span class="label">Warning</span>
+            </div>
+            <div class="type-btn" data-type="urgent">
+              <span class="icon">🚨</span>
+              <span class="label">Urgent</span>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Judul</label>
+          <input type="text" id="notifTitle" placeholder="Contoh: Promo Spesial!" required>
+        </div>
+        <div class="form-group">
+          <label>Pesan</label>
+          <textarea id="notifMessage" placeholder="Contoh: Dapatkan diskon 10% untuk pembelian emas hari ini!" required></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary" id="sendBtn">
+          Kirim Notifikasi
+        </button>
+        <div class="result" id="result"></div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Riwayat Notifikasi</h2>
+      <div class="history" id="history">
+        <div class="empty-state">Belum ada notifikasi dikirim</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let selectedType = 'info';
+    let sentCount = 0;
+    const history = [];
+
+    // Type button selection
+    document.querySelectorAll('.type-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedType = btn.dataset.type;
+      });
+    });
+
+    // Fetch client count
+    async function updateClientCount() {
+      try {
+        const res = await fetch('/stats');
+        const data = await res.json();
+        document.getElementById('clientCount').textContent = data.sseClients || 0;
+      } catch(e) {
+        document.getElementById('clientCount').textContent = '-';
+      }
+    }
+    updateClientCount();
+    setInterval(updateClientCount, 5000);
+
+    // Form submit
+    document.getElementById('notifForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const title = document.getElementById('notifTitle').value.trim();
+      const message = document.getElementById('notifMessage').value.trim();
+      const btn = document.getElementById('sendBtn');
+      const result = document.getElementById('result');
+
+      if (!title || !message) return;
+
+      btn.disabled = true;
+      btn.textContent = 'Mengirim...';
+
+      try {
+        const url = '/send-notif?title=' + encodeURIComponent(title) + '&message=' + encodeURIComponent(message) + '&type=' + selectedType;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (data.success) {
+          result.className = 'result success';
+          result.textContent = 'Notifikasi berhasil dikirim ke ' + data.sent + ' user!';
+
+          // Add to history
+          sentCount++;
+          document.getElementById('sentCount').textContent = sentCount;
+          addToHistory({ type: selectedType, title, message, time: new Date().toISOString(), sent: data.sent });
+
+          // Reset form
+          document.getElementById('notifTitle').value = '';
+          document.getElementById('notifMessage').value = '';
+        } else {
+          result.className = 'result error';
+          result.textContent = 'Gagal: ' + (data.error || 'Unknown error');
+        }
+      } catch(err) {
+        result.className = 'result error';
+        result.textContent = 'Error: ' + err.message;
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Kirim Notifikasi';
+
+      setTimeout(() => { result.className = 'result'; }, 5000);
+    });
+
+    function addToHistory(item) {
+      history.unshift(item);
+      renderHistory();
+    }
+
+    function renderHistory() {
+      const container = document.getElementById('history');
+      if (history.length === 0) {
+        container.innerHTML = '<div class="empty-state">Belum ada notifikasi dikirim</div>';
+        return;
+      }
+
+      container.innerHTML = history.map(item => {
+        const time = new Date(item.time).toLocaleTimeString('id-ID');
+        return '<div class="history-item ' + item.type + '">' +
+          '<div class="time">' + time + ' - Terkirim ke ' + item.sent + ' user</div>' +
+          '<div class="title">' + item.title + '</div>' +
+          '<div class="message">' + item.message + '</div>' +
+        '</div>';
+      }).join('');
+    }
+  </script>
+</body>
+</html>`;
+  res.send(html);
+})
+
 // MONITORING PAGE - Professional Gold Price Dashboard
 app.get('/monitoring', async (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
