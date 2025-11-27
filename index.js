@@ -2479,7 +2479,8 @@ app.get('/favicon.ico', (_req, res) => {
 })
 
 // PWA Manifest
-app.get('/manifest.json', (_req, res) => {
+app.get('/manifest.json', (req, res) => {
+  const host = req.get('host') || 'ts.muhamadaliyudin.xyz'
   res.json({
     name: 'Gold Price Monitor',
     short_name: 'Gold Monitor',
@@ -2501,7 +2502,14 @@ app.get('/manifest.json', (_req, res) => {
         type: 'image/png',
         purpose: 'any maskable'
       }
-    ]
+    ],
+    related_applications: [
+      {
+        platform: 'webapp',
+        url: 'https://' + host + '/manifest.json'
+      }
+    ],
+    prefer_related_applications: false
   })
 })
 
@@ -4108,6 +4116,7 @@ app.get('/install', (_req, res) => {
     document.addEventListener('contextmenu', e => e.preventDefault());
 
     let deferredPrompt;
+    let pwaIsInstalled = false;
     const installBtn = document.getElementById('installBtn');
     const continueBtn = document.getElementById('continueBtn');
     const installedMsg = document.getElementById('installedMsg');
@@ -4129,15 +4138,26 @@ app.get('/install', (_req, res) => {
 
     // Simple standalone detection
     function checkStandalone() {
-      // iOS standalone
       if (window.navigator.standalone === true) return true;
-      // display-mode standalone or fullscreen
       if (window.matchMedia('(display-mode: standalone)').matches) return true;
       if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
       return false;
     }
 
     const isStandalone = checkStandalone();
+
+    // Check if PWA is already installed using getInstalledRelatedApps API
+    async function checkPwaInstalled() {
+      if ('getInstalledRelatedApps' in navigator) {
+        try {
+          const apps = await navigator.getInstalledRelatedApps();
+          return apps.length > 0;
+        } catch (e) {
+          return false;
+        }
+      }
+      return false;
+    }
 
     // Get browser name
     function getBrowserName() {
@@ -4232,72 +4252,96 @@ app.get('/install', (_req, res) => {
       manualSteps.classList.add('show');
     }
 
-    // Check if running as PWA - redirect immediately
-    if (isStandalone) {
-      goToMonitoring();
-    } else {
+    // Main initialization
+    async function init() {
+      // Check if running as PWA - redirect immediately
+      if (isStandalone) {
+        goToMonitoring();
+        return;
+      }
+
+      // Check if PWA is already installed
+      pwaIsInstalled = await checkPwaInstalled();
+
       // Show browser info and instructions
       const browserName = getBrowserName();
       const instructions = getInstallInstructions();
 
       browserInfo.innerHTML = 'Browser: <strong>' + browserName + '</strong>' + (isMobile ? ' (Mobile)' : ' (Desktop)');
-      showManualSteps(instructions);
-      notice.style.display = 'block';
+
+      if (pwaIsInstalled) {
+        // PWA sudah terinstall - tampilkan pesan khusus
+        browserInfo.innerHTML += '<br><span style="color:#00ff88;">✓ Aplikasi sudah terinstall!</span>';
+        installBtn.textContent = 'Buka Aplikasi';
+        installBtn.onclick = () => {
+          // Langsung ke monitoring - akan terbuka di PWA jika sudah install
+          localStorage.setItem('pwa_verified', 'true');
+          window.location.href = '/monitoring';
+        };
+        continueBtn.textContent = 'Buka Aplikasi';
+        notice.innerHTML = 'Klik tombol di atas untuk membuka aplikasi Gold Monitor.';
+      } else {
+        showManualSteps(instructions);
+        notice.style.display = 'block';
+      }
 
       // Handle install prompt for browsers that support it
       window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
 
-        // Auto prompt after 1.5 second
-        setTimeout(() => {
-          if (deferredPrompt) {
-            deferredPrompt.prompt();
-            deferredPrompt.userChoice.then((result) => {
-              if (result.outcome === 'accepted') {
-                markInstalled();
-              }
-              deferredPrompt = null;
-            });
-          }
-        }, 1500);
+        // Jika PWA belum terinstall, auto prompt setelah 1.5 detik
+        if (!pwaIsInstalled) {
+          setTimeout(() => {
+            if (deferredPrompt) {
+              deferredPrompt.prompt();
+              deferredPrompt.userChoice.then((result) => {
+                if (result.outcome === 'accepted') {
+                  markInstalled();
+                }
+                deferredPrompt = null;
+              });
+            }
+          }, 1500);
+        }
       });
 
-      // Install button - trigger install
-      installBtn.onclick = async () => {
-        if (deferredPrompt) {
-          deferredPrompt.prompt();
-          const { outcome } = await deferredPrompt.userChoice;
-          if (outcome === 'accepted') {
-            markInstalled();
-          }
-          deferredPrompt = null;
-        } else {
-          // Show alert with specific instructions
-          if (isIOS) {
-            alert('Cara Install di iOS:\\n\\n1. Tap tombol Share (kotak dengan panah)\\n2. Scroll dan pilih "Add to Home Screen"\\n3. Tap "Add"\\n\\nSetelah itu buka dari Home Screen.');
-          } else if (isAndroid) {
-            alert('Cara Install di Android:\\n\\n1. Tap menu (⋮) di pojok kanan atas\\n2. Pilih "Install app" atau "Add to Home screen"\\n3. Konfirmasi\\n\\nSetelah itu buka dari Home Screen.');
+      // Install button - trigger install atau buka app
+      if (!pwaIsInstalled) {
+        installBtn.onclick = async () => {
+          if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+              markInstalled();
+            }
+            deferredPrompt = null;
           } else {
-            alert('Cara Install:\\n\\n1. Cari opsi "Install" di menu browser\\n2. Atau klik ikon install di address bar\\n3. Konfirmasi instalasi');
+            // Show alert with specific instructions
+            if (isIOS) {
+              alert('Cara Install di iOS:\\n\\n1. Tap tombol Share (kotak dengan panah)\\n2. Scroll dan pilih "Add to Home Screen"\\n3. Tap "Add"\\n\\nSetelah itu buka dari Home Screen.');
+            } else if (isAndroid) {
+              alert('Cara Install di Android:\\n\\n1. Tap menu (⋮) di pojok kanan atas\\n2. Pilih "Install app" atau "Add to Home screen"\\n3. Konfirmasi\\n\\nSetelah itu buka dari Home Screen.');
+            } else {
+              alert('Cara Install:\\n\\n1. Cari opsi "Install" di menu browser\\n2. Atau klik ikon install di address bar\\n3. Konfirmasi instalasi');
+            }
           }
-        }
-      };
+        };
+      }
 
-      // Continue button - set verified dan langsung ke monitoring
+      // Continue button - langsung ke monitoring
       const statusMsg = document.getElementById('statusMsg');
       continueBtn.onclick = () => {
         statusMsg.style.display = 'block';
         statusMsg.style.color = '#00ff88';
         statusMsg.textContent = 'Mengalihkan ke monitoring...';
-        // Set verified flag dan redirect
         localStorage.setItem('pwa_verified', 'true');
         setTimeout(() => {
           window.location.href = '/monitoring';
         }, 300);
       };
 
-      // Check periodically for standalone mode (in case user installs and comes back)
+      // Check periodically for standalone mode
       const checkInterval = setInterval(() => {
         if (checkStandalone()) {
           clearInterval(checkInterval);
@@ -4305,6 +4349,9 @@ app.get('/install', (_req, res) => {
         }
       }, 500);
     }
+
+    // Start initialization
+    init();
 
     window.addEventListener('appinstalled', () => {
       markInstalled();
