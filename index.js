@@ -20,7 +20,7 @@ const GLOBAL_THROTTLE = 3000
 const TYPING_DURATION = 2000
 
 // BROADCAST COOLDOWN
-const PRICE_CHECK_INTERVAL = 500 // 500ms - lebih responsif
+const PRICE_CHECK_INTERVAL = 300 // 300ms - ultra responsif
 const MIN_PRICE_CHANGE = 1
 const BROADCAST_COOLDOWN = 50000 // 50 detik antar broadcast (atau ganti menit)
 
@@ -954,7 +954,7 @@ async function fetchTreasury() {
   const res = await fetch(TREASURY_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(1500) // 1.5 detik timeout
+    signal: AbortSignal.timeout(1000) // 1 detik timeout
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const json = await res.json()
