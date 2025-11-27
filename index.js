@@ -147,7 +147,7 @@ async function useRedisAuthState() {
   const writeData = async (key, data) => {
     try {
       const serialized = JSON.stringify(data, BufferJSON.replacer)
-      await redis.hset(REDIS_KEYS.WA_AUTH, key, serialized)
+      await redis.hset(REDIS_KEYS.WA_AUTH, { [key]: serialized })
     } catch (e) {
       console.error('Redis auth write error:', e.message)
     }
@@ -267,7 +267,7 @@ async function autoRegisterGroupMember(phone, name = null) {
       source: 'whatsapp_group'
     }
 
-    await redis.hset(REDIS_KEYS.USERS, phone, JSON.stringify(userData))
+    await redis.hset(REDIS_KEYS.USERS, { [phone]: JSON.stringify(userData) })
     pushLog('WA | Auto-registered: +62' + phone)
   } catch (e) {
     pushLog('WA | Auto-register failed: ' + e.message)
@@ -2889,7 +2889,7 @@ app.post('/api/push-subscribe', express.json(), async (req, res) => {
   const phone = await redis.hget(REDIS_KEYS.SESSIONS, session)
   if (!phone) return res.json({ success: false, error: 'Invalid session' })
 
-  await redis.hset(REDIS_KEYS.PUSH_SUBS, phone, JSON.stringify(subscription))
+  await redis.hset(REDIS_KEYS.PUSH_SUBS, { [phone]: JSON.stringify(subscription) })
   res.json({ success: true })
 })
 
@@ -3010,7 +3010,7 @@ app.put('/api/admin/users', express.json(), async (req, res) => {
     user.expired = base + (addDays * 24 * 60 * 60 * 1000)
   }
 
-  await redis.hset(REDIS_KEYS.USERS, normalizedPhone, JSON.stringify(user))
+  await redis.hset(REDIS_KEYS.USERS, { [normalizedPhone]: JSON.stringify(user) })
 
   res.json({ success: true, user: { phone: normalizedPhone, ...user } })
 })
