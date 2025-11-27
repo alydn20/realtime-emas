@@ -1508,6 +1508,20 @@ function broadcastSSE(data) {
   })
 }
 
+// SSE Heartbeat - kirim ping setiap 15 detik untuk menjaga koneksi aktif
+setInterval(() => {
+  if (sseClients.size > 0) {
+    const heartbeat = `data: ${JSON.stringify({ type: 'heartbeat', time: Date.now() })}\n\n`
+    sseClients.forEach(client => {
+      try {
+        client.write(heartbeat)
+      } catch (e) {
+        sseClients.delete(client)
+      }
+    })
+  }
+}, 15000)
+
 // MONITORING PAGE - Professional Gold Price Dashboard
 app.get('/monitoring', async (_req, res) => {
   const html = `<!DOCTYPE html>
