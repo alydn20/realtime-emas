@@ -1870,8 +1870,8 @@ app.get('/monitoring', async (_req, res) => {
     setInterval(updateClock, 100);
     updateClock();
 
-    // Fetch Treasury setiap 1 detik untuk real-time
-    setInterval(fetchPrices, 1000);
+    // Fetch Treasury setiap 500ms untuk lebih responsif
+    setInterval(fetchPrices, 500);
     fetchPrices();
 
     // Fetch XAU/USD setiap 2 detik (real-time dari TradingView)
