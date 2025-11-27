@@ -133,7 +133,8 @@ const REDIS_KEYS = {
   SESSIONS: 'gold:sessions',     // Hash: sessionId -> phone
   WA_GROUP_ID: 'gold:wa_group_id', // String: ID grup WA yang di-monitor
   WA_AUTH: 'gold:wa_auth',       // Hash: key -> auth data (creds, keys) for persistent WA session
-  OTP_CODES: 'gold:otp_codes'    // Hash: phone -> OTP code for registration verification
+  OTP_CODES: 'gold:otp_codes',   // Hash: phone -> OTP code for registration verification
+  SOUND_SETTINGS: 'gold:sound_settings' // JSON: custom sound settings (soundUp, soundDown URLs)
 }
 
 // Admin password untuk akses admin panel
@@ -1403,7 +1404,7 @@ ${marketSection}
 
 🎁 20jt→${formatGrams(grams20M)}gr (+Rp${formatRupiah(Math.round(profit20M))}) | 30jt→${formatGrams(grams30M)}gr (+Rp${formatRupiah(Math.round(profit30M))})
 ${calendarSection}
-📊 *Lihat Chart & Riwayat Lengkap:*
+📊 Lihat Chart & Riwayat Lengkap:
 🔗 https://treasury.muhamadaliyudin.xyz`
 }
 async function fetchTreasury() {
@@ -3206,6 +3207,42 @@ app.post('/api/admin/push', express.json(), async (req, res) => {
   }
 })
 
+// ==================== SOUND SETTINGS ====================
+
+// Get sound settings (public - for monitoring page)
+app.get('/api/sound-settings', async (_req, res) => {
+  try {
+    const settings = await redis.get(REDIS_KEYS.SOUND_SETTINGS)
+    if (settings) {
+      const parsed = typeof settings === 'string' ? JSON.parse(settings) : settings
+      res.json({ success: true, settings: parsed })
+    } else {
+      // Default settings (empty = use built-in sounds)
+      res.json({ success: true, settings: { soundUp: '', soundDown: '' } })
+    }
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
+// Admin: Update sound settings
+app.post('/api/admin/sound-settings', express.json(), async (req, res) => {
+  const { password, soundUp, soundDown } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  try {
+    const settings = { soundUp: soundUp || '', soundDown: soundDown || '' }
+    await redis.set(REDIS_KEYS.SOUND_SETTINGS, JSON.stringify(settings))
+
+    // Broadcast to all clients to update their sounds
+    broadcastSSE({ type: 'sound_update', settings })
+
+    res.json({ success: true, settings })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
 // ==================== WHATSAPP GROUP MANAGEMENT ====================
 
 // Admin: Get list of WhatsApp groups
@@ -4378,6 +4415,30 @@ app.get('/admin/users', (_req, res) => {
     </div>
   </div>
 
+  <!-- Sound Settings -->
+  <div class="card">
+    <div class="card-header">
+      <h3>🔊 Pengaturan Sound</h3>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label>Sound Harga Naik (URL MP3/WAV)</label>
+        <input type="text" id="soundUpUrl" placeholder="https://example.com/naik.mp3">
+        <small style="color:#71767b;font-size:0.8em;">Kosongkan untuk sound default</small>
+      </div>
+      <div class="form-group">
+        <label>Sound Harga Turun (URL MP3/WAV)</label>
+        <input type="text" id="soundDownUrl" placeholder="https://example.com/turun.mp3">
+        <small style="color:#71767b;font-size:0.8em;">Kosongkan untuk sound default</small>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:15px;">
+        <button class="btn btn-secondary" style="flex:1;" onclick="testSound('up')">🔊 Test Naik</button>
+        <button class="btn btn-secondary" style="flex:1;" onclick="testSound('down')">🔊 Test Turun</button>
+      </div>
+      <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="saveSoundSettings()">Simpan Sound</button>
+    </div>
+  </div>
+
   <script>
     let adminPass = '';
 
@@ -4394,6 +4455,7 @@ app.get('/admin/users', (_req, res) => {
             localStorage.setItem('admin_pass', adminPass);
             loadUsers();
             loadWaGroups();
+            loadSoundSettings();
           } else {
             alert('Password salah');
           }
@@ -4405,6 +4467,92 @@ app.get('/admin/users', (_req, res) => {
     if (savedPass) {
       document.getElementById('adminPassword').value = savedPass;
       adminLogin();
+    }
+
+    // ==================== Sound Settings Functions ====================
+    let currentSoundUp = '';
+    let currentSoundDown = '';
+
+    function loadSoundSettings() {
+      fetch('/api/sound-settings')
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            currentSoundUp = data.settings.soundUp || '';
+            currentSoundDown = data.settings.soundDown || '';
+            document.getElementById('soundUpUrl').value = currentSoundUp;
+            document.getElementById('soundDownUrl').value = currentSoundDown;
+          }
+        });
+    }
+
+    function saveSoundSettings() {
+      const soundUp = document.getElementById('soundUpUrl').value.trim();
+      const soundDown = document.getElementById('soundDownUrl').value.trim();
+
+      fetch('/api/admin/sound-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass, soundUp, soundDown })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          currentSoundUp = soundUp;
+          currentSoundDown = soundDown;
+          alert('Sound berhasil disimpan!');
+        } else {
+          alert('Gagal: ' + data.error);
+        }
+      });
+    }
+
+    function testSound(direction) {
+      const url = direction === 'up'
+        ? document.getElementById('soundUpUrl').value.trim()
+        : document.getElementById('soundDownUrl').value.trim();
+
+      if (url) {
+        // Play custom sound from URL
+        const audio = new Audio(url);
+        audio.volume = 0.5;
+        audio.play().catch(e => alert('Gagal memutar sound: ' + e.message));
+      } else {
+        // Play default built-in sound
+        playDefaultSound(direction);
+      }
+    }
+
+    function playDefaultSound(direction) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+
+        if (direction === 'up') {
+          oscillator.type = 'sine';
+          oscillator.frequency.setValueAtTime(800, ctx.currentTime);
+          oscillator.frequency.setValueAtTime(1000, ctx.currentTime + 0.1);
+          oscillator.frequency.setValueAtTime(800, ctx.currentTime + 0.2);
+          oscillator.frequency.setValueAtTime(1200, ctx.currentTime + 0.3);
+          gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+          oscillator.start(ctx.currentTime);
+          oscillator.stop(ctx.currentTime + 0.5);
+        } else {
+          oscillator.type = 'sawtooth';
+          oscillator.frequency.setValueAtTime(400, ctx.currentTime);
+          oscillator.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.5);
+          gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+          oscillator.start(ctx.currentTime);
+          oscillator.stop(ctx.currentTime + 0.5);
+        }
+      } catch (e) {
+        console.log('Sound error:', e);
+      }
     }
 
     // ==================== WhatsApp Group Functions ====================
@@ -5606,6 +5754,21 @@ app.get('/monitoring', async (_req, res) => {
     // Sound Notification - berbeda untuk naik dan turun menggunakan Web Audio API
     let soundEnabled = localStorage.getItem('soundEnabled') !== 'false';
     let audioContext = null;
+    let customSoundUp = '';
+    let customSoundDown = '';
+
+    // Load custom sounds from server
+    async function loadCustomSounds() {
+      try {
+        const res = await fetch('/api/sound-settings');
+        const data = await res.json();
+        if (data.success) {
+          customSoundUp = data.settings.soundUp || '';
+          customSoundDown = data.settings.soundDown || '';
+        }
+      } catch (e) {}
+    }
+    loadCustomSounds();
 
     function getAudioContext() {
       if (!audioContext) {
@@ -5624,6 +5787,22 @@ app.get('/monitoring', async (_req, res) => {
     function playSound(direction) {
       if (!soundEnabled) return;
 
+      // Check for custom sound URL
+      const customUrl = direction === 'up' ? customSoundUp : customSoundDown;
+
+      if (customUrl) {
+        // Play custom sound from URL
+        try {
+          const audio = new Audio(customUrl);
+          audio.volume = 0.5;
+          audio.play().catch(e => console.log('Custom audio error:', e));
+        } catch (e) {
+          console.log('Custom audio error:', e);
+        }
+        return;
+      }
+
+      // Play default built-in sound
       try {
         const ctx = getAudioContext();
         if (ctx.state === 'suspended') ctx.resume();
@@ -6036,6 +6215,14 @@ app.get('/monitoring', async (_req, res) => {
         // Handle notifikasi/promo dari admin
         if (data.type === 'notification') {
           showPromoNotification(data);
+          return;
+        }
+
+        // Handle sound settings update from admin
+        if (data.type === 'sound_update') {
+          customSoundUp = data.settings.soundUp || '';
+          customSoundDown = data.settings.soundDown || '';
+          console.log('Sound settings updated');
           return;
         }
 
