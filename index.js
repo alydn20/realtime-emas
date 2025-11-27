@@ -227,50 +227,36 @@ function formatDailyStats(stats) {
 
 // Add price history ke Redis
 let isAddingHistory = false // Lock untuk mencegah race condition
-let lastAddedMinute = -1 // Track menit terakhir yang sudah ditambahkan
+let lastAddedUpdatedAt = '' // Track updatedAt terakhir yang sudah ditambahkan
 
 async function addPriceHistory(buy, sell, prevBuy, prevSell, updatedAt) {
+  // Skip jika updatedAt sama dengan yang terakhir ditambahkan
+  if (updatedAt === lastAddedUpdatedAt) return
+
   // Cek lock untuk mencegah race condition
   if (isAddingHistory) return
   isAddingHistory = true
 
-  const now = new Date()
-  const currentMinute = now.getHours() * 60 + now.getMinutes()
-  const currentDay = now.toDateString()
-
   try {
-    // Cek apakah sudah ada entry di menit yang sama hari ini
+    // Cek apakah sudah ada entry dengan updatedAt yang sama
     const lastEntry = priceHistoryCache[priceHistoryCache.length - 1]
-    if (lastEntry) {
-      const lastTime = new Date(lastEntry.time)
-      const lastMinute = lastTime.getHours() * 60 + lastTime.getMinutes()
-
-      if (lastMinute === currentMinute && lastTime.toDateString() === currentDay) {
-        // Skip - sudah ada entry di menit ini
-        isAddingHistory = false
-        return
-      }
-    }
-
-    // Double check dengan lastAddedMinute
-    if (lastAddedMinute === currentMinute) {
+    if (lastEntry && lastEntry.time === updatedAt) {
       isAddingHistory = false
       return
     }
 
     const entry = {
-      time: now.toISOString(),
+      time: updatedAt, // Pakai waktu dari API Treasury
       buy: buy,
       sell: sell,
       buyChange: buy - prevBuy,
-      sellChange: sell - prevSell,
-      updatedAt: updatedAt
+      sellChange: sell - prevSell
     }
 
     // Tambah entry baru
     await redis.rpush(REDIS_KEYS.PRICE_HISTORY, entry)
     priceHistoryCache.push(entry)
-    lastAddedMinute = currentMinute
+    lastAddedUpdatedAt = updatedAt
 
     // Limit max 1440 entries (24 jam)
     const len = await redis.llen(REDIS_KEYS.PRICE_HISTORY)
@@ -1773,6 +1759,18 @@ app.get('/price-history', async (req, res) => {
   const perPage = parseInt(req.query.perPage) || 10
   const history = await getPriceHistory(page, perPage)
   res.json(history)
+})
+
+// Clear price history (untuk reset data duplikat)
+app.get('/clear-history', async (req, res) => {
+  try {
+    await redis.del(REDIS_KEYS.PRICE_HISTORY)
+    priceHistoryCache = []
+    lastAddedUpdatedAt = ''
+    res.json({ success: true, message: 'Price history cleared' })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
 })
 
 // SSE (Server-Sent Events) untuk real-time push ke frontend
