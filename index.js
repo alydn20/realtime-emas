@@ -1165,14 +1165,14 @@ async function checkPriceUpdate() {
     }
 
     // 🚀 PRE-BUILD MESSAGE untuk instant broadcast
-    const treasuryData = {
+    const broadcastData = {
       data: {
         buying_rate: currentPrice.buy,
         selling_rate: currentPrice.sell,
         updated_at: currentPrice.updated_at
       }
     }
-    const message = formatMessage(treasuryData, cachedMarketData.usdIdr.rate, cachedMarketData.xauUsd, finalPriceChange, cachedMarketData.economicEvents)
+    const message = formatMessage(broadcastData, cachedMarketData.usdIdr.rate, cachedMarketData.xauUsd, finalPriceChange, cachedMarketData.economicEvents)
 
     // 🚀 INSTANT BROADCAST - Langsung kirim tanpa delay
     doBroadcastInstant(message)
