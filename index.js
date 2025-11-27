@@ -1,4 +1,4 @@
-// index.js - Gold Price Monitor v2.1 with Redis
+// index.js - Gold Price Monitor v2.2 with Redis + Push Notifications + User Auth
 import makeWASocket, {
   DisconnectReason,
   fetchLatestBaileysVersion,
@@ -14,6 +14,17 @@ import { Redis } from '@upstash/redis'
 import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import webpush from 'web-push'
+
+// VAPID Keys untuk Web Push Notifications
+const VAPID_PUBLIC_KEY = 'BPvtMmw2JMUUh55UKWO9cSo014LpHor_JDQSwda_MM_J2psg3SsFhzil22utOe5o8wSsQKv218mEQbrvEwN0U18'
+const VAPID_PRIVATE_KEY = 'KMp0F8Q9gzNWpRP1nBwr6xWbc__wG7LcDE17WNAuiHw'
+
+webpush.setVapidDetails(
+  'mailto:admin@goldmonitor.com',
+  VAPID_PUBLIC_KEY,
+  VAPID_PRIVATE_KEY
+)
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -113,8 +124,14 @@ let cachedMarketData = {
 // ==================== REDIS STORAGE ====================
 const REDIS_KEYS = {
   DAILY_STATS: 'gold:daily_stats',
-  PRICE_HISTORY: 'gold:price_history'
+  PRICE_HISTORY: 'gold:price_history',
+  USERS: 'gold:users',           // Hash: phone -> user data (name, expired, createdAt)
+  PUSH_SUBS: 'gold:push_subs',   // Hash: phone -> push subscription JSON
+  SESSIONS: 'gold:sessions'      // Hash: sessionId -> phone
 }
+
+// Admin password untuk akses admin panel
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'
 
 // Cache lokal untuk mengurangi Redis calls
 let dailyStatsCache = null
@@ -1678,7 +1695,7 @@ const app = express()
 app.use(express.json())
 
 app.get('/', (_req, res) => {
-  res.redirect('/monitoring')
+  res.redirect('/login')
 })
 
 app.get('/health', (_req, res) => {
@@ -1951,12 +1968,12 @@ app.get('/manifest.json', (_req, res) => {
   })
 })
 
-// Service Worker for PWA - v2 dengan cache busting
+// Service Worker for PWA - v4 dengan Push Notifications
 app.get('/sw.js', (_req, res) => {
   res.setHeader('Content-Type', 'application/javascript')
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
   res.send(`
-    const CACHE_VERSION = 'gold-monitor-v3';
+    const CACHE_VERSION = 'gold-monitor-v4';
 
     self.addEventListener('install', (e) => {
       self.skipWaiting();
@@ -1979,7 +1996,7 @@ app.get('/sw.js', (_req, res) => {
 
     self.addEventListener('fetch', (e) => {
       // Jangan cache HTML - selalu fetch fresh
-      if (e.request.mode === 'navigate' || e.request.url.includes('/monitoring')) {
+      if (e.request.mode === 'navigate' || e.request.url.includes('/monitoring') || e.request.url.includes('/login') || e.request.url.includes('/install')) {
         e.respondWith(fetch(e.request));
         return;
       }
@@ -1987,6 +2004,55 @@ app.get('/sw.js', (_req, res) => {
       e.respondWith(
         caches.match(e.request).then((response) => {
           return response || fetch(e.request);
+        })
+      );
+    });
+
+    // Handle Push Notifications
+    self.addEventListener('push', (e) => {
+      let data = { title: 'Gold Price Monitor', body: 'Ada update baru!' };
+
+      if (e.data) {
+        try {
+          data = e.data.json();
+        } catch (err) {
+          data.body = e.data.text();
+        }
+      }
+
+      const options = {
+        body: data.body,
+        icon: data.icon || '/icon.png',
+        badge: data.badge || '/icon.png',
+        vibrate: [200, 100, 200],
+        tag: data.type || 'notification',
+        renotify: true,
+        data: { url: data.url || '/monitoring' }
+      };
+
+      e.waitUntil(
+        self.registration.showNotification(data.title, options)
+      );
+    });
+
+    // Handle notification click
+    self.addEventListener('notificationclick', (e) => {
+      e.notification.close();
+
+      const urlToOpen = e.notification.data?.url || '/monitoring';
+
+      e.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+          // Check if there is already a window open
+          for (let client of windowClients) {
+            if (client.url.includes('/monitoring') && 'focus' in client) {
+              return client.focus();
+            }
+          }
+          // If no window open, open new one
+          if (clients.openWindow) {
+            return clients.openWindow(urlToOpen);
+          }
         })
       );
     });
@@ -2307,9 +2373,1296 @@ app.get('/admin/monitoring', (_req, res) => {
   res.send(html);
 })
 
+// ==================== USER AUTHENTICATION SYSTEM ====================
+
+// Helper: Generate session ID
+function generateSessionId() {
+  return 'sess_' + Math.random().toString(36).substr(2, 9) + Date.now().toString(36)
+}
+
+// Helper: Normalize phone number (remove +62, 62, 0 prefix -> just numbers)
+function normalizePhone(phone) {
+  let clean = phone.replace(/\D/g, '')
+  if (clean.startsWith('62')) clean = clean.substring(2)
+  if (clean.startsWith('0')) clean = clean.substring(1)
+  return clean
+}
+
+// Helper: Check if user is valid (exists and not expired)
+async function isUserValid(phone) {
+  try {
+    const userData = await redis.hget(REDIS_KEYS.USERS, phone)
+    if (!userData) return { valid: false, reason: 'not_found' }
+
+    const user = typeof userData === 'string' ? JSON.parse(userData) : userData
+    const now = Date.now()
+
+    if (user.expired && now > user.expired) {
+      return { valid: false, reason: 'expired', user }
+    }
+
+    return { valid: true, user }
+  } catch (e) {
+    return { valid: false, reason: 'error' }
+  }
+}
+
+// API: Login user
+app.post('/api/login', express.json(), async (req, res) => {
+  const { phone } = req.body
+  if (!phone) return res.json({ success: false, error: 'Nomor WhatsApp wajib diisi' })
+
+  const normalizedPhone = normalizePhone(phone)
+  const check = await isUserValid(normalizedPhone)
+
+  if (!check.valid) {
+    if (check.reason === 'not_found') {
+      return res.json({ success: false, error: 'Nomor tidak terdaftar. Hubungi admin.' })
+    }
+    if (check.reason === 'expired') {
+      return res.json({ success: false, error: 'Akun sudah expired. Hubungi admin untuk perpanjang.' })
+    }
+    return res.json({ success: false, error: 'Terjadi kesalahan' })
+  }
+
+  // Create session
+  const sessionId = generateSessionId()
+  await redis.hset(REDIS_KEYS.SESSIONS, sessionId, normalizedPhone)
+
+  res.json({ success: true, sessionId, user: check.user })
+})
+
+// API: Verify session
+app.get('/api/verify-session', async (req, res) => {
+  const sessionId = req.query.session
+  if (!sessionId) return res.json({ valid: false })
+
+  const phone = await redis.hget(REDIS_KEYS.SESSIONS, sessionId)
+  if (!phone) return res.json({ valid: false })
+
+  const check = await isUserValid(phone)
+  if (!check.valid) return res.json({ valid: false, reason: check.reason })
+
+  res.json({ valid: true, user: check.user, phone })
+})
+
+// API: Logout
+app.post('/api/logout', express.json(), async (req, res) => {
+  const { session } = req.body
+  if (session) {
+    await redis.hdel(REDIS_KEYS.SESSIONS, session)
+  }
+  res.json({ success: true })
+})
+
+// API: Save push subscription
+app.post('/api/push-subscribe', express.json(), async (req, res) => {
+  const { session, subscription } = req.body
+  if (!session || !subscription) return res.json({ success: false })
+
+  const phone = await redis.hget(REDIS_KEYS.SESSIONS, session)
+  if (!phone) return res.json({ success: false, error: 'Invalid session' })
+
+  await redis.hset(REDIS_KEYS.PUSH_SUBS, phone, JSON.stringify(subscription))
+  res.json({ success: true })
+})
+
+// API: Get VAPID public key
+app.get('/api/vapid-public-key', (_req, res) => {
+  res.json({ publicKey: VAPID_PUBLIC_KEY })
+})
+
+// ==================== ADMIN API ====================
+
+// Admin: Get all users
+app.get('/api/admin/users', async (req, res) => {
+  const { password } = req.query
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  try {
+    const users = await redis.hgetall(REDIS_KEYS.USERS)
+    const result = []
+
+    for (const [phone, data] of Object.entries(users || {})) {
+      const user = typeof data === 'string' ? JSON.parse(data) : data
+      const hasPushSub = await redis.hget(REDIS_KEYS.PUSH_SUBS, phone)
+      result.push({
+        phone,
+        ...user,
+        hasPushSubscription: !!hasPushSub
+      })
+    }
+
+    res.json({ success: true, users: result })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
+// Admin: Add user
+app.post('/api/admin/users', express.json(), async (req, res) => {
+  const { password, phone, name, expiredDays } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  if (!phone) return res.json({ success: false, error: 'Nomor WA wajib diisi' })
+
+  const normalizedPhone = normalizePhone(phone)
+  const now = Date.now()
+  const expired = expiredDays ? now + (expiredDays * 24 * 60 * 60 * 1000) : null
+
+  const userData = {
+    name: name || 'User ' + normalizedPhone,
+    createdAt: now,
+    expired: expired
+  }
+
+  await redis.hset(REDIS_KEYS.USERS, normalizedPhone, JSON.stringify(userData))
+
+  res.json({ success: true, user: { phone: normalizedPhone, ...userData } })
+})
+
+// Admin: Update user
+app.put('/api/admin/users', express.json(), async (req, res) => {
+  const { password, phone, name, expiredDays, addDays } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  const normalizedPhone = normalizePhone(phone)
+  const existing = await redis.hget(REDIS_KEYS.USERS, normalizedPhone)
+
+  if (!existing) return res.json({ success: false, error: 'User tidak ditemukan' })
+
+  const user = typeof existing === 'string' ? JSON.parse(existing) : existing
+
+  if (name) user.name = name
+
+  if (expiredDays !== undefined) {
+    user.expired = expiredDays ? Date.now() + (expiredDays * 24 * 60 * 60 * 1000) : null
+  }
+
+  if (addDays) {
+    const base = user.expired && user.expired > Date.now() ? user.expired : Date.now()
+    user.expired = base + (addDays * 24 * 60 * 60 * 1000)
+  }
+
+  await redis.hset(REDIS_KEYS.USERS, normalizedPhone, JSON.stringify(user))
+
+  res.json({ success: true, user: { phone: normalizedPhone, ...user } })
+})
+
+// Admin: Delete user
+app.delete('/api/admin/users', express.json(), async (req, res) => {
+  const { password, phone } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  const normalizedPhone = normalizePhone(phone)
+
+  await Promise.all([
+    redis.hdel(REDIS_KEYS.USERS, normalizedPhone),
+    redis.hdel(REDIS_KEYS.PUSH_SUBS, normalizedPhone)
+  ])
+
+  // Remove all sessions for this user
+  const sessions = await redis.hgetall(REDIS_KEYS.SESSIONS)
+  for (const [sessId, sessPhone] of Object.entries(sessions || {})) {
+    if (sessPhone === normalizedPhone) {
+      await redis.hdel(REDIS_KEYS.SESSIONS, sessId)
+    }
+  }
+
+  res.json({ success: true })
+})
+
+// Admin: Send push notification
+app.post('/api/admin/push', express.json(), async (req, res) => {
+  const { password, title, message, phone, type = 'info' } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  if (!title || !message) return res.json({ success: false, error: 'Title dan message wajib' })
+
+  const payload = JSON.stringify({
+    title,
+    body: message,
+    icon: '/icon.png',
+    badge: '/icon.png',
+    type,
+    url: '/monitoring'
+  })
+
+  let sent = 0
+  let failed = 0
+
+  try {
+    if (phone) {
+      // Send to specific user
+      const normalizedPhone = normalizePhone(phone)
+      const subData = await redis.hget(REDIS_KEYS.PUSH_SUBS, normalizedPhone)
+      if (subData) {
+        const subscription = typeof subData === 'string' ? JSON.parse(subData) : subData
+        try {
+          await webpush.sendNotification(subscription, payload)
+          sent++
+        } catch (e) {
+          failed++
+          if (e.statusCode === 410) {
+            await redis.hdel(REDIS_KEYS.PUSH_SUBS, normalizedPhone)
+          }
+        }
+      }
+    } else {
+      // Send to all users
+      const allSubs = await redis.hgetall(REDIS_KEYS.PUSH_SUBS)
+      for (const [userPhone, subData] of Object.entries(allSubs || {})) {
+        const subscription = typeof subData === 'string' ? JSON.parse(subData) : subData
+        try {
+          await webpush.sendNotification(subscription, payload)
+          sent++
+        } catch (e) {
+          failed++
+          if (e.statusCode === 410) {
+            await redis.hdel(REDIS_KEYS.PUSH_SUBS, userPhone)
+          }
+        }
+      }
+    }
+
+    // Also broadcast via SSE
+    broadcastSSE({ type: 'notification', notifType: type, title, message, time: new Date().toISOString() })
+
+    res.json({ success: true, sent, failed })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
+// ==================== LOGIN PAGE ====================
+app.get('/login', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0f1419">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icon.png">
+  <title>Login - Gold Price Monitor</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: linear-gradient(135deg, #0f1419 0%, #1a1f26 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      color: #e7e9ea;
+    }
+    .login-container {
+      width: 100%;
+      max-width: 400px;
+    }
+    .login-card {
+      background: rgba(26, 31, 38, 0.95);
+      border-radius: 20px;
+      padding: 40px 30px;
+      border: 1px solid #2f3640;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .logo {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .logo img {
+      width: 80px;
+      height: 80px;
+      border-radius: 20px;
+    }
+    .logo h1 {
+      color: #f7931a;
+      font-size: 1.5em;
+      margin-top: 15px;
+    }
+    .logo p {
+      color: #71767b;
+      font-size: 0.9em;
+      margin-top: 5px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-group label {
+      display: block;
+      color: #71767b;
+      font-size: 0.85em;
+      margin-bottom: 8px;
+    }
+    .input-wrapper {
+      position: relative;
+    }
+    .input-wrapper .prefix {
+      position: absolute;
+      left: 15px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #71767b;
+      font-size: 1em;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 15px 15px 15px 50px;
+      border: 2px solid #2f3640;
+      border-radius: 12px;
+      background: #0f1419;
+      color: #e7e9ea;
+      font-size: 1.1em;
+      transition: border-color 0.2s;
+    }
+    .form-group input:focus {
+      outline: none;
+      border-color: #f7931a;
+    }
+    .form-group input::placeholder {
+      color: #555;
+    }
+    .btn {
+      width: 100%;
+      padding: 15px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.1em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #f7931a 0%, #ff6b00 100%);
+      color: white;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(247,147,26,0.3);
+    }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .error-msg {
+      background: rgba(255,68,68,0.1);
+      border: 1px solid #ff4444;
+      color: #ff4444;
+      padding: 12px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      font-size: 0.9em;
+      display: none;
+    }
+    .error-msg.show { display: block; }
+    .footer-text {
+      text-align: center;
+      margin-top: 20px;
+      color: #71767b;
+      font-size: 0.8em;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-card">
+      <div class="logo">
+        <img src="/icon.png" alt="Gold Monitor">
+        <h1>Gold Price Monitor</h1>
+        <p>Masuk dengan nomor WhatsApp</p>
+      </div>
+
+      <div class="error-msg" id="errorMsg"></div>
+
+      <form id="loginForm">
+        <div class="form-group">
+          <label>Nomor WhatsApp</label>
+          <div class="input-wrapper">
+            <span class="prefix">+62</span>
+            <input type="tel" id="phone" placeholder="812xxxxxxxx" required pattern="[0-9]{9,13}" inputmode="numeric">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="loginBtn">Masuk</button>
+      </form>
+
+      <p class="footer-text">Hubungi admin jika belum punya akun</p>
+    </div>
+  </div>
+
+  <script>
+    // Check existing session
+    const existingSession = localStorage.getItem('goldmonitor_session');
+    if (existingSession) {
+      fetch('/api/verify-session?session=' + existingSession)
+        .then(r => r.json())
+        .then(data => {
+          if (data.valid) {
+            window.location.href = '/monitoring';
+          }
+        });
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const phone = document.getElementById('phone').value.trim();
+      const btn = document.getElementById('loginBtn');
+      const errorMsg = document.getElementById('errorMsg');
+
+      btn.disabled = true;
+      btn.textContent = 'Memproses...';
+      errorMsg.classList.remove('show');
+
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: '62' + phone })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          localStorage.setItem('goldmonitor_session', data.sessionId);
+          localStorage.setItem('goldmonitor_user', JSON.stringify(data.user));
+          window.location.href = '/install-pwa';
+        } else {
+          errorMsg.textContent = data.error;
+          errorMsg.classList.add('show');
+        }
+      } catch (err) {
+        errorMsg.textContent = 'Terjadi kesalahan. Coba lagi.';
+        errorMsg.classList.add('show');
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Masuk';
+    });
+  </script>
+</body>
+</html>`;
+  res.send(html);
+})
+
+// ==================== INSTALL PWA PAGE ====================
+app.get('/install-pwa', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0f1419">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icon.png">
+  <title>Install App - Gold Price Monitor</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: linear-gradient(135deg, #0f1419 0%, #1a1f26 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      color: #e7e9ea;
+    }
+    .container {
+      width: 100%;
+      max-width: 450px;
+      text-align: center;
+    }
+    .card {
+      background: rgba(26, 31, 38, 0.95);
+      border-radius: 20px;
+      padding: 40px 30px;
+      border: 1px solid #2f3640;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .icon {
+      width: 100px;
+      height: 100px;
+      margin: 0 auto 25px;
+      border-radius: 25px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(247,147,26,0.3);
+    }
+    .icon img { width: 100%; height: 100%; }
+    h1 {
+      color: #f7931a;
+      font-size: 1.5em;
+      margin-bottom: 10px;
+    }
+    .subtitle {
+      color: #71767b;
+      font-size: 0.95em;
+      margin-bottom: 30px;
+      line-height: 1.5;
+    }
+    .steps {
+      text-align: left;
+      margin-bottom: 30px;
+    }
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 15px;
+      padding: 15px;
+      background: #0f1419;
+      border-radius: 12px;
+      margin-bottom: 10px;
+    }
+    .step-num {
+      width: 30px;
+      height: 30px;
+      background: linear-gradient(135deg, #f7931a 0%, #ff6b00 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 0.9em;
+      flex-shrink: 0;
+    }
+    .step-text {
+      color: #e7e9ea;
+      font-size: 0.9em;
+      line-height: 1.4;
+    }
+    .step-text strong { color: #f7931a; }
+    .btn {
+      width: 100%;
+      padding: 15px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.1em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 10px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #f7931a 0%, #ff6b00 100%);
+      color: white;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(247,147,26,0.3);
+    }
+    .btn-secondary {
+      background: #2f3640;
+      color: #e7e9ea;
+    }
+    .btn-secondary:hover {
+      background: #3f4650;
+    }
+    .installed-msg {
+      display: none;
+      background: rgba(0,255,136,0.1);
+      border: 1px solid #00ff88;
+      color: #00ff88;
+      padding: 15px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+    }
+    .installed-msg.show { display: block; }
+    .skip-link {
+      color: #71767b;
+      font-size: 0.85em;
+      margin-top: 15px;
+      display: none;
+    }
+    .skip-link a { color: #f7931a; text-decoration: none; }
+    .android-steps, .ios-steps { display: none; }
+    .android-steps.show, .ios-steps.show { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="icon">
+        <img src="/icon.png" alt="Gold Monitor">
+      </div>
+      <h1>Install Aplikasi</h1>
+      <p class="subtitle">Install Gold Price Monitor untuk pengalaman terbaik dan menerima notifikasi harga emas real-time</p>
+
+      <div class="installed-msg" id="installedMsg">
+        Aplikasi sudah terinstall! Klik tombol di bawah untuk lanjut.
+      </div>
+
+      <div class="steps android-steps" id="androidSteps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-text">Tap tombol <strong>"Install Aplikasi"</strong> di bawah</div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-text">Pilih <strong>"Add to Home Screen"</strong> atau <strong>"Install"</strong></div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-text">Buka aplikasi dari home screen</div>
+        </div>
+      </div>
+
+      <div class="steps ios-steps" id="iosSteps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-text">Tap tombol <strong>Share</strong> di browser (ikon kotak dengan panah)</div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-text">Scroll dan pilih <strong>"Add to Home Screen"</strong></div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-text">Tap <strong>"Add"</strong> untuk konfirmasi</div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="installBtn">Install Aplikasi</button>
+      <button class="btn btn-secondary" id="continueBtn" style="display:none;">Lanjut ke Monitoring</button>
+
+      <p class="skip-link" id="skipLink">Atau <a href="/monitoring">lewati untuk sekarang</a></p>
+    </div>
+  </div>
+
+  <script>
+    // Check session first
+    const session = localStorage.getItem('goldmonitor_session');
+    if (!session) {
+      window.location.href = '/login';
+    }
+
+    let deferredPrompt;
+    const installBtn = document.getElementById('installBtn');
+    const continueBtn = document.getElementById('continueBtn');
+    const installedMsg = document.getElementById('installedMsg');
+    const skipLink = document.getElementById('skipLink');
+
+    // Detect iOS
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isAndroid = /Android/.test(navigator.userAgent);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+    if (isStandalone) {
+      // Already installed
+      installedMsg.classList.add('show');
+      installBtn.style.display = 'none';
+      continueBtn.style.display = 'block';
+      continueBtn.onclick = () => window.location.href = '/monitoring';
+    } else if (isIOS) {
+      document.getElementById('iosSteps').classList.add('show');
+      installBtn.textContent = 'Buka Menu Share';
+      installBtn.onclick = () => {
+        alert('Tap tombol Share di browser Safari, lalu pilih "Add to Home Screen"');
+      };
+      skipLink.style.display = 'block';
+    } else {
+      document.getElementById('androidSteps').classList.add('show');
+
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        installBtn.style.display = 'block';
+      });
+
+      installBtn.onclick = async () => {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          if (outcome === 'accepted') {
+            installedMsg.classList.add('show');
+            installBtn.style.display = 'none';
+            continueBtn.style.display = 'block';
+            continueBtn.onclick = () => window.location.href = '/monitoring';
+          }
+          deferredPrompt = null;
+        } else {
+          alert('Gunakan Chrome/Edge untuk install, atau pilih menu > "Add to Home Screen"');
+        }
+      };
+
+      skipLink.style.display = 'block';
+    }
+
+    window.addEventListener('appinstalled', () => {
+      installedMsg.classList.add('show');
+      installBtn.style.display = 'none';
+      continueBtn.style.display = 'block';
+      continueBtn.onclick = () => window.location.href = '/monitoring';
+    });
+  </script>
+</body>
+</html>`;
+  res.send(html);
+})
+
+// ==================== ADMIN PANEL - USER MANAGEMENT ====================
+app.get('/admin/users', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Kelola User</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0f1419;
+      min-height: 100vh;
+      padding: 20px;
+      color: #e7e9ea;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding: 15px 20px;
+      background: #1a1f26;
+      border-radius: 12px;
+      border: 1px solid #2f3640;
+    }
+    .header h1 { color: #f7931a; font-size: 1.3em; }
+    .header-actions { display: flex; gap: 10px; }
+    .header-actions a {
+      padding: 8px 15px;
+      background: #2f3640;
+      color: #e7e9ea;
+      text-decoration: none;
+      border-radius: 8px;
+      font-size: 0.85em;
+    }
+    .header-actions a:hover { background: #3f4650; }
+
+    .login-form {
+      background: #1a1f26;
+      padding: 30px;
+      border-radius: 12px;
+      border: 1px solid #2f3640;
+      max-width: 400px;
+      margin: 50px auto;
+    }
+    .login-form h2 { text-align: center; margin-bottom: 20px; color: #f7931a; }
+
+    .card {
+      background: #1a1f26;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid #2f3640;
+    }
+    .card h2 {
+      color: #e7e9ea;
+      font-size: 1.1em;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #2f3640;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    .form-group { margin-bottom: 10px; }
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      color: #71767b;
+      font-size: 0.85em;
+    }
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #2f3640;
+      border-radius: 8px;
+      background: #0f1419;
+      color: #e7e9ea;
+      font-size: 0.95em;
+    }
+    .form-group input:focus { outline: none; border-color: #f7931a; }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95em;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #f7931a 0%, #ff6b00 100%);
+      color: white;
+    }
+    .btn-primary:hover { transform: translateY(-1px); }
+    .btn-danger { background: #ff4444; color: white; }
+    .btn-danger:hover { background: #ff6666; }
+    .btn-sm { padding: 6px 12px; font-size: 0.8em; }
+
+    .user-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .user-table th, .user-table td {
+      padding: 12px 10px;
+      text-align: left;
+      border-bottom: 1px solid #2f3640;
+    }
+    .user-table th {
+      color: #71767b;
+      font-size: 0.8em;
+      text-transform: uppercase;
+    }
+    .user-table tr:hover { background: rgba(247,147,26,0.05); }
+
+    .status-badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75em;
+      font-weight: 600;
+    }
+    .status-active { background: rgba(0,255,136,0.2); color: #00ff88; }
+    .status-expired { background: rgba(255,68,68,0.2); color: #ff4444; }
+    .status-lifetime { background: rgba(247,147,26,0.2); color: #f7931a; }
+
+    .push-badge {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .push-yes { background: #00ff88; }
+    .push-no { background: #ff4444; }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: #1a1f26;
+      padding: 20px;
+      border-radius: 12px;
+      text-align: center;
+      border: 1px solid #2f3640;
+    }
+    .stat-value { font-size: 2em; font-weight: bold; color: #f7931a; }
+    .stat-label { color: #71767b; font-size: 0.85em; margin-top: 5px; }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .modal.show { display: flex; }
+    .modal-content {
+      background: #1a1f26;
+      padding: 25px;
+      border-radius: 15px;
+      width: 90%;
+      max-width: 400px;
+      border: 1px solid #2f3640;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .modal-header h3 { color: #f7931a; }
+    .modal-close {
+      background: none;
+      border: none;
+      color: #71767b;
+      font-size: 1.5em;
+      cursor: pointer;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: #71767b;
+    }
+
+    .result-msg {
+      padding: 10px 15px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      display: none;
+    }
+    .result-msg.success { display: block; background: rgba(0,255,136,0.1); border: 1px solid #00ff88; color: #00ff88; }
+    .result-msg.error { display: block; background: rgba(255,68,68,0.1); border: 1px solid #ff4444; color: #ff4444; }
+
+    @media (max-width: 600px) {
+      .user-table { font-size: 0.85em; }
+      .user-table th, .user-table td { padding: 8px 5px; }
+      .stats-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Login Form -->
+    <div class="login-form" id="loginForm">
+      <h2>Admin Login</h2>
+      <div class="form-group">
+        <label>Password Admin</label>
+        <input type="password" id="adminPassword" placeholder="Masukkan password">
+      </div>
+      <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="adminLogin()">Login</button>
+    </div>
+
+    <!-- Main Content (hidden until login) -->
+    <div id="mainContent" style="display:none;">
+      <div class="header">
+        <h1>Kelola User</h1>
+        <div class="header-actions">
+          <a href="/admin/monitoring">Notifikasi</a>
+          <a href="/monitoring" target="_blank">Monitoring</a>
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-value" id="totalUsers">0</div>
+          <div class="stat-label">Total User</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="activeUsers">0</div>
+          <div class="stat-label">User Aktif</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="pushUsers">0</div>
+          <div class="stat-label">Push Enabled</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Tambah User Baru</h2>
+        <div class="result-msg" id="addResult"></div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Nomor WhatsApp</label>
+            <input type="tel" id="newPhone" placeholder="08123456789">
+          </div>
+          <div class="form-group">
+            <label>Nama (opsional)</label>
+            <input type="text" id="newName" placeholder="Nama user">
+          </div>
+          <div class="form-group">
+            <label>Expired (hari)</label>
+            <input type="number" id="newExpired" placeholder="30" min="0">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="addUser()">Tambah User</button>
+        <small style="color:#71767b;margin-left:10px;">Kosongkan expired untuk lifetime</small>
+      </div>
+
+      <div class="card">
+        <h2>Daftar User</h2>
+        <table class="user-table">
+          <thead>
+            <tr>
+              <th>No WA</th>
+              <th>Nama</th>
+              <th>Status</th>
+              <th>Push</th>
+              <th>Expired</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="userList">
+            <tr><td colspan="6" class="empty-state">Memuat data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Modal -->
+  <div class="modal" id="editModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Edit User</h3>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Nomor WhatsApp</label>
+        <input type="text" id="editPhone" readonly style="opacity:0.7;">
+      </div>
+      <div class="form-group">
+        <label>Nama</label>
+        <input type="text" id="editName">
+      </div>
+      <div class="form-group">
+        <label>Tambah Hari</label>
+        <input type="number" id="editAddDays" placeholder="30" min="0">
+      </div>
+      <button class="btn btn-primary" style="width:100%;margin-top:15px;" onclick="saveUser()">Simpan</button>
+    </div>
+  </div>
+
+  <!-- Push Modal -->
+  <div class="modal" id="pushModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Kirim Notifikasi</h3>
+        <button class="modal-close" onclick="closePushModal()">&times;</button>
+      </div>
+      <input type="hidden" id="pushPhone">
+      <div class="form-group">
+        <label>Tipe</label>
+        <select id="pushType">
+          <option value="info">Info</option>
+          <option value="promo">Promo</option>
+          <option value="warning">Warning</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Judul</label>
+        <input type="text" id="pushTitle" placeholder="Judul notifikasi">
+      </div>
+      <div class="form-group">
+        <label>Pesan</label>
+        <input type="text" id="pushMessage" placeholder="Isi pesan">
+      </div>
+      <button class="btn btn-primary" style="width:100%;margin-top:15px;" onclick="sendPush()">Kirim</button>
+    </div>
+  </div>
+
+  <script>
+    let adminPass = '';
+
+    function adminLogin() {
+      adminPass = document.getElementById('adminPassword').value;
+      if (!adminPass) return alert('Password wajib diisi');
+
+      fetch('/api/admin/users?password=' + encodeURIComponent(adminPass))
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'block';
+            localStorage.setItem('admin_pass', adminPass);
+            loadUsers();
+          } else {
+            alert('Password salah');
+          }
+        });
+    }
+
+    // Auto login if saved
+    const savedPass = localStorage.getItem('admin_pass');
+    if (savedPass) {
+      document.getElementById('adminPassword').value = savedPass;
+      adminLogin();
+    }
+
+    function loadUsers() {
+      fetch('/api/admin/users?password=' + encodeURIComponent(adminPass))
+        .then(r => r.json())
+        .then(data => {
+          if (!data.success) return;
+
+          const users = data.users;
+          const now = Date.now();
+
+          let total = users.length;
+          let active = users.filter(u => !u.expired || u.expired > now).length;
+          let push = users.filter(u => u.hasPushSubscription).length;
+
+          document.getElementById('totalUsers').textContent = total;
+          document.getElementById('activeUsers').textContent = active;
+          document.getElementById('pushUsers').textContent = push;
+
+          const tbody = document.getElementById('userList');
+          if (users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Belum ada user</td></tr>';
+            return;
+          }
+
+          tbody.innerHTML = users.map(u => {
+            let status, statusClass;
+            if (!u.expired) {
+              status = 'Lifetime';
+              statusClass = 'status-lifetime';
+            } else if (u.expired > now) {
+              status = 'Aktif';
+              statusClass = 'status-active';
+            } else {
+              status = 'Expired';
+              statusClass = 'status-expired';
+            }
+
+            const expDate = u.expired ? new Date(u.expired).toLocaleDateString('id-ID') : '-';
+
+            return '<tr>' +
+              '<td>+62' + u.phone + '</td>' +
+              '<td>' + (u.name || '-') + '</td>' +
+              '<td><span class="status-badge ' + statusClass + '">' + status + '</span></td>' +
+              '<td><span class="push-badge ' + (u.hasPushSubscription ? 'push-yes' : 'push-no') + '"></span></td>' +
+              '<td>' + expDate + '</td>' +
+              '<td>' +
+                '<button class="btn btn-sm" onclick="editUser(\\'' + u.phone + '\\',\\'' + (u.name||'') + '\\')">Edit</button> ' +
+                '<button class="btn btn-sm" onclick="openPushModal(\\'' + u.phone + '\\')">Push</button> ' +
+                '<button class="btn btn-sm btn-danger" onclick="deleteUser(\\'' + u.phone + '\\')">Hapus</button>' +
+              '</td>' +
+            '</tr>';
+          }).join('');
+        });
+    }
+
+    function addUser() {
+      const phone = document.getElementById('newPhone').value.trim();
+      const name = document.getElementById('newName').value.trim();
+      const expired = document.getElementById('newExpired').value;
+      const result = document.getElementById('addResult');
+
+      if (!phone) return alert('Nomor WA wajib diisi');
+
+      fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPass,
+          phone,
+          name,
+          expiredDays: expired ? parseInt(expired) : null
+        })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          result.className = 'result-msg success';
+          result.textContent = 'User berhasil ditambahkan!';
+          document.getElementById('newPhone').value = '';
+          document.getElementById('newName').value = '';
+          document.getElementById('newExpired').value = '';
+          loadUsers();
+        } else {
+          result.className = 'result-msg error';
+          result.textContent = data.error;
+        }
+        setTimeout(() => result.className = 'result-msg', 3000);
+      });
+    }
+
+    function editUser(phone, name) {
+      document.getElementById('editPhone').value = phone;
+      document.getElementById('editName').value = name;
+      document.getElementById('editAddDays').value = '';
+      document.getElementById('editModal').classList.add('show');
+    }
+
+    function closeModal() {
+      document.getElementById('editModal').classList.remove('show');
+    }
+
+    function saveUser() {
+      const phone = document.getElementById('editPhone').value;
+      const name = document.getElementById('editName').value;
+      const addDays = document.getElementById('editAddDays').value;
+
+      fetch('/api/admin/users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPass,
+          phone,
+          name,
+          addDays: addDays ? parseInt(addDays) : null
+        })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          closeModal();
+          loadUsers();
+        } else {
+          alert(data.error);
+        }
+      });
+    }
+
+    function deleteUser(phone) {
+      if (!confirm('Hapus user +62' + phone + '?')) return;
+
+      fetch('/api/admin/users', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass, phone })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) loadUsers();
+        else alert(data.error);
+      });
+    }
+
+    function openPushModal(phone) {
+      document.getElementById('pushPhone').value = phone || '';
+      document.getElementById('pushTitle').value = '';
+      document.getElementById('pushMessage').value = '';
+      document.getElementById('pushModal').classList.add('show');
+    }
+
+    function closePushModal() {
+      document.getElementById('pushModal').classList.remove('show');
+    }
+
+    function sendPush() {
+      const phone = document.getElementById('pushPhone').value;
+      const type = document.getElementById('pushType').value;
+      const title = document.getElementById('pushTitle').value;
+      const message = document.getElementById('pushMessage').value;
+
+      if (!title || !message) return alert('Judul dan pesan wajib diisi');
+
+      fetch('/api/admin/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass, phone: phone || null, type, title, message })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          alert('Notifikasi terkirim ke ' + data.sent + ' user');
+          closePushModal();
+        } else {
+          alert(data.error);
+        }
+      });
+    }
+  </script>
+</body>
+</html>`;
+  res.send(html);
+})
+
 // MONITORING PAGE - Professional Gold Price Dashboard
 app.get('/monitoring', async (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
+  res.setHeader('Pragma', 'no-cache')
   res.setHeader('Pragma', 'no-cache')
   res.setHeader('Expires', '0')
   const html = `<!DOCTYPE html>
@@ -2816,6 +4169,7 @@ app.get('/monitoring', async (_req, res) => {
       <div class="header-right">
         <div class="clock" id="clock">--:--:--</div>
         <div class="date-info" id="dateInfo">Loading...</div>
+        <button onclick="logout()" style="margin-top:5px;padding:4px 10px;background:#ff4444;border:none;border-radius:5px;color:white;font-size:0.7em;cursor:pointer;">Logout</button>
       </div>
     </div>
 
@@ -3145,6 +4499,7 @@ app.get('/monitoring', async (_req, res) => {
 
       if (Notification.permission === 'granted') {
         notifEnabled = true;
+        subscribeToPush(); // Subscribe to push when permission already granted
         return true;
       }
 
@@ -3152,6 +4507,7 @@ app.get('/monitoring', async (_req, res) => {
         const permission = await Notification.requestPermission();
         if (permission === 'granted') {
           notifEnabled = true;
+          subscribeToPush(); // Subscribe to push after permission granted
           return true;
         }
       }
@@ -3237,9 +4593,108 @@ app.get('/monitoring', async (_req, res) => {
       }, 3000);
     }
 
+    // ==================== AUTH CHECK ====================
+    (async function checkAuth() {
+      const session = localStorage.getItem('goldmonitor_session');
+      if (!session) {
+        window.location.href = '/login';
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/verify-session?session=' + session);
+        const data = await res.json();
+        if (!data.valid) {
+          localStorage.removeItem('goldmonitor_session');
+          localStorage.removeItem('goldmonitor_user');
+          window.location.href = '/login';
+          return;
+        }
+        // Display user name if available
+        if (data.user && data.user.name) {
+          const header = document.querySelector('.header-left .subtitle');
+          if (header) header.textContent = 'Welcome, ' + data.user.name;
+        }
+      } catch (e) {
+        // Allow offline access
+        console.log('Auth check failed, allowing offline access');
+      }
+    })();
+
+    // Logout function
+    window.logout = async function() {
+      const session = localStorage.getItem('goldmonitor_session');
+      if (session) {
+        await fetch('/api/logout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session })
+        });
+      }
+      localStorage.removeItem('goldmonitor_session');
+      localStorage.removeItem('goldmonitor_user');
+      window.location.href = '/login';
+    };
+
+    // ==================== PUSH NOTIFICATION SUBSCRIPTION ====================
+    async function subscribeToPush() {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        console.log('Push not supported');
+        return;
+      }
+
+      try {
+        const registration = await navigator.serviceWorker.ready;
+
+        // Get VAPID public key
+        const vapidRes = await fetch('/api/vapid-public-key');
+        const { publicKey } = await vapidRes.json();
+
+        // Convert VAPID key
+        const applicationServerKey = urlBase64ToUint8Array(publicKey);
+
+        // Subscribe
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey
+        });
+
+        // Send to server
+        const session = localStorage.getItem('goldmonitor_session');
+        if (session) {
+          await fetch('/api/push-subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session, subscription })
+          });
+          console.log('Push subscription saved');
+        }
+      } catch (e) {
+        console.log('Push subscription failed:', e);
+      }
+    }
+
+    function urlBase64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const rawData = window.atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      return outputArray;
+    }
+
     // Register Service Worker for PWA
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.register('/sw.js')
+        .then(() => {
+          // Subscribe to push after SW registered
+          if (Notification.permission === 'granted') {
+            subscribeToPush();
+          }
+        })
+        .catch(() => {});
     }
 
     // PWA Install Prompt
