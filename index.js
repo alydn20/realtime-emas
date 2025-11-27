@@ -1267,168 +1267,312 @@ app.get('/calendar', async (_req, res) => {
   }
 })
 
-// 📺 MONITORING PAGE - Real-time dengan JavaScript dan Chart XAU/USD
+// MONITORING PAGE - Professional Gold Price Dashboard
 app.get('/monitoring', async (_req, res) => {
   const html = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>📺 Gold Price Monitor</title>
+  <title>Gold Price Monitor</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+      background: #0f1419;
       min-height: 100vh;
       padding: 20px;
-      color: #fff;
+      color: #e7e9ea;
     }
-    .container { max-width: 900px; margin: 0 auto; }
+    .container { max-width: 1100px; margin: 0 auto; }
+
+    /* Header */
     .header {
-      text-align: center;
-      margin-bottom: 20px;
-      padding: 15px;
-      background: rgba(255,255,255,0.1);
-      border-radius: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding: 20px 24px;
+      background: #1a1f26;
+      border-radius: 12px;
+      border: 1px solid #2f3640;
     }
-    .header h1 { font-size: 1.5em; margin-bottom: 5px; }
+    .header-left h1 {
+      font-size: 1.4em;
+      font-weight: 600;
+      color: #e7e9ea;
+      margin-bottom: 4px;
+    }
+    .header-left .subtitle {
+      font-size: 0.85em;
+      color: #71767b;
+    }
+    .header-right {
+      text-align: right;
+    }
     .clock {
       font-size: 2em;
-      font-weight: bold;
-      color: #ffd700;
-      font-family: 'SF Mono', Monaco, monospace;
-      margin: 10px 0;
+      font-weight: 700;
+      color: #f7931a;
+      font-family: 'SF Mono', 'Consolas', monospace;
+      letter-spacing: 2px;
     }
-    .date-info { font-size: 0.85em; color: #aaa; }
-    .price-grid {
+    .date-info {
+      font-size: 0.8em;
+      color: #71767b;
+      margin-top: 4px;
+    }
+
+    /* Price Cards */
+    .price-section {
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 15px;
-      margin-bottom: 20px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
     }
-    .price-box {
-      background: rgba(255,255,255,0.1);
+    .price-card {
+      background: #1a1f26;
       padding: 20px;
-      border-radius: 15px;
-      text-align: center;
+      border-radius: 12px;
+      border: 1px solid #2f3640;
     }
-    .price-box.buy { border-left: 4px solid #00ff88; }
-    .price-box.sell { border-left: 4px solid #ff6b6b; }
-    .price-box .label { font-size: 0.85em; color: #aaa; margin-bottom: 8px; }
-    .price-box .value { font-size: 1.8em; font-weight: bold; color: #fff; }
-    .price-box .unit { font-size: 0.7em; color: #888; }
-    .market-info {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 15px;
-      margin-bottom: 20px;
+    .price-card .label {
+      font-size: 0.75em;
+      color: #71767b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
     }
-    .market-box {
-      background: rgba(255,255,255,0.05);
-      padding: 15px;
-      border-radius: 10px;
-      text-align: center;
+    .price-card .value {
+      font-size: 1.5em;
+      font-weight: 700;
+      color: #e7e9ea;
     }
-    .market-box .label { font-size: 0.75em; color: #888; margin-bottom: 5px; }
-    .market-box .value { font-size: 1.2em; font-weight: bold; color: #ffd700; }
-    .chart-box {
-      background: #0d1421;
-      border: 1px solid #2a3f5f;
-      border-radius: 15px;
+    .price-card .change {
+      font-size: 0.8em;
+      margin-top: 6px;
+    }
+    .price-card .change.up { color: #00c853; }
+    .price-card .change.down { color: #ff5252; }
+    .price-card.highlight { border-color: #f7931a; }
+    .price-card.highlight .value { color: #f7931a; }
+
+    /* Chart Section */
+    .chart-section {
+      background: #1a1f26;
+      border-radius: 12px;
+      border: 1px solid #2f3640;
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+    .chart-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #2f3640;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .chart-header h2 {
+      font-size: 1em;
+      font-weight: 600;
+      color: #e7e9ea;
+    }
+    .chart-header .live-badge {
+      background: #00c853;
+      color: #fff;
+      font-size: 0.7em;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    /* History Table */
+    .history-section {
+      background: #1a1f26;
+      border-radius: 12px;
+      border: 1px solid #2f3640;
       overflow: hidden;
     }
-    .loading { color: #888; animation: blink 1s infinite; }
-    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-    .updated { animation: flash 0.5s; }
-    @keyframes flash { 0%, 100% { background: transparent; } 50% { background: rgba(255,215,0,0.2); } }
+    .history-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #2f3640;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .history-header h2 {
+      font-size: 1em;
+      font-weight: 600;
+      color: #e7e9ea;
+    }
+    .history-header .count {
+      font-size: 0.8em;
+      color: #71767b;
+    }
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .history-table th {
+      text-align: left;
+      padding: 12px 20px;
+      font-size: 0.75em;
+      color: #71767b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      background: #15191e;
+      font-weight: 600;
+    }
+    .history-table td {
+      padding: 14px 20px;
+      font-size: 0.9em;
+      border-bottom: 1px solid #2f3640;
+      color: #e7e9ea;
+    }
+    .history-table tr:last-child td {
+      border-bottom: none;
+    }
+    .history-table tr:hover {
+      background: rgba(255,255,255,0.02);
+    }
+    .history-table .price-up { color: #00c853; }
+    .history-table .price-down { color: #ff5252; }
+    .history-table .time-col { color: #71767b; font-family: monospace; }
+    .history-table .no-data {
+      text-align: center;
+      color: #71767b;
+      padding: 40px 20px;
+    }
+
+    /* Animations */
+    .updated { animation: highlight 0.6s ease; }
+    @keyframes highlight {
+      0%, 100% { background: transparent; }
+      50% { background: rgba(247, 147, 26, 0.1); }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .price-section { grid-template-columns: repeat(2, 1fr); }
+      .header { flex-direction: column; text-align: center; gap: 16px; }
+      .header-right { text-align: center; }
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>📺 Gold Price Monitor</h1>
-      <div class="clock" id="clock">--:--:--</div>
-      <div class="date-info" id="dateInfo">Loading...</div>
-    </div>
-
-    <div class="price-grid">
-      <div class="price-box buy" id="buyBox">
-        <div class="label">💰 HARGA BELI</div>
-        <div class="value" id="buyPrice"><span class="loading">Loading...</span></div>
-        <div class="unit">per gram</div>
+      <div class="header-left">
+        <h1>Gold Price Monitor</h1>
+        <div class="subtitle">Real-time Treasury Gold Rates</div>
       </div>
-      <div class="price-box sell" id="sellBox">
-        <div class="label">💵 HARGA JUAL</div>
-        <div class="value" id="sellPrice"><span class="loading">Loading...</span></div>
-        <div class="unit">per gram</div>
+      <div class="header-right">
+        <div class="clock" id="clock">--:--:--</div>
+        <div class="date-info" id="dateInfo">Loading...</div>
       </div>
     </div>
 
-    <div class="market-info">
-      <div class="market-box">
-        <div class="label">💱 USD/IDR</div>
+    <div class="price-section">
+      <div class="price-card highlight" id="buyCard">
+        <div class="label">Harga Beli</div>
+        <div class="value" id="buyPrice">-</div>
+        <div class="change" id="buyChange"></div>
+      </div>
+      <div class="price-card highlight" id="sellCard">
+        <div class="label">Harga Jual</div>
+        <div class="value" id="sellPrice">-</div>
+        <div class="change" id="sellChange"></div>
+      </div>
+      <div class="price-card">
+        <div class="label">USD/IDR</div>
         <div class="value" id="usdIdr">-</div>
       </div>
-      <div class="market-box">
-        <div class="label">🥇 XAU/USD</div>
+      <div class="price-card">
+        <div class="label">XAU/USD</div>
         <div class="value" id="xauUsd">-</div>
       </div>
     </div>
 
-    <div class="chart-box">
-      <!-- TradingView Widget with Symbol Info -->
-      <div class="tradingview-widget-container" style="height:550px;">
-        <div id="tv_chart" style="height:100%;"></div>
+    <div class="chart-section">
+      <div class="chart-header">
+        <h2>XAU/USD Chart</h2>
+        <span class="live-badge">Live</span>
+      </div>
+      <div class="tradingview-widget-container">
+        <div id="tv_chart" style="height:450px;"></div>
         <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
         <script type="text/javascript">
         new TradingView.MediumWidget({
           "symbols": [["OANDA:XAUUSD|1"]],
-          "chartOnly": false,
+          "chartOnly": true,
           "width": "100%",
           "height": "100%",
-          "locale": "id",
+          "locale": "en",
           "colorTheme": "dark",
           "autosize": true,
           "showVolume": false,
           "hideDateRanges": false,
-          "hideMarketStatus": false,
-          "hideSymbolLogo": false,
+          "hideMarketStatus": true,
+          "hideSymbolLogo": true,
           "scalePosition": "right",
           "scaleMode": "Normal",
-          "fontFamily": "-apple-system, BlinkMacSystemFont, Trebuchet MS, Roboto, Ubuntu, sans-serif",
+          "fontFamily": "Segoe UI, sans-serif",
           "fontSize": "10",
           "noTimeScale": false,
           "valuesTracking": "1",
           "changeMode": "price-and-percent",
           "chartType": "candlesticks",
-          "container_id": "tv_chart",
-          "dateFormat": "dd MMM yyyy HH:mm"
+          "container_id": "tv_chart"
         });
         </script>
       </div>
+    </div>
+
+    <div class="history-section">
+      <div class="history-header">
+        <h2>Riwayat Perubahan Harga</h2>
+        <span class="count" id="historyCount">0 records</span>
+      </div>
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>Waktu</th>
+            <th>Harga Beli</th>
+            <th>Harga Jual</th>
+            <th>Perubahan</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody">
+          <tr><td colspan="4" class="no-data">Menunggu data...</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
   <script>
     const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-    const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
     let lastBuy = 0;
     let lastSell = 0;
+    let priceHistory = [];
+    const MAX_HISTORY = 20;
 
-    // Format angka ke Rupiah
     function formatRupiah(n) {
-      return 'Rp' + n.toLocaleString('id-ID');
+      return 'Rp ' + n.toLocaleString('id-ID');
     }
 
-    // Update jam dengan detik
+    function formatTime(date) {
+      const h = date.getHours().toString().padStart(2, '0');
+      const m = date.getMinutes().toString().padStart(2, '0');
+      const s = date.getSeconds().toString().padStart(2, '0');
+      return h + ':' + m + ':' + s;
+    }
+
     function updateClock() {
       const now = new Date();
-      const hours = now.getHours().toString().padStart(2, '0');
-      const mins = now.getMinutes().toString().padStart(2, '0');
-      const secs = now.getSeconds().toString().padStart(2, '0');
-      document.getElementById('clock').textContent = hours + ':' + mins + ':' + secs;
+      document.getElementById('clock').textContent = formatTime(now);
       const dayName = days[now.getDay()];
       const date = now.getDate();
       const month = months[now.getMonth()];
@@ -1436,7 +1580,55 @@ app.get('/monitoring', async (_req, res) => {
       document.getElementById('dateInfo').textContent = dayName + ', ' + date + ' ' + month + ' ' + year + ' WIB';
     }
 
-    // Fetch data harga
+    function updateHistory(buy, sell, prevBuy, prevSell) {
+      const now = new Date();
+      const buyChange = buy - prevBuy;
+      const sellChange = sell - prevSell;
+
+      priceHistory.unshift({
+        time: now,
+        buy: buy,
+        sell: sell,
+        buyChange: buyChange,
+        sellChange: sellChange
+      });
+
+      if (priceHistory.length > MAX_HISTORY) {
+        priceHistory.pop();
+      }
+
+      renderHistory();
+    }
+
+    function renderHistory() {
+      const tbody = document.getElementById('historyBody');
+      document.getElementById('historyCount').textContent = priceHistory.length + ' records';
+
+      if (priceHistory.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="no-data">Menunggu data...</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = priceHistory.map((item, idx) => {
+        const timeStr = formatTime(item.time);
+        const buyClass = item.buyChange > 0 ? 'price-up' : (item.buyChange < 0 ? 'price-down' : '');
+        const sellClass = item.sellChange > 0 ? 'price-up' : (item.sellChange < 0 ? 'price-down' : '');
+
+        let changeText = '-';
+        if (item.buyChange !== 0) {
+          const sign = item.buyChange > 0 ? '+' : '';
+          changeText = '<span class="' + buyClass + '">' + sign + item.buyChange.toLocaleString('id-ID') + '</span>';
+        }
+
+        return '<tr' + (idx === 0 ? ' class="updated"' : '') + '>' +
+          '<td class="time-col">' + timeStr + '</td>' +
+          '<td>' + formatRupiah(item.buy) + '</td>' +
+          '<td>' + formatRupiah(item.sell) + '</td>' +
+          '<td>' + changeText + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
     let isFetching = false;
     async function fetchPrices() {
       if (isFetching) return;
@@ -1445,29 +1637,38 @@ app.get('/monitoring', async (_req, res) => {
         const res = await fetch('/monitoring/api', { cache: 'no-store' });
         const data = await res.json();
 
-        // Update harga beli
         if (data.buy) {
           document.getElementById('buyPrice').textContent = formatRupiah(data.buy);
           if (data.buy !== lastBuy && lastBuy > 0) {
-            document.getElementById('buyBox').classList.add('updated');
-            setTimeout(() => document.getElementById('buyBox').classList.remove('updated'), 500);
+            const change = data.buy - lastBuy;
+            const sign = change > 0 ? '+' : '';
+            const cls = change > 0 ? 'up' : 'down';
+            document.getElementById('buyChange').textContent = sign + change.toLocaleString('id-ID');
+            document.getElementById('buyChange').className = 'change ' + cls;
+            document.getElementById('buyCard').classList.add('updated');
+            setTimeout(() => document.getElementById('buyCard').classList.remove('updated'), 600);
+
+            updateHistory(data.buy, data.sell, lastBuy, lastSell);
           }
           lastBuy = data.buy;
         }
 
-        // Update harga jual
         if (data.sell) {
           document.getElementById('sellPrice').textContent = formatRupiah(data.sell);
           if (data.sell !== lastSell && lastSell > 0) {
-            document.getElementById('sellBox').classList.add('updated');
-            setTimeout(() => document.getElementById('sellBox').classList.remove('updated'), 500);
+            const change = data.sell - lastSell;
+            const sign = change > 0 ? '+' : '';
+            const cls = change > 0 ? 'up' : 'down';
+            document.getElementById('sellChange').textContent = sign + change.toLocaleString('id-ID');
+            document.getElementById('sellChange').className = 'change ' + cls;
+            document.getElementById('sellCard').classList.add('updated');
+            setTimeout(() => document.getElementById('sellCard').classList.remove('updated'), 600);
           }
           lastSell = data.sell;
         }
 
-        // Update market info
         if (data.usdIdr) {
-          document.getElementById('usdIdr').textContent = 'Rp' + Math.round(data.usdIdr).toLocaleString('id-ID');
+          document.getElementById('usdIdr').textContent = 'Rp ' + Math.round(data.usdIdr).toLocaleString('id-ID');
         }
         if (data.xauUsd) {
           document.getElementById('xauUsd').textContent = '$' + data.xauUsd.toFixed(2);
@@ -1479,15 +1680,11 @@ app.get('/monitoring', async (_req, res) => {
       }
     }
 
-    // Initialize
-    setInterval(updateClock, 50);
+    setInterval(updateClock, 100);
     updateClock();
 
-    // Fetch harga setiap 1 detik
     setInterval(fetchPrices, 1000);
     fetchPrices();
-
-    console.log('📺 Gold Price Monitor - Real-time');
   </script>
 </body>
 </html>`
