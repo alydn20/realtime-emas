@@ -128,7 +128,8 @@ const REDIS_KEYS = {
   USERS: 'gold:users',           // Hash: phone -> user data (name, expired, createdAt)
   PUSH_SUBS: 'gold:push_subs',   // Hash: phone -> push subscription JSON
   SESSIONS: 'gold:sessions',     // Hash: sessionId -> phone
-  WA_GROUP_ID: 'gold:wa_group_id' // String: ID grup WA yang di-monitor
+  WA_GROUP_ID: 'gold:wa_group_id', // String: ID grup WA yang di-monitor
+  WA_AUTH: 'gold:wa_auth'        // Hash: key -> auth data (creds, keys) for persistent WA session
 }
 
 // Admin password untuk akses admin panel
@@ -136,6 +137,89 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'
 
 // ID Grup WhatsApp yang membernya otomatis terdaftar (di-set via admin panel)
 let monitoredGroupId = null
+
+// ==================== REDIS AUTH STATE (Persistent WA Session) ====================
+async function useRedisAuthState() {
+  const writeData = async (key, data) => {
+    try {
+      await redis.hset(REDIS_KEYS.WA_AUTH, key, JSON.stringify(data))
+    } catch (e) {
+      console.error('Redis auth write error:', e.message)
+    }
+  }
+
+  const readData = async (key) => {
+    try {
+      const data = await redis.hget(REDIS_KEYS.WA_AUTH, key)
+      if (!data) return null
+      return typeof data === 'string' ? JSON.parse(data) : data
+    } catch (e) {
+      console.error('Redis auth read error:', e.message)
+      return null
+    }
+  }
+
+  const removeData = async (key) => {
+    try {
+      await redis.hdel(REDIS_KEYS.WA_AUTH, key)
+    } catch (e) {
+      console.error('Redis auth delete error:', e.message)
+    }
+  }
+
+  // Load creds
+  const creds = await readData('creds') || {}
+
+  // Load keys
+  const keys = {}
+
+  return {
+    state: {
+      creds,
+      keys: {
+        get: async (type, ids) => {
+          const data = {}
+          for (const id of ids) {
+            const value = await readData(`${type}-${id}`)
+            if (value) {
+              if (type === 'app-state-sync-key') {
+                data[id] = { keyData: value.keyData ? Buffer.from(value.keyData) : value }
+              } else {
+                data[id] = value
+              }
+            }
+          }
+          return data
+        },
+        set: async (data) => {
+          for (const [category, entries] of Object.entries(data)) {
+            for (const [id, value] of Object.entries(entries || {})) {
+              const key = `${category}-${id}`
+              if (value) {
+                await writeData(key, value)
+              } else {
+                await removeData(key)
+              }
+            }
+          }
+        }
+      }
+    },
+    saveCreds: async () => {
+      await writeData('creds', creds)
+    }
+  }
+}
+
+// Clear WA auth from Redis
+async function clearRedisAuth() {
+  try {
+    await redis.del(REDIS_KEYS.WA_AUTH)
+    pushLog('WA | Redis auth cleared')
+  } catch (e) {
+    pushLog('WA | Failed to clear Redis auth: ' + e.message)
+  }
+}
 
 // Load grup ID dari Redis saat startup
 async function loadMonitoredGroup() {
@@ -1889,14 +1973,17 @@ app.get('/qr-reset', async (req, res) => {
     isReady = false
     lastQr = null
 
-    // Delete auth folder
+    // Clear Redis auth (persistent session)
+    await clearRedisAuth()
+
+    // Delete local auth folder if exists
     const fs = await import('fs')
     const path = await import('path')
     const authPath = path.join(process.cwd(), 'auth')
 
     if (fs.existsSync(authPath)) {
       fs.rmSync(authPath, { recursive: true, force: true })
-      pushLog('WA | Auth folder deleted')
+      pushLog('WA | Local auth folder deleted')
     }
 
     // Restart connection
@@ -5551,8 +5638,11 @@ async function start() {
   await loadFromRedis()
   await loadMonitoredGroup()
 
-  const { state, saveCreds } = await useMultiFileAuthState('./auth')
+  // Use Redis-based auth state for persistent sessions across rebuilds
+  const { state, saveCreds } = await useRedisAuthState()
   const { version } = await fetchLatestBaileysVersion()
+
+  pushLog('WA | Using Redis auth state (persistent)')
 
   sock = makeWASocket({
     version,
