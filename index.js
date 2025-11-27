@@ -1606,9 +1606,10 @@ app.get('/monitoring', async (_req, res) => {
       document.getElementById('dateInfo').textContent = dayName + ', ' + date + ' ' + month + ' ' + year + ' WIB';
     }
 
-    function updateHistory(buy, sell, prevBuy, prevSell) {
-      const now = new Date();
-      const currentMinute = now.getHours() * 60 + now.getMinutes();
+    function updateHistory(buy, sell, prevBuy, prevSell, updatedAt) {
+      // Gunakan waktu dari API Treasury, bukan waktu browser
+      const apiTime = updatedAt ? new Date(updatedAt) : new Date();
+      const currentMinute = apiTime.getHours() * 60 + apiTime.getMinutes();
 
       // Hanya catat 1x per menit untuk menghindari spam dari fluktuasi API
       if (currentMinute === lastHistoryMinute) {
@@ -1620,7 +1621,7 @@ app.get('/monitoring', async (_req, res) => {
       const sellChange = sell - prevSell;
 
       priceHistory.unshift({
-        time: now,
+        time: apiTime,
         buy: buy,
         sell: sell,
         buyChange: buyChange,
@@ -1717,7 +1718,7 @@ app.get('/monitoring', async (_req, res) => {
             document.getElementById('buyCard').classList.add('updated');
             setTimeout(() => document.getElementById('buyCard').classList.remove('updated'), 600);
 
-            updateHistory(data.buy, data.sell, lastBuy, lastSell);
+            updateHistory(data.buy, data.sell, lastBuy, lastSell, data.updatedAt);
           }
           lastBuy = data.buy;
         }
@@ -1806,6 +1807,7 @@ app.get('/monitoring/api', async (_req, res) => {
     xauUsd: cachedMarketData.xauUsd,
     buy,
     sell,
+    updatedAt,
     message: currentMessage,
     logs: logs.slice(-10)
   })
