@@ -1551,9 +1551,7 @@ app.get('/monitoring', async (_req, res) => {
           "hotlist": true,
           "calendar": true,
           "studies": [
-            "MASimple@tv-basicstudies",
-            "RSI@tv-basicstudies",
-            "MACD@tv-basicstudies"
+            "MASimple@tv-basicstudies"
           ],
           "support_host": "https://www.tradingview.com"
         });
