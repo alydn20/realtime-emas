@@ -2395,8 +2395,19 @@ app.get('/monitoring', async (_req, res) => {
     updateClock();
 
     // 🚀 SSE (Server-Sent Events) untuk real-time INSTANT update
-    const evtSource = new EventSource('/sse');
+    let evtSource = null;
+    let sseReconnectTimer = null;
+    let lastDataTime = Date.now();
 
+    function connectSSE() {
+      if (evtSource) {
+        evtSource.close();
+      }
+      evtSource = new EventSource('/sse');
+      setupSSEHandlers();
+    }
+
+    function setupSSEHandlers() {
     // Stats untuk evaluasi
     let updateCount = 0;
     let totalDelay = 0;
@@ -2406,6 +2417,7 @@ app.get('/monitoring', async (_req, res) => {
 
     evtSource.onmessage = function(event) {
       try {
+        lastDataTime = Date.now(); // Update waktu terakhir dapat data
         const data = JSON.parse(event.data);
         if (data.type === 'price') {
           const now = new Date();
@@ -2564,11 +2576,36 @@ app.get('/monitoring', async (_req, res) => {
 
     evtSource.onopen = function() {
       console.log('%c✅ SSE Connected - Real-time updates aktif', 'background: #4caf50; color: #fff; padding: 4px 8px; border-radius: 4px;');
+      // Update badge ke Live
+      const badge = document.querySelector('.live-badge');
+      if (badge) {
+        badge.textContent = 'Live';
+        badge.style.background = '#00c853';
+      }
+      lastDataTime = Date.now();
     };
 
     evtSource.onerror = function() {
       console.warn('%c⚠️ SSE Disconnected - Reconnecting...', 'background: #ff9800; color: #000; padding: 4px 8px; border-radius: 4px;');
+      // Update badge ke Reconnecting
+      const badge = document.querySelector('.live-badge');
+      if (badge) {
+        badge.textContent = 'Reconnecting...';
+        badge.style.background = '#ff9800';
+      }
     };
+    } // end setupSSEHandlers
+
+    // Start SSE connection
+    connectSSE();
+
+    // Check jika tidak ada data selama 60 detik, reconnect
+    setInterval(function() {
+      if (Date.now() - lastDataTime > 60000) {
+        console.warn('%c🔄 No data for 60s, reconnecting SSE...', 'background: #ff5722; color: #fff; padding: 4px 8px; border-radius: 4px;');
+        connectSSE();
+      }
+    }, 10000);
 
     // Fallback: Fetch sekali saat load untuk data awal
     fetchPrices();
