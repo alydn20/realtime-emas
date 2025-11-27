@@ -1952,7 +1952,7 @@ app.get('/admin-login', (req, res) => {
       color: #71767b;
       text-align: center;
       margin-bottom: 30px;
-      font-size: 0.9em;
+      font-size: 0.7em;
     }
     .form-group {
       margin-bottom: 20px;
@@ -1961,7 +1961,7 @@ app.get('/admin-login', (req, res) => {
       display: block;
       color: #71767b;
       margin-bottom: 8px;
-      font-size: 0.9em;
+      font-size: 0.7em;
     }
     input {
       width: 100%;
@@ -1983,7 +1983,7 @@ app.get('/admin-login', (req, res) => {
       color: white;
       border: none;
       border-radius: 10px;
-      font-size: 1em;
+      font-size: 0.8em;
       font-weight: 600;
       cursor: pointer;
       transition: transform 0.2s;
@@ -2649,7 +2649,7 @@ ${authScript}
       font-size: 1.5em;
       margin-bottom: 5px;
     }
-    .header p { color: #71767b; font-size: 0.9em; }
+    .header p { color: #71767b; font-size: 0.7em; }
 
     .stats-bar {
       display: flex;
@@ -2684,7 +2684,7 @@ ${authScript}
       display: block;
       margin-bottom: 5px;
       color: #71767b;
-      font-size: 1em;
+      font-size: 0.8em;
     }
     .form-group input, .form-group textarea, .form-group select {
       width: 100%;
@@ -2693,7 +2693,7 @@ ${authScript}
       border-radius: 8px;
       background: #0f1419;
       color: #e7e9ea;
-      font-size: 1em;
+      font-size: 0.8em;
     }
     .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
       outline: none;
@@ -2726,7 +2726,7 @@ ${authScript}
       padding: 15px;
       border: none;
       border-radius: 10px;
-      font-size: 1em;
+      font-size: 0.8em;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s;
@@ -2757,7 +2757,7 @@ ${authScript}
     }
     .history-item .time { font-size: 0.75em; color: #71767b; }
     .history-item .title { font-weight: 600; color: #e7e9ea; }
-    .history-item .message { font-size: 0.9em; color: #71767b; margin-top: 3px; }
+    .history-item .message { font-size: 0.7em; color: #71767b; margin-top: 3px; }
     .history-item.promo { border-left-color: #00ff88; }
     .history-item.warning { border-left-color: #ffaa00; }
     .history-item.urgent { border-left-color: #ff4444; }
@@ -3816,7 +3816,7 @@ app.get('/login', (_req, res) => {
     }
     .subtitle {
       color: #71767b;
-      font-size: 0.9em;
+      font-size: 0.7em;
       margin-bottom: 25px;
       line-height: 1.4;
     }
@@ -3827,7 +3827,7 @@ app.get('/login', (_req, res) => {
     .form-group label {
       display: block;
       color: #71767b;
-      font-size: 1.05em;
+      font-size: 0.85em;
       margin-bottom: 8px;
     }
     .form-group input {
@@ -3837,7 +3837,7 @@ app.get('/login', (_req, res) => {
       border-radius: 12px;
       background: #0f1419;
       color: #e7e9ea;
-      font-size: 1em;
+      font-size: 0.8em;
       transition: border-color 0.2s;
     }
     .form-group input:focus {
@@ -3852,7 +3852,7 @@ app.get('/login', (_req, res) => {
       padding: 14px;
       border: none;
       border-radius: 12px;
-      font-size: 1em;
+      font-size: 0.8em;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s;
@@ -3874,7 +3874,7 @@ app.get('/login', (_req, res) => {
       padding: 12px;
       border-radius: 10px;
       margin-bottom: 15px;
-      font-size: 0.9em;
+      font-size: 0.7em;
       display: none;
     }
     .message.error {
@@ -3934,14 +3934,14 @@ app.get('/login', (_req, res) => {
     }
     .wait-msg.show { display: block; }
     .wait-msg h3 { color: #f7931a; margin-bottom: 10px; }
-    .wait-msg p { color: #71767b; font-size: 0.9em; line-height: 1.5; }
+    .wait-msg p { color: #71767b; font-size: 0.7em; line-height: 1.5; }
     .wa-icon { font-size: 40px; margin-bottom: 10px; }
     .resend-btn {
       background: none;
       border: none;
       color: #f7931a;
       cursor: pointer;
-      font-size: 0.9em;
+      font-size: 0.7em;
       margin-top: 15px;
       text-decoration: underline;
     }
@@ -4347,7 +4347,7 @@ ${authScript}
       color: #e7e9ea;
       text-decoration: none;
       border-radius: 8px;
-      font-size: 1.05em;
+      font-size: 0.85em;
     }
     .header-actions a:hover { background: #3f4650; }
 
@@ -4387,7 +4387,7 @@ ${authScript}
       display: block;
       margin-bottom: 5px;
       color: #71767b;
-      font-size: 1.05em;
+      font-size: 0.85em;
     }
     .form-group input, .form-group select {
       width: 100%;
@@ -4404,7 +4404,7 @@ ${authScript}
       padding: 10px 20px;
       border: none;
       border-radius: 8px;
-      font-size: 1.6em;
+      font-size: 1.2em;
       cursor: pointer;
       transition: all 0.2s;
     }
@@ -4415,7 +4415,7 @@ ${authScript}
     .btn-primary:hover { transform: translateY(-1px); }
     .btn-danger { background: #ff4444; color: white; }
     .btn-danger:hover { background: #ff6666; }
-    .btn-sm { padding: 6px 12px; font-size: 1.6em; }
+    .btn-sm { padding: 6px 12px; font-size: 1.2em; }
 
     .user-table {
       width: 100%;
@@ -4428,7 +4428,7 @@ ${authScript}
     }
     .user-table th {
       color: #71767b;
-      font-size: 1em;
+      font-size: 0.8em;
       text-transform: uppercase;
     }
     .user-table tr:hover { background: rgba(247,147,26,0.05); }
@@ -4467,7 +4467,7 @@ ${authScript}
       border: 1px solid #2f3640;
     }
     .stat-value { font-size: 2em; font-weight: bold; color: #f7931a; }
-    .stat-label { color: #71767b; font-size: 1.05em; margin-top: 5px; }
+    .stat-label { color: #71767b; font-size: 0.85em; margin-top: 5px; }
 
     .modal {
       display: none;
@@ -4521,7 +4521,7 @@ ${authScript}
     .result-msg.error { display: block; background: rgba(255,68,68,0.1); border: 1px solid #ff4444; color: #ff4444; }
 
     @media (max-width: 600px) {
-      .user-table { font-size: 1.05em; }
+      .user-table { font-size: 0.85em; }
       .user-table th, .user-table td { padding: 8px 5px; }
       .stats-row { grid-template-columns: 1fr; }
     }
@@ -5431,13 +5431,13 @@ app.get('/monitoring', async (_req, res) => {
       border: 1px solid #2f3640;
     }
     .header-left h1 {
-      font-size: 1.6em;
+      font-size: 1.2em;
       font-weight: 600;
       color: #e7e9ea;
       margin-bottom: 2px;
     }
     .header-left .subtitle {
-      font-size: 1em;
+      font-size: 0.8em;
       color: #71767b;
     }
     .header-right {
@@ -5510,19 +5510,19 @@ app.get('/monitoring', async (_req, res) => {
       border: 1px solid #2f3640;
     }
     .stat-item .stat-label {
-      font-size: 1.05em;
+      font-size: 0.85em;
       color: #71767b;
       text-transform: uppercase;
     }
     .stat-item .stat-value {
-      font-size: 1.05em;
+      font-size: 0.85em;
       font-weight: 600;
       color: #e7e9ea;
     }
     .stat-item .stat-value.green { color: #00c853; }
     .stat-item .stat-value.blue { color: #2196f3; }
     .stat-item .stat-change {
-      font-size: 1.05em;
+      font-size: 0.85em;
       padding: 2px 5px;
       border-radius: 3px;
     }
@@ -5602,12 +5602,12 @@ app.get('/monitoring', async (_req, res) => {
       padding: 3px 8px;
       background: #151920;
       border-radius: 4px;
-      font-size: 1.05em;
+      font-size: 0.85em;
     }
     .daily-item .daily-label {
       color: #71767b;
       text-transform: uppercase;
-      font-size: 1.6em;
+      font-size: 1.2em;
     }
     .daily-item .daily-value {
       color: #e7e9ea;
@@ -5709,7 +5709,7 @@ app.get('/monitoring', async (_req, res) => {
       align-items: center;
     }
     .history-header h2 {
-      font-size: 1.6em;
+      font-size: 1.2em;
       font-weight: 600;
       color: #e7e9ea;
     }
@@ -5725,7 +5725,7 @@ app.get('/monitoring', async (_req, res) => {
     .history-table th {
       text-align: left;
       padding: 10px 8px;
-      font-size: 1.05em;
+      font-size: 0.85em;
       color: #71767b;
       text-transform: uppercase;
       letter-spacing: 0.3px;
@@ -5735,7 +5735,7 @@ app.get('/monitoring', async (_req, res) => {
     }
     .history-table td {
       padding: 10px 8px;
-      font-size: 1.6em;
+      font-size: 1.2em;
       border-bottom: 1px solid #2f3640;
       color: #e7e9ea;
       white-space: nowrap;
@@ -5748,7 +5748,7 @@ app.get('/monitoring', async (_req, res) => {
     }
     .history-table .price-up { color: #00c853; font-weight: 600; }
     .history-table .price-down { color: #ff5252; font-weight: 600; }
-    .history-table .time-col { color: #71767b; font-family: monospace; font-size: 0.75em; }
+    .history-table .time-col { color: #71767b; font-family: monospace; font-size: 0.95em; }
     .history-table .no-data {
       text-align: center;
       color: #71767b;
@@ -5769,12 +5769,12 @@ app.get('/monitoring', async (_req, res) => {
       padding: 8px 16px;
       border-radius: 6px;
       cursor: pointer;
-      font-size: 1.05em;
+      font-size: 0.85em;
       transition: background 0.2s;
     }
     .page-btn:hover:not(:disabled) { background: #3d4654; }
     .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .page-info { color: #71767b; font-size: 1.05em; }
+    .page-info { color: #71767b; font-size: 0.85em; }
 
     /* Animations - color based on price direction */
     .price-card.updated-up {
@@ -5827,23 +5827,23 @@ app.get('/monitoring', async (_req, res) => {
         padding: 14px 16px;
         margin-bottom: 12px;
       }
-      .header-left h1 { font-size: 1.6em; }
+      .header-left h1 { font-size: 1.2em; }
       .header-right { text-align: center; }
-      .clock { font-size: 1.6em; }
+      .clock { font-size: 1.2em; }
       .chart-section { margin-bottom: 12px; border-radius: 10px; }
       .chart-header { padding: 10px 12px; gap: 8px; }
-      .chart-header h2 { font-size: 0.9em; }
+      .chart-header h2 { font-size: 0.7em; }
       .chart-stats { gap: 5px; }
       .stat-item { padding: 4px 8px; gap: 4px; }
       .stat-item .stat-label { font-size: 1.3em; }
       .stat-item .stat-value { font-size: 0.75em; }
-      .stat-item .stat-change { font-size: 1em; padding: 1px 4px; }
+      .stat-item .stat-change { font-size: 0.8em; padding: 1px 4px; }
       .tradingview-widget-container { height: 400px; }
       .history-section { border-radius: 10px; }
       .history-header { padding: 12px 14px; }
-      .history-header h2 { font-size: 0.9em; }
-      .history-table th { padding: 10px 12px; font-size: 1.05em; }
-      .history-table td { padding: 10px 12px; font-size: 1.6em; }
+      .history-header h2 { font-size: 0.7em; }
+      .history-table th { padding: 10px 12px; font-size: 0.85em; }
+      .history-table td { padding: 10px 12px; font-size: 1.2em; }
       .history-pagination { padding: 12px; gap: 10px; }
       .page-btn { padding: 6px 12px; font-size: 1.3em; }
     }
@@ -5856,11 +5856,11 @@ app.get('/monitoring', async (_req, res) => {
         margin-bottom: 8px;
         border-radius: 8px;
       }
-      .header-left h1 { font-size: 1.6em; }
+      .header-left h1 { font-size: 1.2em; }
       .header-left h1 svg { width: 18px; height: 18px; }
-      .header-left .subtitle { font-size: 0.9em; }
+      .header-left .subtitle { font-size: 0.7em; }
       .clock { font-size: 1.3em; letter-spacing: 1px; }
-      .date-info { font-size: 1.05em; }
+      .date-info { font-size: 0.85em; }
 
       .chart-section {
         margin-bottom: 8px;
@@ -5874,7 +5874,7 @@ app.get('/monitoring', async (_req, res) => {
       .chart-stats { gap: 4px; }
       .stat-item { padding: 3px 5px; gap: 3px; border-radius: 4px; }
       .stat-item .stat-label { font-size: 0.55em; }
-      .stat-item .stat-value { font-size: 0.9em; }
+      .stat-item .stat-value { font-size: 0.7em; }
       .stat-item .stat-change { font-size: 0.55em; padding: 1px 3px; border-radius: 2px; }
       .tradingview-widget-container { height: 350px; }
 
@@ -5882,24 +5882,24 @@ app.get('/monitoring', async (_req, res) => {
       .history-header { padding: 10px 12px; }
       .history-header h2 { font-size: 1.3em; }
       .history-header h2 svg { width: 12px; height: 12px; }
-      .history-table th { padding: 8px 10px; font-size: 1em; }
-      .history-table td { padding: 8px 10px; font-size: 0.9em; }
+      .history-table th { padding: 8px 10px; font-size: 0.8em; }
+      .history-table td { padding: 8px 10px; font-size: 0.7em; }
       .history-pagination { padding: 10px; gap: 8px; flex-wrap: wrap; }
       .page-btn { padding: 5px 10px; font-size: 0.75em; }
-      .page-info { font-size: 0.9em; }
+      .page-info { font-size: 0.7em; }
     }
 
     /* Extra small screens */
     @media (max-width: 360px) {
       body { padding: 4px; }
       .header { padding: 8px; margin-bottom: 6px; }
-      .header-left h1 { font-size: 1.05em; }
+      .header-left h1 { font-size: 0.85em; }
       .clock { font-size: 1.1em; }
       .chart-header { padding: 6px 8px; gap: 5px; }
       .chart-header h2 { font-size: 0.75em; }
       .stat-item { padding: 2px 4px; gap: 2px; }
       .stat-item .stat-label { font-size: 0.5em; }
-      .stat-item .stat-value { font-size: 1.05em; }
+      .stat-item .stat-value { font-size: 0.85em; }
       .stat-item .stat-change { font-size: 0.5em; }
       .tradingview-widget-container { height: 280px; }
       .history-table th, .history-table td { padding: 6px 8px; font-size: 1.3em; }
@@ -6171,11 +6171,8 @@ app.get('/monitoring', async (_req, res) => {
     }
 
     function formatRupiahShort(n) {
-      // Format singkat: 2.325.000 -> 2,325jt
-      if (n >= 1000000) {
-        return (n / 1000000).toFixed(3).replace('.', ',') + 'jt';
-      }
-      return n.toLocaleString('id-ID');
+      // Format lengkap: 2.325.000 -> Rp 2.325.000
+      return 'Rp ' + n.toLocaleString('id-ID');
     }
 
     function formatChangeShort(n) {
