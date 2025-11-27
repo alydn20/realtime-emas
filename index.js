@@ -1325,6 +1325,43 @@ async function checkPriceUpdate() {
 // Polling dengan interval tercepat (100ms) untuk test semua
 setInterval(checkPriceUpdate, 100)
 
+// ==================== XAU/USD REAL-TIME ====================
+let lastXauUsdPrice = null
+let isXauFetching = false
+
+async function checkXauUpdate() {
+  if (isXauFetching) return
+  isXauFetching = true
+
+  try {
+    const price = await fetchXAUUSDFromTradingView()
+    if (price && price !== lastXauUsdPrice) {
+      const prevPrice = lastXauUsdPrice
+      lastXauUsdPrice = price
+      cachedMarketData.xauUsd = price
+
+      // Broadcast XAU update via SSE
+      broadcastSSE({
+        type: 'xau',
+        price: price,
+        prevPrice: prevPrice,
+        change: prevPrice ? (price - prevPrice).toFixed(2) : 0,
+        timestamp: new Date().toISOString()
+      })
+
+      console.log(`XAU | $${price.toFixed(2)} (${prevPrice ? (price > prevPrice ? '+' : '') + (price - prevPrice).toFixed(2) : 'initial'})`)
+    }
+  } catch (e) {
+    // Silent fail
+  } finally {
+    isXauFetching = false
+  }
+}
+
+// XAU/USD polling setiap 1 detik
+setInterval(checkXauUpdate, 1000)
+checkXauUpdate() // Initial fetch
+
 // Log initial message
 console.log('\n🔬 SPEED TEST MODE ACTIVE')
 console.log('   Testing intervals:', INTERVALS.join('ms, ') + 'ms')
@@ -2223,6 +2260,41 @@ app.get('/monitoring', async (_req, res) => {
           }
           if (data.xauUsd) {
             document.getElementById('xauUsd').textContent = '$' + data.xauUsd.toFixed(2);
+          }
+        }
+
+        // Handle XAU/USD real-time updates
+        if (data.type === 'xau') {
+          const xauEl = document.getElementById('xauUsd');
+          const xauUpdateEl = document.getElementById('xauUpdate');
+
+          if (data.price) {
+            xauEl.textContent = '$' + data.price.toFixed(2);
+
+            // Show change indicator
+            if (data.prevPrice && data.price !== data.prevPrice) {
+              const change = data.price - data.prevPrice;
+              const sign = change > 0 ? '+' : '';
+              const cls = change > 0 ? 'up' : 'down';
+              xauUpdateEl.textContent = sign + change.toFixed(2);
+              xauUpdateEl.className = 'change ' + cls;
+
+              // Flash animation on XAU card
+              const xauCard = xauEl.closest('.price-card');
+              if (xauCard) {
+                xauCard.classList.remove('updated');
+                void xauCard.offsetWidth;
+                xauCard.classList.add('updated');
+              }
+
+              // Console log
+              console.log(
+                '%c🥇 XAU/USD UPDATE',
+                'background: #ffd700; color: #000; padding: 2px 6px; border-radius: 3px; font-weight: bold;',
+                '$' + data.price.toFixed(2),
+                '(' + sign + change.toFixed(2) + ')'
+              );
+            }
           }
         }
       } catch (e) {
