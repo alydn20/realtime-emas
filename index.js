@@ -3940,12 +3940,10 @@ app.get('/install', (_req, res) => {
       setTimeout(goToMonitoring, 2000);
     }
 
-    // IMMEDIATELY check if running as PWA
+    // ONLY allow access to monitoring if running as PWA (standalone mode)
+    // Browser biasa harus tetap di halaman install
     if (isStandalone) {
-      // Already running as PWA - go directly to monitoring
-      goToMonitoring();
-    } else if (localStorage.getItem('pwa_installed_v2') === 'true') {
-      // Previously installed - go to monitoring
+      // Running as PWA - go directly to monitoring
       goToMonitoring();
     } else if (isIOS) {
       // iOS Safari - must install manually
@@ -5961,16 +5959,15 @@ app.get('/monitoring', async (_req, res) => {
     // Disable right-click
     document.addEventListener('contextmenu', e => e.preventDefault());
 
-    // Check if PWA installed - redirect to install page if not
-    (function checkPwaInstalled() {
+    // HANYA PWA yang bisa akses monitoring - browser biasa harus install dulu
+    (function checkPwaAccess() {
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches
                         || window.navigator.standalone === true
                         || document.referrer.includes('android-app://')
                         || window.matchMedia('(display-mode: fullscreen)').matches;
-      const isInstalled = localStorage.getItem('pwa_installed_v2') === 'true';
 
-      if (!isStandalone && !isInstalled) {
-        // Not installed - redirect to install page
+      if (!isStandalone) {
+        // Browser biasa - redirect ke halaman install
         window.location.href = '/install';
         return;
       }
