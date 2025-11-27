@@ -1897,7 +1897,7 @@ const app = express()
 app.use(express.json())
 
 app.get('/', (_req, res) => {
-  res.redirect('/monitoring')
+  res.redirect('/install-pwa')
 })
 
 app.get('/health', (_req, res) => {
@@ -3897,7 +3897,10 @@ app.get('/install-pwa', (_req, res) => {
       </div>
 
       <button class="btn btn-primary" id="installBtn">Install Aplikasi</button>
-      <button class="btn btn-secondary" id="continueBtn" style="display:none;">Lanjut Login</button>
+      <button class="btn btn-secondary" id="continueBtn" style="display:none;">Lanjut ke Monitoring</button>
+      <p class="notice" id="notice" style="color:#ff6b6b;margin-top:15px;font-size:0.9em;display:none;">
+        Anda harus install aplikasi terlebih dahulu untuk mengakses monitoring harga emas.
+      </p>
     </div>
   </div>
 
@@ -3906,6 +3909,7 @@ app.get('/install-pwa', (_req, res) => {
     const installBtn = document.getElementById('installBtn');
     const continueBtn = document.getElementById('continueBtn');
     const installedMsg = document.getElementById('installedMsg');
+    const notice = document.getElementById('notice');
 
     // Detect platform
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
@@ -3913,41 +3917,44 @@ app.get('/install-pwa', (_req, res) => {
     const isMobile = isIOS || isAndroid;
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
 
-    // Mark as installed
+    // Go to monitoring after install
+    function goToMonitoring() {
+      window.location.href = '/monitoring';
+    }
+
+    // Mark as installed and go to monitoring
     function markInstalled() {
       localStorage.setItem('pwa_installed', 'true');
       installedMsg.classList.add('show');
       installBtn.style.display = 'none';
       continueBtn.style.display = 'block';
-      continueBtn.textContent = 'Lanjut ke Aplikasi';
-      continueBtn.onclick = () => window.location.href = '/login';
-    }
-
-    // Continue without install
-    function continueWithoutInstall() {
-      localStorage.setItem('pwa_installed', 'skipped');
-      window.location.href = '/login';
+      continueBtn.onclick = goToMonitoring;
+      // Auto redirect after 2 seconds
+      setTimeout(goToMonitoring, 2000);
     }
 
     if (isStandalone) {
-      // Already running as PWA - go directly to login
-      window.location.href = '/login';
-    } else if (localStorage.getItem('pwa_installed')) {
-      // Previously installed or skipped - go to login
-      window.location.href = '/login';
+      // Already running as PWA - go directly to monitoring
+      goToMonitoring();
+    } else if (localStorage.getItem('pwa_installed') === 'true') {
+      // Previously installed - go to monitoring
+      goToMonitoring();
     } else if (isIOS) {
-      // iOS Safari
+      // iOS Safari - must install manually
       document.getElementById('iosSteps').classList.add('show');
-      installBtn.textContent = 'Cara Install (iOS)';
+      installBtn.textContent = 'Lihat Cara Install';
       installBtn.onclick = () => {
-        alert('1. Tap tombol Share di browser Safari\\n2. Scroll dan pilih "Add to Home Screen"\\n3. Tap "Add"');
+        alert('Untuk install di iOS:\\n\\n1. Tap tombol Share di browser Safari (ikon kotak dengan panah)\\n\\n2. Scroll ke bawah dan pilih "Add to Home Screen"\\n\\n3. Tap "Add" untuk konfirmasi\\n\\nSetelah install, buka aplikasi dari home screen.');
       };
-      // Show continue button immediately
-      continueBtn.style.display = 'block';
-      continueBtn.textContent = 'Lanjut Tanpa Install';
-      continueBtn.onclick = continueWithoutInstall;
+      notice.style.display = 'block';
+      // Check periodically if user installed
+      setInterval(() => {
+        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+          markInstalled();
+        }
+      }, 1000);
     } else if (isAndroid) {
-      // Android - try to auto-prompt install
+      // Android - auto-prompt install
       document.getElementById('androidSteps').classList.add('show');
 
       window.addEventListener('beforeinstallprompt', (e) => {
@@ -3960,6 +3967,8 @@ app.get('/install-pwa', (_req, res) => {
             deferredPrompt.userChoice.then((result) => {
               if (result.outcome === 'accepted') {
                 markInstalled();
+              } else {
+                notice.style.display = 'block';
               }
               deferredPrompt = null;
             });
@@ -3973,18 +3982,15 @@ app.get('/install-pwa', (_req, res) => {
           const { outcome } = await deferredPrompt.userChoice;
           if (outcome === 'accepted') {
             markInstalled();
+          } else {
+            notice.style.display = 'block';
           }
           deferredPrompt = null;
         } else {
-          // Try menu install
           alert('Tap menu (titik 3) di pojok kanan atas browser, lalu pilih "Add to Home Screen" atau "Install App"');
+          notice.style.display = 'block';
         }
       };
-
-      // Show continue button immediately for flexibility
-      continueBtn.style.display = 'block';
-      continueBtn.textContent = 'Lanjut Tanpa Install';
-      continueBtn.onclick = continueWithoutInstall;
     } else {
       // Desktop browser
       document.getElementById('androidSteps').classList.add('show');
@@ -4000,17 +4006,15 @@ app.get('/install-pwa', (_req, res) => {
           const { outcome } = await deferredPrompt.userChoice;
           if (outcome === 'accepted') {
             markInstalled();
+          } else {
+            notice.style.display = 'block';
           }
           deferredPrompt = null;
         } else {
-          continueWithoutInstall();
+          alert('Klik ikon install di address bar browser (biasanya di sebelah kanan), atau gunakan menu browser > "Install Gold Price Monitor"');
+          notice.style.display = 'block';
         }
       };
-
-      // Desktop - show continue button immediately
-      continueBtn.style.display = 'block';
-      continueBtn.textContent = 'Lanjut di Browser';
-      continueBtn.onclick = continueWithoutInstall;
     }
 
     window.addEventListener('appinstalled', () => {
