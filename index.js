@@ -1583,6 +1583,7 @@ app.get('/monitoring', async (_req, res) => {
     const MAX_HISTORY = 1440; // 24 jam x 60 menit
     const PER_PAGE = 10;
     let currentPage = 1;
+    let lastHistoryMinute = -1; // Track menit terakhir dicatat ke history
 
     function formatRupiah(n) {
       return 'Rp ' + n.toLocaleString('id-ID');
@@ -1607,6 +1608,14 @@ app.get('/monitoring', async (_req, res) => {
 
     function updateHistory(buy, sell, prevBuy, prevSell) {
       const now = new Date();
+      const currentMinute = now.getHours() * 60 + now.getMinutes();
+
+      // Hanya catat 1x per menit untuk menghindari spam dari fluktuasi API
+      if (currentMinute === lastHistoryMinute) {
+        return;
+      }
+
+      lastHistoryMinute = currentMinute;
       const buyChange = buy - prevBuy;
       const sellChange = sell - prevSell;
 
