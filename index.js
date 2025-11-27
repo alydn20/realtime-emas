@@ -3913,12 +3913,38 @@ app.get('/install', (_req, res) => {
     const isEdge = /Edg/.test(ua);
     const isOpera = /OPR|Opera/.test(ua);
     const isSafari = /Safari/.test(ua) && !/Chrome/.test(ua);
-    const isDesktop = !isIOS && !isAndroid;
+    const isMobile = isIOS || isAndroid;
 
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
-                      || window.navigator.standalone === true
-                      || document.referrer.includes('android-app://')
-                      || window.matchMedia('(display-mode: fullscreen)').matches;
+    // ROBUST standalone detection - multiple methods
+    function checkStandalone() {
+      // Method 1: display-mode media query
+      if (window.matchMedia('(display-mode: standalone)').matches) return true;
+      // Method 2: iOS Safari standalone
+      if (window.navigator.standalone === true) return true;
+      // Method 3: Android TWA
+      if (document.referrer.includes('android-app://')) return true;
+      // Method 4: display-mode fullscreen
+      if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
+      // Method 5: display-mode minimal-ui
+      if (window.matchMedia('(display-mode: minimal-ui)').matches) return true;
+      // Method 6: Check window features (no browser UI)
+      if (window.outerWidth === window.innerWidth && window.outerHeight === window.innerHeight) {
+        // Could be fullscreen or standalone
+        if (!window.menubar.visible && !window.toolbar.visible) return true;
+      }
+      // Method 7: Check if opened from home screen (no referrer + specific conditions)
+      if (isIOS && !document.referrer && window.innerHeight > window.innerWidth * 1.5) {
+        // Likely iOS standalone
+        return true;
+      }
+      // Method 8: Samsung Internet standalone
+      if (isSamsung && window.matchMedia('(display-mode: browser)').matches === false) {
+        return true;
+      }
+      return false;
+    }
+
+    const isStandalone = checkStandalone();
 
     // Get browser name
     function getBrowserName() {
@@ -3931,168 +3957,63 @@ app.get('/install', (_req, res) => {
       if (isFirefox && isAndroid) return 'Firefox (Android)';
       if (isOpera && isAndroid) return 'Opera (Android)';
       if (isEdge && isAndroid) return 'Edge (Android)';
-      if (isChrome && isDesktop) return 'Chrome (Desktop)';
-      if (isFirefox && isDesktop) return 'Firefox (Desktop)';
-      if (isEdge && isDesktop) return 'Edge (Desktop)';
-      if (isOpera && isDesktop) return 'Opera (Desktop)';
-      if (isSafari && isDesktop) return 'Safari (Mac)';
+      if (isAndroid) return 'Browser Android';
+      if (isChrome) return 'Chrome';
+      if (isFirefox) return 'Firefox';
+      if (isEdge) return 'Edge';
+      if (isOpera) return 'Opera';
+      if (isSafari) return 'Safari';
       return 'Browser';
     }
 
-    // Get install instructions based on browser
+    // Universal install instructions - support ALL browsers
     function getInstallInstructions() {
-      // iOS Safari
-      if (isIOS && isSafari) {
-        return {
-          auto: false,
-          steps: [
-            'Tap ikon <strong>Share</strong> (kotak dengan panah ke atas) di bagian bawah browser',
-            'Scroll ke bawah dan tap <strong>"Add to Home Screen"</strong>',
-            'Tap <strong>"Add"</strong> di pojok kanan atas',
-            'Buka aplikasi dari Home Screen'
-          ]
-        };
+      const steps = [];
+
+      if (isIOS) {
+        // All iOS browsers
+        steps.push('Tap ikon <strong>Share</strong> (kotak dengan panah ke atas) di bagian bawah browser');
+        steps.push('Scroll dan tap <strong>"Add to Home Screen"</strong>');
+        steps.push('Tap <strong>"Add"</strong> untuk konfirmasi');
+        steps.push('Buka aplikasi dari <strong>Home Screen</strong> Anda');
+        if (!isSafari) {
+          steps.unshift('<span style="color:#ffaa00;">Tip: Untuk hasil terbaik, buka di Safari</span>');
+        }
+        return { auto: false, steps };
       }
-      // iOS Chrome/Firefox - redirect to Safari
-      if (isIOS && !isSafari) {
-        return {
-          auto: false,
-          steps: [
-            '<strong style="color:#ff6b6b;">Buka halaman ini di Safari</strong> untuk install PWA',
-            'Di Safari, tap ikon <strong>Share</strong> (kotak dengan panah)',
-            'Pilih <strong>"Add to Home Screen"</strong>',
-            'Buka aplikasi dari Home Screen'
-          ]
-        };
-      }
-      // Samsung Internet
-      if (isSamsung) {
-        return {
-          auto: true,
-          steps: [
-            'Tap tombol <strong>"Install Aplikasi"</strong> di bawah',
-            'Atau tap ikon <strong>menu (≡)</strong> di pojok kanan bawah',
-            'Pilih <strong>"Add page to" → "Home screen"</strong>',
-            'Buka aplikasi dari Home Screen'
-          ]
-        };
-      }
-      // Chrome Android
-      if (isChrome && isAndroid) {
-        return {
-          auto: true,
-          steps: [
-            'Tap tombol <strong>"Install Aplikasi"</strong> di bawah',
-            'Atau tap <strong>menu (⋮)</strong> di pojok kanan atas',
-            'Pilih <strong>"Install app"</strong> atau <strong>"Add to Home screen"</strong>',
-            'Buka aplikasi dari Home Screen'
-          ]
-        };
-      }
-      // Firefox Android
-      if (isFirefox && isAndroid) {
-        return {
-          auto: false,
-          steps: [
-            'Tap <strong>menu (⋮)</strong> di pojok kanan atas',
-            'Pilih <strong>"Install"</strong> atau <strong>"Add to Home screen"</strong>',
-            'Konfirmasi dengan tap <strong>"Add"</strong>',
-            'Buka aplikasi dari Home Screen'
-          ]
-        };
-      }
-      // Edge Android
-      if (isEdge && isAndroid) {
-        return {
-          auto: true,
-          steps: [
-            'Tap tombol <strong>"Install Aplikasi"</strong> di bawah',
-            'Atau tap <strong>menu (≡)</strong> di bagian bawah',
-            'Pilih <strong>"Add to phone"</strong>',
-            'Buka aplikasi dari Home Screen'
-          ]
-        };
-      }
-      // Opera Android
-      if (isOpera && isAndroid) {
-        return {
-          auto: true,
-          steps: [
-            'Tap tombol <strong>"Install Aplikasi"</strong> di bawah',
-            'Atau tap <strong>menu (⋮)</strong> di pojok kanan bawah',
-            'Pilih <strong>"Home screen"</strong>',
-            'Buka aplikasi dari Home Screen'
-          ]
-        };
-      }
-      // Chrome Desktop
-      if (isChrome && isDesktop) {
-        return {
-          auto: true,
-          steps: [
-            'Klik tombol <strong>"Install Aplikasi"</strong> di bawah',
-            'Atau klik ikon <strong>install (⊕)</strong> di address bar (pojok kanan)',
-            'Klik <strong>"Install"</strong> pada popup',
-            'Aplikasi akan terbuka di window baru'
-          ]
-        };
-      }
-      // Edge Desktop
-      if (isEdge && isDesktop) {
-        return {
-          auto: true,
-          steps: [
-            'Klik tombol <strong>"Install Aplikasi"</strong> di bawah',
-            'Atau klik <strong>menu (···)</strong> di pojok kanan atas',
-            'Pilih <strong>"Apps" → "Install this site as an app"</strong>',
-            'Klik <strong>"Install"</strong>'
-          ]
-        };
-      }
-      // Firefox Desktop
-      if (isFirefox && isDesktop) {
-        return {
-          auto: false,
-          steps: [
-            'Firefox Desktop tidak mendukung install PWA secara langsung',
-            'Gunakan <strong>Chrome</strong> atau <strong>Edge</strong> untuk install',
-            'Atau bookmark halaman ini untuk akses cepat'
-          ]
-        };
-      }
-      // Safari Mac
-      if (isSafari && isDesktop) {
-        return {
-          auto: false,
-          steps: [
-            'Di Safari 17+, klik <strong>File → Add to Dock</strong>',
-            'Atau gunakan <strong>Chrome/Edge</strong> untuk install PWA',
-            'Bookmark halaman ini untuk akses cepat'
-          ]
-        };
-      }
-      // Default Android
+
       if (isAndroid) {
-        return {
-          auto: true,
-          steps: [
-            'Tap tombol <strong>"Install Aplikasi"</strong> di bawah',
-            'Atau buka menu browser dan pilih <strong>"Add to Home screen"</strong>',
-            'Konfirmasi instalasi',
-            'Buka aplikasi dari Home Screen'
-          ]
-        };
+        steps.push('Tap tombol <strong>"Install Aplikasi"</strong> di bawah');
+        if (isSamsung) {
+          steps.push('Atau tap <strong>menu (≡)</strong> → <strong>"Add page to"</strong> → <strong>"Home screen"</strong>');
+        } else if (isFirefox) {
+          steps.push('Atau tap <strong>menu (⋮)</strong> → <strong>"Install"</strong>');
+        } else if (isOpera) {
+          steps.push('Atau tap <strong>menu</strong> → <strong>"Home screen"</strong>');
+        } else {
+          steps.push('Atau tap <strong>menu (⋮)</strong> → <strong>"Install app"</strong> / <strong>"Add to Home screen"</strong>');
+        }
+        steps.push('Konfirmasi instalasi');
+        steps.push('Buka aplikasi dari <strong>Home Screen</strong> Anda');
+        return { auto: true, steps };
       }
-      // Default Desktop
-      return {
-        auto: true,
-        steps: [
-          'Klik tombol <strong>"Install Aplikasi"</strong> di bawah',
-          'Atau cari opsi <strong>"Install"</strong> di menu browser',
-          'Konfirmasi instalasi',
-          'Aplikasi akan terbuka'
-        ]
-      };
+
+      // Desktop
+      steps.push('Klik tombol <strong>"Install Aplikasi"</strong> di bawah');
+      if (isChrome) {
+        steps.push('Atau klik ikon <strong>Install (⊕)</strong> di address bar');
+      } else if (isEdge) {
+        steps.push('Atau klik <strong>menu (···)</strong> → <strong>"Apps"</strong> → <strong>"Install"</strong>');
+      } else if (isFirefox) {
+        steps.push('<span style="color:#ffaa00;">Firefox: Gunakan Chrome/Edge untuk install PWA</span>');
+      } else if (isSafari) {
+        steps.push('Atau klik <strong>File</strong> → <strong>"Add to Dock"</strong> (Safari 17+)');
+      } else {
+        steps.push('Atau cari opsi <strong>"Install"</strong> di menu browser');
+      }
+      steps.push('Konfirmasi instalasi');
+      steps.push('Aplikasi akan terbuka secara terpisah');
+      return { auto: true, steps };
     }
 
     function goToMonitoring() {
@@ -4118,7 +4039,7 @@ app.get('/install', (_req, res) => {
       manualSteps.classList.add('show');
     }
 
-    // Check if running as PWA
+    // Check if running as PWA - redirect immediately
     if (isStandalone) {
       goToMonitoring();
     } else {
@@ -4126,56 +4047,56 @@ app.get('/install', (_req, res) => {
       const browserName = getBrowserName();
       const instructions = getInstallInstructions();
 
-      browserInfo.innerHTML = 'Browser: <strong>' + browserName + '</strong>';
+      browserInfo.innerHTML = 'Browser: <strong>' + browserName + '</strong>' + (isMobile ? ' (Mobile)' : ' (Desktop)');
       showManualSteps(instructions);
       notice.style.display = 'block';
 
-      // Handle install prompt
-      if (instructions.auto) {
-        window.addEventListener('beforeinstallprompt', (e) => {
-          e.preventDefault();
-          deferredPrompt = e;
+      // Handle install prompt for browsers that support it
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
 
-          // Auto prompt after 1 second
-          setTimeout(() => {
-            if (deferredPrompt) {
-              deferredPrompt.prompt();
-              deferredPrompt.userChoice.then((result) => {
-                if (result.outcome === 'accepted') {
-                  markInstalled();
-                }
-                deferredPrompt = null;
-              });
-            }
-          }, 1000);
-        });
-
-        installBtn.onclick = async () => {
+        // Auto prompt after 1.5 second
+        setTimeout(() => {
           if (deferredPrompt) {
             deferredPrompt.prompt();
-            const { outcome } = await deferredPrompt.userChoice;
-            if (outcome === 'accepted') {
-              markInstalled();
-            }
-            deferredPrompt = null;
-          } else {
-            alert('Install tidak tersedia secara otomatis.\\n\\nIkuti langkah manual di halaman ini untuk install aplikasi.');
+            deferredPrompt.userChoice.then((result) => {
+              if (result.outcome === 'accepted') {
+                markInstalled();
+              }
+              deferredPrompt = null;
+            });
           }
-        };
-      } else {
-        // No auto install - show manual button
-        installBtn.textContent = 'Lihat Cara Install';
-        installBtn.onclick = () => {
-          manualSteps.scrollIntoView({ behavior: 'smooth' });
-        };
-      }
+        }, 1500);
+      });
 
-      // Check periodically for standalone mode
-      setInterval(() => {
-        if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+      installBtn.onclick = async () => {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          if (outcome === 'accepted') {
+            markInstalled();
+          }
+          deferredPrompt = null;
+        } else {
+          // Show alert with specific instructions
+          if (isIOS) {
+            alert('Cara Install di iOS:\\n\\n1. Tap tombol Share (kotak dengan panah)\\n2. Scroll dan pilih "Add to Home Screen"\\n3. Tap "Add"\\n\\nSetelah itu buka dari Home Screen.');
+          } else if (isAndroid) {
+            alert('Cara Install di Android:\\n\\n1. Tap menu (⋮) di pojok kanan atas\\n2. Pilih "Install app" atau "Add to Home screen"\\n3. Konfirmasi\\n\\nSetelah itu buka dari Home Screen.');
+          } else {
+            alert('Cara Install:\\n\\n1. Cari opsi "Install" di menu browser\\n2. Atau klik ikon install di address bar\\n3. Konfirmasi instalasi');
+          }
+        }
+      };
+
+      // Check periodically for standalone mode (in case user installs and comes back)
+      const checkInterval = setInterval(() => {
+        if (checkStandalone()) {
+          clearInterval(checkInterval);
           markInstalled();
         }
-      }, 1000);
+      }, 500);
     }
 
     window.addEventListener('appinstalled', () => {
@@ -6238,12 +6159,38 @@ app.get('/monitoring', async (_req, res) => {
 
     // HANYA PWA yang bisa akses monitoring - browser biasa harus install dulu
     (function checkPwaAccess() {
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches
-                        || window.navigator.standalone === true
-                        || document.referrer.includes('android-app://')
-                        || window.matchMedia('(display-mode: fullscreen)').matches;
+      // ROBUST standalone detection - same as install page
+      const ua = navigator.userAgent;
+      const isIOS = /iPad|iPhone|iPod/.test(ua);
+      const isSamsung = /SamsungBrowser/.test(ua);
 
-      if (!isStandalone) {
+      function isStandaloneMode() {
+        // Method 1: display-mode media query
+        if (window.matchMedia('(display-mode: standalone)').matches) return true;
+        // Method 2: iOS Safari standalone
+        if (window.navigator.standalone === true) return true;
+        // Method 3: Android TWA
+        if (document.referrer.includes('android-app://')) return true;
+        // Method 4: display-mode fullscreen
+        if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
+        // Method 5: display-mode minimal-ui
+        if (window.matchMedia('(display-mode: minimal-ui)').matches) return true;
+        // Method 6: Check window features (no browser UI)
+        if (window.outerWidth === window.innerWidth && window.outerHeight === window.innerHeight) {
+          if (!window.menubar.visible && !window.toolbar.visible) return true;
+        }
+        // Method 7: iOS specific check
+        if (isIOS && !document.referrer && window.innerHeight > window.innerWidth * 1.5) {
+          return true;
+        }
+        // Method 8: Samsung Internet standalone
+        if (isSamsung && window.matchMedia('(display-mode: browser)').matches === false) {
+          return true;
+        }
+        return false;
+      }
+
+      if (!isStandaloneMode()) {
         // Browser biasa - redirect ke halaman install
         window.location.href = '/install';
         return;
