@@ -458,9 +458,29 @@ async function addPriceHistory(buy, sell, prevBuy, prevSell, updatedAt) {
       return
     }
 
-    // Cek dari cache lokal - cari di seluruh array bukan hanya terakhir
+    // Cek dari Redis langsung - ambil timestamp terakhir yang disimpan
+    const lastSavedTime = await redis.get('gold:last_history_time')
+    if (lastSavedTime === updatedAt) {
+      addedTimestamps.add(updatedAt)
+      lastAddedUpdatedAt = updatedAt
+      return
+    }
+
+    // Cek dari cache lokal - cari di seluruh array
     const existsInCache = priceHistoryCache.some(entry => entry.time === updatedAt)
     if (existsInCache) {
+      addedTimestamps.add(updatedAt)
+      lastAddedUpdatedAt = updatedAt
+      return
+    }
+
+    // TAMBAHAN: Cek 10 entry terakhir di Redis untuk memastikan tidak duplikat
+    const recentEntries = await redis.lrange(REDIS_KEYS.PRICE_HISTORY, -10, -1)
+    const existsInRedis = recentEntries.some(entry => {
+      const parsed = typeof entry === 'string' ? JSON.parse(entry) : entry
+      return parsed.time === updatedAt
+    })
+    if (existsInRedis) {
       addedTimestamps.add(updatedAt)
       lastAddedUpdatedAt = updatedAt
       return
@@ -479,21 +499,20 @@ async function addPriceHistory(buy, sell, prevBuy, prevSell, updatedAt) {
       usdIdr: cachedMarketData.usdIdr?.rate || 0
     }
 
-    // Simpan ke Redis (entry + timestamp terakhir)
-    await Promise.all([
-      redis.rpush(REDIS_KEYS.PRICE_HISTORY, entry),
-      redis.set('gold:last_history_time', updatedAt)
-    ])
-
-    priceHistoryCache.push(entry)
+    // Simpan timestamp DULU sebelum push untuk mencegah race condition
+    await redis.set('gold:last_history_time', updatedAt)
     addedTimestamps.add(updatedAt)
     lastAddedUpdatedAt = updatedAt
 
-    // Limit addedTimestamps to last 100 entries untuk hemat memory
-    if (addedTimestamps.size > 100) {
+    // Baru push ke list
+    await redis.rpush(REDIS_KEYS.PRICE_HISTORY, entry)
+    priceHistoryCache.push(entry)
+
+    // Limit addedTimestamps to last 200 entries untuk hemat memory
+    if (addedTimestamps.size > 200) {
       const arr = Array.from(addedTimestamps)
       addedTimestamps.clear()
-      arr.slice(-50).forEach(t => addedTimestamps.add(t))
+      arr.slice(-100).forEach(t => addedTimestamps.add(t))
     }
 
     // Limit max 1440 entries (24 jam)
@@ -2360,6 +2379,42 @@ app.get('/clear-history', async (req, res) => {
     priceHistoryCache = []
     lastAddedUpdatedAt = ''
     res.json({ success: true, message: 'Price history cleared' })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
+// Remove duplicate entries from history
+app.get('/cleanup-history', async (req, res) => {
+  try {
+    const allHistory = await redis.lrange(REDIS_KEYS.PRICE_HISTORY, 0, -1)
+    const seen = new Set()
+    const uniqueHistory = []
+
+    for (const entry of allHistory) {
+      const parsed = typeof entry === 'string' ? JSON.parse(entry) : entry
+      if (!seen.has(parsed.time)) {
+        seen.add(parsed.time)
+        uniqueHistory.push(entry)
+      }
+    }
+
+    const removed = allHistory.length - uniqueHistory.length
+
+    if (removed > 0) {
+      await redis.del(REDIS_KEYS.PRICE_HISTORY)
+      for (const entry of uniqueHistory) {
+        await redis.rpush(REDIS_KEYS.PRICE_HISTORY, entry)
+      }
+      priceHistoryCache = uniqueHistory.map(e => typeof e === 'string' ? JSON.parse(e) : e)
+      addedTimestamps.clear()
+      uniqueHistory.forEach(e => {
+        const parsed = typeof e === 'string' ? JSON.parse(e) : e
+        addedTimestamps.add(parsed.time)
+      })
+    }
+
+    res.json({ success: true, removed: removed, remaining: uniqueHistory.length })
   } catch (e) {
     res.json({ success: false, error: e.message })
   }
