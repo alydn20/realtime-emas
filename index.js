@@ -439,29 +439,30 @@ function formatDailyStats(stats) {
 // Add price history ke Redis
 let isAddingHistory = false // Lock untuk mencegah race condition
 let lastAddedUpdatedAt = '' // Track updatedAt terakhir yang sudah ditambahkan
+const addedTimestamps = new Set() // Track semua timestamp yang sudah ditambahkan
 
 async function addPriceHistory(buy, sell, prevBuy, prevSell, updatedAt) {
   // Skip jika updatedAt kosong atau sama dengan yang terakhir
   if (!updatedAt || updatedAt === lastAddedUpdatedAt) return
+
+  // Cek apakah timestamp sudah pernah ditambahkan (anti-duplikat)
+  if (addedTimestamps.has(updatedAt)) return
 
   // Cek lock untuk mencegah race condition
   if (isAddingHistory) return
   isAddingHistory = true
 
   try {
-    // Cek dari Redis apakah updatedAt sudah pernah disimpan
-    const lastSavedTime = await redis.get('gold:last_history_time')
-    if (lastSavedTime === updatedAt) {
-      lastAddedUpdatedAt = updatedAt
-      isAddingHistory = false
+    // Double check setelah dapat lock
+    if (addedTimestamps.has(updatedAt)) {
       return
     }
 
-    // Cek dari cache lokal
-    const lastEntry = priceHistoryCache[priceHistoryCache.length - 1]
-    if (lastEntry && lastEntry.time === updatedAt) {
+    // Cek dari cache lokal - cari di seluruh array bukan hanya terakhir
+    const existsInCache = priceHistoryCache.some(entry => entry.time === updatedAt)
+    if (existsInCache) {
+      addedTimestamps.add(updatedAt)
       lastAddedUpdatedAt = updatedAt
-      isAddingHistory = false
       return
     }
 
@@ -485,7 +486,15 @@ async function addPriceHistory(buy, sell, prevBuy, prevSell, updatedAt) {
     ])
 
     priceHistoryCache.push(entry)
+    addedTimestamps.add(updatedAt)
     lastAddedUpdatedAt = updatedAt
+
+    // Limit addedTimestamps to last 100 entries untuk hemat memory
+    if (addedTimestamps.size > 100) {
+      const arr = Array.from(addedTimestamps)
+      addedTimestamps.clear()
+      arr.slice(-50).forEach(t => addedTimestamps.add(t))
+    }
 
     // Limit max 1440 entries (24 jam)
     const len = await redis.llen(REDIS_KEYS.PRICE_HISTORY)
@@ -7004,7 +7013,7 @@ async function start() {
 
         const sendTarget = msg.key.remoteJid
         
-        if (/\bmulai\b|\bstart\b|\bsubscribe\b/.test(text)) {
+        if (/\bmulai\b|\bstart\b|\bsubscribe\b|^\/langganan$/.test(text)) {
           if (subscriptions.has(sendTarget)) {
             await sock.sendMessage(sendTarget, {
               text: '✅ Sudah aktif!\n\n📢 Update otomatis saat harga berubah\n⏰ Broadcast setiap ganti menit atau per 50 detik\n📅 Termasuk kalender ekonomi USD (auto-hide 3 jam)\n⚡ Ultra real-time (1 detik check interval)'
@@ -7020,7 +7029,7 @@ async function start() {
           continue
         }
 
-        if (/\bberhenti\b|\bunsubscribe\b|\bstop\b/.test(text)) {
+        if (/\bberhenti\b|\bunsubscribe\b|\bstop\b|^\/berhenti$/.test(text)) {
           if (subscriptions.has(sendTarget)) {
             subscriptions.delete(sendTarget)
             pushLog(`SUB   | ➖ ${sendTarget.substring(0, 15)}... (total: ${subscriptions.size})`)
