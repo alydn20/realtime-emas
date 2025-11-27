@@ -1595,7 +1595,6 @@ app.get('/monitoring', async (_req, res) => {
     const MAX_HISTORY = 1440; // 24 jam x 60 menit
     const PER_PAGE = 10;
     let currentPage = 1;
-    let lastHistoryMinute = -1; // Track menit terakhir dicatat ke history
 
     function formatRupiah(n) {
       return 'Rp ' + n.toLocaleString('id-ID');
@@ -1621,14 +1620,18 @@ app.get('/monitoring', async (_req, res) => {
     function updateHistory(buy, sell, prevBuy, prevSell, updatedAt) {
       // Gunakan waktu dari API Treasury, bukan waktu browser
       const apiTime = updatedAt ? new Date(updatedAt) : new Date();
-      const currentMinute = apiTime.getHours() * 60 + apiTime.getMinutes();
+      const timeKey = apiTime.getHours() * 60 + apiTime.getMinutes();
 
-      // Hanya catat 1x per menit untuk menghindari spam dari fluktuasi API
-      if (currentMinute === lastHistoryMinute) {
-        return;
+      // Cek apakah sudah ada entry dengan menit yang sama di history
+      const existingEntry = priceHistory.find(item => {
+        const itemMinute = item.time.getHours() * 60 + item.time.getMinutes();
+        return itemMinute === timeKey;
+      });
+
+      if (existingEntry) {
+        return; // Skip jika sudah ada entry di menit ini
       }
 
-      lastHistoryMinute = currentMinute;
       const buyChange = buy - prevBuy;
       const sellChange = sell - prevSell;
 
