@@ -4303,14 +4303,14 @@ app.get('/install', (_req, res) => {
         }
       };
 
-      // Continue button - check if installed, if yes go to monitoring, if no trigger install
+      // Continue button - untuk user yang sudah install PWA
       const statusMsg = document.getElementById('statusMsg');
       continueBtn.onclick = async () => {
         statusMsg.style.display = 'block';
         statusMsg.style.color = '#f7931a';
-        statusMsg.textContent = 'Memeriksa instalasi...';
+        statusMsg.textContent = 'Memeriksa...';
 
-        // Check if already standalone
+        // Check if already standalone (running as PWA)
         if (checkStandalone()) {
           statusMsg.style.color = '#00ff88';
           statusMsg.textContent = 'PWA terdeteksi! Mengalihkan...';
@@ -4318,35 +4318,35 @@ app.get('/install', (_req, res) => {
           return;
         }
 
-        // Not standalone - try to install
-        if (deferredPrompt) {
-          statusMsg.textContent = 'Memulai instalasi...';
-          try {
-            deferredPrompt.prompt();
-            const { outcome } = await deferredPrompt.userChoice;
-            if (outcome === 'accepted') {
-              statusMsg.style.color = '#00ff88';
-              statusMsg.textContent = 'Instalasi berhasil! Mengalihkan...';
-              markInstalled();
-            } else {
-              statusMsg.style.color = '#ff6b6b';
-              statusMsg.textContent = 'Instalasi dibatalkan. Silakan install terlebih dahulu.';
-            }
-            deferredPrompt = null;
-          } catch (e) {
-            statusMsg.style.color = '#ff6b6b';
-            statusMsg.textContent = 'Error: ' + e.message;
-          }
+        // Di browser biasa - tidak bisa detect apakah PWA sudah terinstall
+        // Beri instruksi untuk buka dari Home Screen
+        statusMsg.style.color = '#ffaa00';
+        if (isIOS) {
+          statusMsg.innerHTML = '<strong>Jika sudah install:</strong><br>Tutup browser ini dan buka aplikasi <strong>Gold Monitor</strong> dari Home Screen Anda.<br><br><strong>Jika belum install:</strong><br>Tap Share → Add to Home Screen';
+        } else if (isAndroid) {
+          statusMsg.innerHTML = '<strong>Jika sudah install:</strong><br>Tutup browser ini dan buka aplikasi <strong>Gold Monitor</strong> dari Home Screen Anda.<br><br><strong>Jika belum install:</strong><br>Tap tombol "Install Aplikasi" di atas';
         } else {
-          // No install prompt available - show instructions
-          statusMsg.style.color = '#ff6b6b';
-          if (isIOS) {
-            statusMsg.innerHTML = 'PWA belum terinstall. Tap <strong>Share</strong> → <strong>Add to Home Screen</strong>';
-          } else if (isAndroid) {
-            statusMsg.innerHTML = 'PWA belum terinstall. Tap <strong>menu (⋮)</strong> → <strong>Install app</strong>';
-          } else {
-            statusMsg.innerHTML = 'PWA belum terinstall. Gunakan menu browser untuk install.';
-          }
+          statusMsg.innerHTML = '<strong>Jika sudah install:</strong><br>Buka aplikasi Gold Monitor yang sudah terinstall di komputer Anda.<br><br><strong>Jika belum install:</strong><br>Klik tombol "Install Aplikasi" di atas';
+        }
+
+        // Jika ada install prompt, coba trigger
+        if (deferredPrompt) {
+          setTimeout(async () => {
+            statusMsg.innerHTML += '<br><br><span style="color:#f7931a;">Atau klik di sini untuk install sekarang...</span>';
+            statusMsg.style.cursor = 'pointer';
+            statusMsg.onclick = async () => {
+              if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                  statusMsg.style.color = '#00ff88';
+                  statusMsg.textContent = 'Instalasi berhasil!';
+                  markInstalled();
+                }
+                deferredPrompt = null;
+              }
+            };
+          }, 500);
         }
       };
 
