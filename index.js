@@ -2127,6 +2127,8 @@ app.get('/price-history', async (req, res) => {
   const page = parseInt(req.query.page) || 1
   const perPage = parseInt(req.query.perPage) || 10
   const history = await getPriceHistory(page, perPage)
+  // Include current USD/IDR for fallback on old entries
+  history.currentUsdIdr = cachedMarketData.usdIdr?.rate || 0
   res.json(history)
 })
 
@@ -2734,7 +2736,7 @@ async function isUserValid(phone) {
 // API: Request OTP for registration
 app.post('/api/request-otp', express.json(), async (req, res) => {
   const { phone } = req.body
-  if (!phone) return res.json({ success: false, error: 'Nomor WhatsApp wajib diisi' })
+  if (!phone) return res.json({ success: false, error: 'Nomor HP wajib diisi' })
 
   const normalizedPhone = normalizePhone(phone)
 
@@ -2818,7 +2820,7 @@ app.post('/api/verify-otp', express.json(), async (req, res) => {
 // API: Login user
 app.post('/api/login', express.json(), async (req, res) => {
   const { phone } = req.body
-  if (!phone) return res.json({ success: false, error: 'Nomor WhatsApp wajib diisi' })
+  if (!phone) return res.json({ success: false, error: 'Nomor HP wajib diisi' })
 
   const normalizedPhone = normalizePhone(phone)
   const check = await isUserValid(normalizedPhone)
@@ -3552,14 +3554,14 @@ app.get('/login', (_req, res) => {
       <div class="logo">
         <img src="/icon.png" alt="Gold Monitor">
         <h1>Gold Price Monitor</h1>
-        <p>Masuk dengan nomor WhatsApp</p>
+        <p>Masuk dengan nomor HP langganan</p>
       </div>
 
       <div class="error-msg" id="errorMsg"></div>
 
       <form id="loginForm">
         <div class="form-group">
-          <label>Nomor WhatsApp</label>
+          <label>Nomor HP Langganan</label>
           <div class="input-wrapper">
             <span class="prefix">+62</span>
             <input type="tel" id="phone" placeholder="812xxxxxxxx" required pattern="[0-9]{9,13}" inputmode="numeric">
@@ -5453,6 +5455,7 @@ app.get('/monitoring', async (_req, res) => {
     let currentPage = 1;
     let totalPages = 1;
     let totalRecords = 0;
+    let currentUsdIdr = 0;
 
     // Load history dari server
     async function loadHistory() {
@@ -5461,6 +5464,7 @@ app.get('/monitoring', async (_req, res) => {
         const data = await res.json();
         totalRecords = data.total;
         totalPages = data.totalPages;
+        currentUsdIdr = data.currentUsdIdr || 0;
         renderServerHistory(data.items);
       } catch (e) {
         renderServerHistory([]);
@@ -5493,8 +5497,9 @@ app.get('/monitoring', async (_req, res) => {
         const spread = item.spread || ((item.sell - item.buy) / item.buy * 100).toFixed(2);
         const spreadClass = parseFloat(spread) < 0 ? 'price-down' : '';
 
-        // USD/IDR
-        const usdIdr = item.usdIdr ? Math.round(item.usdIdr).toLocaleString('id-ID') : '-';
+        // USD/IDR - use current rate as fallback for old entries
+        const usdIdrVal = item.usdIdr || currentUsdIdr;
+        const usdIdr = usdIdrVal ? Math.round(usdIdrVal).toLocaleString('id-ID') : '-';
 
         // Calculate gram for 20jt and 30jt based on buy price
         const gram20jt = (20000000 / item.buy).toFixed(4);
