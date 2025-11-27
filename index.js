@@ -4127,32 +4127,13 @@ app.get('/install', (_req, res) => {
     const isSafari = /Safari/.test(ua) && !/Chrome/.test(ua);
     const isMobile = isIOS || isAndroid;
 
-    // ROBUST standalone detection - multiple methods
+    // Simple standalone detection
     function checkStandalone() {
-      // Method 1: display-mode media query
-      if (window.matchMedia('(display-mode: standalone)').matches) return true;
-      // Method 2: iOS Safari standalone
+      // iOS standalone
       if (window.navigator.standalone === true) return true;
-      // Method 3: Android TWA
-      if (document.referrer.includes('android-app://')) return true;
-      // Method 4: display-mode fullscreen
+      // display-mode standalone or fullscreen
+      if (window.matchMedia('(display-mode: standalone)').matches) return true;
       if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
-      // Method 5: display-mode minimal-ui
-      if (window.matchMedia('(display-mode: minimal-ui)').matches) return true;
-      // Method 6: Check window features (no browser UI)
-      if (window.outerWidth === window.innerWidth && window.outerHeight === window.innerHeight) {
-        // Could be fullscreen or standalone
-        if (!window.menubar.visible && !window.toolbar.visible) return true;
-      }
-      // Method 7: Check if opened from home screen (no referrer + specific conditions)
-      if (isIOS && !document.referrer && window.innerHeight > window.innerWidth * 1.5) {
-        // Likely iOS standalone
-        return true;
-      }
-      // Method 8: Samsung Internet standalone
-      if (isSamsung && window.matchMedia('(display-mode: browser)').matches === false) {
-        return true;
-      }
       return false;
     }
 
@@ -4303,51 +4284,17 @@ app.get('/install', (_req, res) => {
         }
       };
 
-      // Continue button - untuk user yang sudah install PWA
+      // Continue button - set verified dan langsung ke monitoring
       const statusMsg = document.getElementById('statusMsg');
-      continueBtn.onclick = async () => {
+      continueBtn.onclick = () => {
         statusMsg.style.display = 'block';
-        statusMsg.style.color = '#f7931a';
-        statusMsg.textContent = 'Memeriksa...';
-
-        // Check if already standalone (running as PWA)
-        if (checkStandalone()) {
-          statusMsg.style.color = '#00ff88';
-          statusMsg.textContent = 'PWA terdeteksi! Mengalihkan...';
-          setTimeout(goToMonitoring, 500);
-          return;
-        }
-
-        // Di browser biasa - tidak bisa detect apakah PWA sudah terinstall
-        // Beri instruksi untuk buka dari Home Screen
-        statusMsg.style.color = '#ffaa00';
-        if (isIOS) {
-          statusMsg.innerHTML = '<strong>Jika sudah install:</strong><br>Tutup browser ini dan buka aplikasi <strong>Gold Monitor</strong> dari Home Screen Anda.<br><br><strong>Jika belum install:</strong><br>Tap Share → Add to Home Screen';
-        } else if (isAndroid) {
-          statusMsg.innerHTML = '<strong>Jika sudah install:</strong><br>Tutup browser ini dan buka aplikasi <strong>Gold Monitor</strong> dari Home Screen Anda.<br><br><strong>Jika belum install:</strong><br>Tap tombol "Install Aplikasi" di atas';
-        } else {
-          statusMsg.innerHTML = '<strong>Jika sudah install:</strong><br>Buka aplikasi Gold Monitor yang sudah terinstall di komputer Anda.<br><br><strong>Jika belum install:</strong><br>Klik tombol "Install Aplikasi" di atas';
-        }
-
-        // Jika ada install prompt, coba trigger
-        if (deferredPrompt) {
-          setTimeout(async () => {
-            statusMsg.innerHTML += '<br><br><span style="color:#f7931a;">Atau klik di sini untuk install sekarang...</span>';
-            statusMsg.style.cursor = 'pointer';
-            statusMsg.onclick = async () => {
-              if (deferredPrompt) {
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === 'accepted') {
-                  statusMsg.style.color = '#00ff88';
-                  statusMsg.textContent = 'Instalasi berhasil!';
-                  markInstalled();
-                }
-                deferredPrompt = null;
-              }
-            };
-          }, 500);
-        }
+        statusMsg.style.color = '#00ff88';
+        statusMsg.textContent = 'Mengalihkan ke monitoring...';
+        // Set verified flag dan redirect
+        localStorage.setItem('pwa_verified', 'true');
+        setTimeout(() => {
+          window.location.href = '/monitoring';
+        }, 300);
       };
 
       // Check periodically for standalone mode (in case user installs and comes back)
@@ -6419,44 +6366,26 @@ app.get('/monitoring', async (_req, res) => {
     // Disable right-click
     document.addEventListener('contextmenu', e => e.preventDefault());
 
-    // HANYA PWA yang bisa akses monitoring - browser biasa harus install dulu
+    // Cek akses - PWA atau sudah pernah akses dari PWA
     (function checkPwaAccess() {
-      // ROBUST standalone detection - same as install page
-      const ua = navigator.userAgent;
-      const isIOS = /iPad|iPhone|iPod/.test(ua);
-      const isSamsung = /SamsungBrowser/.test(ua);
+      // Simple standalone detection
+      const isStandalone = window.navigator.standalone === true
+        || window.matchMedia('(display-mode: standalone)').matches
+        || window.matchMedia('(display-mode: fullscreen)').matches;
 
-      function isStandaloneMode() {
-        // Method 1: display-mode media query
-        if (window.matchMedia('(display-mode: standalone)').matches) return true;
-        // Method 2: iOS Safari standalone
-        if (window.navigator.standalone === true) return true;
-        // Method 3: Android TWA
-        if (document.referrer.includes('android-app://')) return true;
-        // Method 4: display-mode fullscreen
-        if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
-        // Method 5: display-mode minimal-ui
-        if (window.matchMedia('(display-mode: minimal-ui)').matches) return true;
-        // Method 6: Check window features (no browser UI)
-        if (window.outerWidth === window.innerWidth && window.outerHeight === window.innerHeight) {
-          if (!window.menubar.visible && !window.toolbar.visible) return true;
-        }
-        // Method 7: iOS specific check
-        if (isIOS && !document.referrer && window.innerHeight > window.innerWidth * 1.5) {
-          return true;
-        }
-        // Method 8: Samsung Internet standalone
-        if (isSamsung && window.matchMedia('(display-mode: browser)').matches === false) {
-          return true;
-        }
-        return false;
+      if (isStandalone) {
+        // Mark as PWA user
+        localStorage.setItem('pwa_verified', 'true');
+        return; // Allow access
       }
 
-      if (!isStandaloneMode()) {
-        // Browser biasa - redirect ke halaman install
-        window.location.href = '/install';
-        return;
+      // Check if previously verified as PWA user
+      if (localStorage.getItem('pwa_verified') === 'true') {
+        return; // Allow access
       }
+
+      // Not PWA and not verified - redirect to install
+      window.location.href = '/install';
     })();
 
     // ==================== PUSH NOTIFICATION SUBSCRIPTION ====================
