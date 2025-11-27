@@ -132,7 +132,8 @@ const REDIS_KEYS = {
   PUSH_SUBS: 'gold:push_subs',   // Hash: phone -> push subscription JSON
   SESSIONS: 'gold:sessions',     // Hash: sessionId -> phone
   WA_GROUP_ID: 'gold:wa_group_id', // String: ID grup WA yang di-monitor
-  WA_AUTH: 'gold:wa_auth'        // Hash: key -> auth data (creds, keys) for persistent WA session
+  WA_AUTH: 'gold:wa_auth',       // Hash: key -> auth data (creds, keys) for persistent WA session
+  OTP_CODES: 'gold:otp_codes'    // Hash: phone -> OTP code for registration verification
 }
 
 // Admin password untuk akses admin panel
@@ -2706,6 +2707,90 @@ async function isUserValid(phone) {
   }
 }
 
+// API: Request OTP for registration
+app.post('/api/request-otp', express.json(), async (req, res) => {
+  const { phone } = req.body
+  if (!phone) return res.json({ success: false, error: 'Nomor WhatsApp wajib diisi' })
+
+  const normalizedPhone = normalizePhone(phone)
+
+  // Check if already registered
+  const existing = await redis.hget(REDIS_KEYS.USERS, normalizedPhone)
+  if (existing) {
+    return res.json({ success: false, error: 'Nomor sudah terdaftar. Silakan login.' })
+  }
+
+  // Check if WhatsApp is connected
+  if (!sock || !isReady) {
+    return res.json({ success: false, error: 'WhatsApp tidak terhubung. Coba lagi nanti.' })
+  }
+
+  // Generate 6-digit OTP
+  const otp = Math.floor(100000 + Math.random() * 900000).toString()
+
+  // Store OTP with 5 minute expiry
+  await redis.hset(REDIS_KEYS.OTP_CODES, { [normalizedPhone]: JSON.stringify({ otp, expires: Date.now() + 5 * 60 * 1000 }) })
+
+  // Send OTP via WhatsApp
+  try {
+    const jid = `62${normalizedPhone}@s.whatsapp.net`
+    await sock.sendMessage(jid, {
+      text: `🔐 *Kode OTP Gold Price Monitor*\n\nKode verifikasi Anda: *${otp}*\n\nKode berlaku 5 menit.\nJangan bagikan kode ini kepada siapapun.`
+    })
+
+    pushLog(`OTP | Sent to +62${normalizedPhone}`)
+    res.json({ success: true, message: 'Kode OTP telah dikirim ke WhatsApp Anda' })
+  } catch (e) {
+    pushLog(`OTP | Failed to send to +62${normalizedPhone}: ${e.message}`)
+    res.json({ success: false, error: 'Gagal mengirim OTP. Pastikan nomor WhatsApp aktif.' })
+  }
+})
+
+// API: Verify OTP and register user
+app.post('/api/verify-otp', express.json(), async (req, res) => {
+  const { phone, otp, name } = req.body
+  if (!phone || !otp) return res.json({ success: false, error: 'Nomor dan OTP wajib diisi' })
+
+  const normalizedPhone = normalizePhone(phone)
+
+  // Get stored OTP
+  const stored = await redis.hget(REDIS_KEYS.OTP_CODES, normalizedPhone)
+  if (!stored) {
+    return res.json({ success: false, error: 'OTP tidak ditemukan. Minta OTP baru.' })
+  }
+
+  const otpData = typeof stored === 'string' ? JSON.parse(stored) : stored
+
+  // Check expiry
+  if (Date.now() > otpData.expires) {
+    await redis.hdel(REDIS_KEYS.OTP_CODES, normalizedPhone)
+    return res.json({ success: false, error: 'OTP sudah expired. Minta OTP baru.' })
+  }
+
+  // Verify OTP
+  if (otp !== otpData.otp) {
+    return res.json({ success: false, error: 'OTP salah' })
+  }
+
+  // OTP valid - register user
+  const userData = {
+    name: name || 'User ' + normalizedPhone,
+    createdAt: Date.now(),
+    expired: null,
+    source: 'otp_registration'
+  }
+
+  await redis.hset(REDIS_KEYS.USERS, { [normalizedPhone]: JSON.stringify(userData) })
+  await redis.hdel(REDIS_KEYS.OTP_CODES, normalizedPhone)
+
+  // Create session
+  const sessionId = generateSessionId()
+  await redis.hset(REDIS_KEYS.SESSIONS, { [sessionId]: normalizedPhone })
+
+  pushLog(`OTP | User registered: +62${normalizedPhone}`)
+  res.json({ success: true, sessionId, user: userData })
+})
+
 // API: Login user
 app.post('/api/login', express.json(), async (req, res) => {
   const { phone } = req.body
@@ -2716,7 +2801,7 @@ app.post('/api/login', express.json(), async (req, res) => {
 
   if (!check.valid) {
     if (check.reason === 'not_found') {
-      return res.json({ success: false, error: 'Nomor tidak terdaftar. Hubungi admin.' })
+      return res.json({ success: false, error: 'Nomor tidak terdaftar. Silakan daftar dulu.', needRegister: true })
     }
     if (check.reason === 'expired') {
       return res.json({ success: false, error: 'Akun sudah expired. Hubungi admin untuk perpanjang.' })
@@ -2726,7 +2811,7 @@ app.post('/api/login', express.json(), async (req, res) => {
 
   // Create session
   const sessionId = generateSessionId()
-  await redis.hset(REDIS_KEYS.SESSIONS, sessionId, normalizedPhone)
+  await redis.hset(REDIS_KEYS.SESSIONS, { [sessionId]: normalizedPhone })
 
   res.json({ success: true, sessionId, user: check.user })
 })
@@ -2871,7 +2956,7 @@ app.delete('/api/admin/users', express.json(), async (req, res) => {
   res.json({ success: true })
 })
 
-// Admin: Clear invalid users (short phone numbers < 9 digits)
+// Admin: Clear invalid users (LID format or invalid Indonesian phone numbers)
 app.post('/api/admin/users/clear-invalid', express.json(), async (req, res) => {
   const { password } = req.body
   if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
@@ -2881,14 +2966,34 @@ app.post('/api/admin/users/clear-invalid', express.json(), async (req, res) => {
     let deleted = 0
 
     for (const phone of Object.keys(allUsers)) {
-      // Delete if phone is less than 9 digits (invalid)
-      if (phone.length < 9) {
+      // Valid Indonesian phone: starts with 8, length 9-12 (without 62 prefix)
+      // Invalid: LID numbers (very long), or doesn't start with 8
+      const isValidIndonesian = /^8\d{8,11}$/.test(phone)
+
+      if (!isValidIndonesian) {
         await redis.hdel(REDIS_KEYS.USERS, phone)
         deleted++
       }
     }
 
+    pushLog(`Admin | Cleared ${deleted} invalid users`)
     res.json({ success: true, deleted })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
+// Admin: Clear ALL users (use with caution!)
+app.post('/api/admin/users/clear-all', express.json(), async (req, res) => {
+  const { password, confirm } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+  if (confirm !== 'DELETE_ALL') return res.json({ success: false, error: 'Konfirmasi salah' })
+
+  try {
+    await redis.del(REDIS_KEYS.USERS)
+    await redis.del(REDIS_KEYS.SESSIONS)
+    pushLog(`Admin | All users cleared!`)
+    res.json({ success: true })
   } catch (e) {
     res.json({ success: false, error: e.message })
   }
@@ -3017,19 +3122,41 @@ app.get('/api/admin/wa-groups/debug', async (req, res) => {
     const groupMeta = await sock.groupMetadata(monitoredGroupId)
     const participants = groupMeta.participants || []
 
-    // Show first 5 participants raw data for debugging
-    const sample = participants.slice(0, 5).map(p => ({
-      id: p.id,
-      admin: p.admin,
-      notify: p.notify
-    }))
+    // Try to get phone numbers using lidToPhone mapping if available
+    const sampleWithPhone = []
+    for (const p of participants.slice(0, 10)) {
+      let phoneNumber = null
+
+      // Check if it's LID format (@lid) or standard format (@s.whatsapp.net)
+      if (p.id.endsWith('@lid')) {
+        // Try to resolve LID to phone number
+        try {
+          // Check if sock has lidToPhone store
+          if (sock.store?.lidToPhone) {
+            phoneNumber = sock.store.lidToPhone.get(p.id)
+          }
+        } catch (e) {}
+      } else if (p.id.endsWith('@s.whatsapp.net')) {
+        // Standard format - extract phone directly
+        const match = p.id.match(/^(\d+)@/)
+        if (match) phoneNumber = match[1]
+      }
+
+      sampleWithPhone.push({
+        id: p.id,
+        admin: p.admin,
+        notify: p.notify,
+        resolvedPhone: phoneNumber
+      })
+    }
 
     res.json({
       success: true,
       groupId: monitoredGroupId,
       groupName: groupMeta.subject,
       totalParticipants: participants.length,
-      sampleParticipants: sample
+      sampleParticipants: sampleWithPhone,
+      note: 'WhatsApp menggunakan LID (Linked ID) untuk privacy. Nomor asli mungkin tidak bisa diakses.'
     })
   } catch (e) {
     res.json({ success: false, error: e.message })
@@ -3037,6 +3164,8 @@ app.get('/api/admin/wa-groups/debug', async (req, res) => {
 })
 
 // Admin: Sync all members from monitored group
+// NOTE: WhatsApp now uses LID (Linked ID) format which doesn't expose phone numbers
+// This function will inform admin about this limitation
 app.post('/api/admin/wa-groups/sync', express.json(), async (req, res) => {
   const { password } = req.body
   if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
@@ -3053,41 +3182,44 @@ app.post('/api/admin/wa-groups/sync', express.json(), async (req, res) => {
     const groupMeta = await sock.groupMetadata(monitoredGroupId)
     const participants = groupMeta.participants || []
 
-    pushLog(`WA | Syncing ${participants.length} members from group`)
+    pushLog(`WA | Checking ${participants.length} members from group`)
 
-    // Get all existing users in one call
+    // Check if participants use LID format
+    const usesLid = participants.some(p => p.id?.endsWith('@lid'))
+
+    if (usesLid) {
+      pushLog(`WA | Group uses LID format - phone numbers hidden by WhatsApp`)
+      return res.json({
+        success: false,
+        error: 'WhatsApp menggunakan format LID (privacy) di grup ini. Nomor telepon tidak dapat diakses otomatis. Gunakan fitur "Tambah User Manual" atau aktifkan "Registrasi via OTP".',
+        total: participants.length,
+        usesLid: true
+      })
+    }
+
+    // Standard format - proceed with sync
     const existingUsers = await redis.hgetall(REDIS_KEYS.USERS) || {}
 
     let added = 0
     let skipped = 0
     let errors = 0
-    const addedPhones = []
 
     for (const p of participants) {
-      // Extract phone number from JID (format: 62xxx@s.whatsapp.net)
       if (!p.id) continue
 
-      // Get full phone number from JID
-      const jidMatch = p.id.match(/^(\d+)@/)
+      const jidMatch = p.id.match(/^(\d+)@s\.whatsapp\.net/)
       if (!jidMatch) continue
 
-      const fullPhone = jidMatch[1] // e.g., "628123456789"
-
-      // Remove leading 62 for storage (Indonesian format)
+      const fullPhone = jidMatch[1]
       const phone = fullPhone.startsWith('62') ? fullPhone.substring(2) : fullPhone
 
-      if (!phone || phone.length < 9) {
-        pushLog(`WA | Skip invalid phone: ${p.id}`)
-        continue
-      }
+      if (!phone || phone.length < 9) continue
 
-      // Check if already exists
       if (existingUsers[phone]) {
         skipped++
         continue
       }
 
-      // Add user one by one
       try {
         const userData = JSON.stringify({
           name: p.notify || p.verifiedName || 'Member ' + phone,
@@ -3098,14 +3230,12 @@ app.post('/api/admin/wa-groups/sync', express.json(), async (req, res) => {
 
         await redis.hset(REDIS_KEYS.USERS, { [phone]: userData })
         added++
-        if (addedPhones.length < 3) addedPhones.push(phone) // Sample for logging
       } catch (err) {
         errors++
-        pushLog(`WA | Sync error for ${phone}: ${err.message}`)
       }
     }
 
-    pushLog(`WA | Sync completed: ${added} added, ${skipped} skipped, ${errors} errors. Sample: ${addedPhones.join(', ')}`)
+    pushLog(`WA | Sync completed: ${added} added, ${skipped} skipped`)
     res.json({ success: true, added, skipped, errors, total: participants.length })
   } catch (e) {
     pushLog(`WA | Sync error: ${e.message}`)
@@ -3881,10 +4011,16 @@ app.get('/admin/users', (_req, res) => {
         </div>
         <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;">
           <button class="btn" style="background:#2f3640;color:#e7e9ea;" onclick="loadWaGroups()">Refresh Grup</button>
-          <button class="btn btn-primary" onclick="syncMembers()">Sync Semua Member</button>
           <button class="btn" style="background:#ff4444;color:white;" onclick="clearInvalidUsers()">Hapus User Invalid</button>
+          <button class="btn" style="background:#880000;color:white;" onclick="clearAllUsers()">Hapus Semua User</button>
         </div>
         <div id="currentGroup" style="margin-top:10px;font-size:0.85em;color:#71767b;"></div>
+        <div style="margin-top:15px;padding:12px;background:rgba(255,170,0,0.1);border:1px solid #ffaa00;border-radius:8px;">
+          <p style="color:#ffaa00;font-size:0.85em;margin:0;">
+            <strong>⚠️ Catatan:</strong> WhatsApp menggunakan format LID (privacy) sehingga nomor telepon member tidak bisa diakses otomatis.
+            User harus mendaftar sendiri via OTP atau ditambahkan manual oleh admin.
+          </p>
+        </div>
       </div>
 
       <div class="card">
@@ -4100,7 +4236,7 @@ app.get('/admin/users', (_req, res) => {
     }
 
     function clearInvalidUsers() {
-      if (!confirm('Hapus semua user dengan nomor invalid (< 9 digit)?')) return;
+      if (!confirm('Hapus semua user dengan nomor invalid (bukan format Indonesia 08xx)?')) return;
 
       const result = document.getElementById('syncResult');
       result.className = 'result-msg success';
@@ -4116,6 +4252,33 @@ app.get('/admin/users', (_req, res) => {
         if (data.success) {
           result.className = 'result-msg success';
           result.textContent = 'Berhasil menghapus ' + data.deleted + ' user invalid.';
+          loadUsers();
+        } else {
+          result.className = 'result-msg error';
+          result.textContent = 'Error: ' + data.error;
+        }
+        setTimeout(() => result.className = 'result-msg', 5000);
+      });
+    }
+
+    function clearAllUsers() {
+      if (!confirm('⚠️ HAPUS SEMUA USER? Aksi ini tidak dapat dibatalkan!')) return;
+      if (!confirm('Ketik OK untuk konfirmasi HAPUS SEMUA USER')) return;
+
+      const result = document.getElementById('syncResult');
+      result.className = 'result-msg success';
+      result.textContent = 'Menghapus semua user...';
+
+      fetch('/api/admin/users/clear-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass, confirm: 'DELETE_ALL' })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          result.className = 'result-msg success';
+          result.textContent = 'Semua user berhasil dihapus.';
           loadUsers();
         } else {
           result.className = 'result-msg error';
