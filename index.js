@@ -5645,25 +5645,30 @@ async function start() {
   await loadFromRedis()
   await loadMonitoredGroup()
 
-  // Use Redis-based auth state for persistent sessions across rebuilds
-  const { state, saveCreds } = await useRedisAuthState()
+  // Clear any corrupt Redis auth from previous attempts
+  await clearRedisAuth()
+
+  // Use file-based auth (more stable)
+  const { state, saveCreds } = await useMultiFileAuthState('./auth')
   const { version } = await fetchLatestBaileysVersion()
 
-  pushLog('WA | Using Redis auth state (persistent)')
+  pushLog('WA | Using file-based auth state')
 
   sock = makeWASocket({
     version,
     logger: pino({ level: 'silent' }),
-    printQRInTerminal: false,
+    printQRInTerminal: true,
     auth: {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
     },
-    browser: Browsers.macOS('Desktop'),
+    browser: Browsers.ubuntu('Chrome'),
     markOnlineOnConnect: false,
     syncFullHistory: false,
-    defaultQueryTimeoutMs: 60000,
-    keepAliveIntervalMs: 30000,
+    defaultQueryTimeoutMs: 120000,
+    keepAliveIntervalMs: 25000,
+    connectTimeoutMs: 60000,
+    qrTimeout: 60000,
     getMessage: async () => ({ conversation: '' })
   })
 
