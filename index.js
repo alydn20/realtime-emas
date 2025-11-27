@@ -1512,6 +1512,7 @@ app.get('/monitoring', async (_req, res) => {
       <div class="price-card">
         <div class="label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:6px;"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>XAU/USD</div>
         <div class="value" id="xauUsd">-</div>
+        <div class="change" id="xauUpdate" style="color:#71767b;font-size:0.75em;"></div>
       </div>
     </div>
 
@@ -1765,12 +1766,68 @@ app.get('/monitoring', async (_req, res) => {
       }
     }
 
+    // Fetch XAU/USD real-time dari TradingView
+    let lastXauPrice = 0;
+    let xauFetching = false;
+    async function fetchXauRealtime() {
+      if (xauFetching) return;
+      xauFetching = true;
+      try {
+        const res = await fetch('https://scanner.tradingview.com/symbol', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            symbols: { tickers: ['OANDA:XAUUSD'], query: { types: [] } },
+            columns: ['close', 'change', 'change_abs']
+          })
+        });
+        if (res.ok) {
+          const json = await res.json();
+          if (json?.data?.[0]?.d) {
+            const price = json.data[0].d[0];
+            const changePercent = json.data[0].d[1];
+            const changeAbs = json.data[0].d[2];
+            if (price > 1000 && price < 10000) {
+              document.getElementById('xauUsd').textContent = '$' + price.toFixed(2);
+
+              // Update timestamp
+              const now = new Date();
+              const timeStr = now.getHours().toString().padStart(2,'0') + ':' +
+                             now.getMinutes().toString().padStart(2,'0') + ':' +
+                             now.getSeconds().toString().padStart(2,'0');
+              document.getElementById('xauUpdate').textContent = 'Update ' + timeStr;
+
+              // Show change if available
+              if (changeAbs && lastXauPrice > 0) {
+                const change = price - lastXauPrice;
+                if (Math.abs(change) >= 0.01) {
+                  const sign = change > 0 ? '+' : '';
+                  const cls = change > 0 ? 'up' : 'down';
+                  document.getElementById('xauUpdate').innerHTML =
+                    '<span class="' + cls + '">' + sign + change.toFixed(2) + '</span> • ' + timeStr;
+                }
+              }
+              lastXauPrice = price;
+            }
+          }
+        }
+      } catch (e) {
+        // Silent fail
+      } finally {
+        xauFetching = false;
+      }
+    }
+
     setInterval(updateClock, 100);
     updateClock();
 
-    // Fetch setiap 500ms untuk lebih real-time
+    // Fetch Treasury setiap 500ms
     setInterval(fetchPrices, 500);
     fetchPrices();
+
+    // Fetch XAU/USD setiap 2 detik (real-time dari TradingView)
+    setInterval(fetchXauRealtime, 2000);
+    fetchXauRealtime();
   </script>
 </body>
 </html>`
