@@ -1405,7 +1405,7 @@ ${marketSection}
 🎁 20jt→${formatGrams(grams20M)}gr (+Rp${formatRupiah(Math.round(profit20M))}) | 30jt→${formatGrams(grams30M)}gr (+Rp${formatRupiah(Math.round(profit30M))})
 ${calendarSection}
 📊 Lihat Chart & Riwayat Lengkap:
-🔗 https://treasury.muhamadaliyudin.xyz`
+🔗 https://ts.muhamadaliyudin.xyz`
 }
 async function fetchTreasury() {
   const res = await fetch(TREASURY_URL, {
@@ -5456,7 +5456,6 @@ app.get('/monitoring', async (_req, res) => {
       <div class="header-right">
         <div class="clock" id="clock">--:--:--</div>
         <div class="date-info" id="dateInfo">Loading...</div>
-        <button onclick="logout()" style="margin-top:5px;padding:4px 10px;background:#ff4444;border:none;border-radius:5px;color:white;font-size:0.7em;cursor:pointer;">Logout</button>
       </div>
     </div>
 
