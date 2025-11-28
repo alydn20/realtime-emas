@@ -2915,9 +2915,11 @@ function generateSessionId() {
 // Helper: Normalize phone number (remove +62, 62, 0 prefix -> just numbers)
 function normalizePhone(phone) {
   let clean = phone.replace(/\D/g, '')
+  // Remove leading 0 or 62
   if (clean.startsWith('62')) clean = clean.substring(2)
   if (clean.startsWith('0')) clean = clean.substring(1)
-  return clean
+  // Always return with 62 prefix for consistency with database
+  return '62' + clean
 }
 
 // Helper: Check if user is valid (exists and not expired)
