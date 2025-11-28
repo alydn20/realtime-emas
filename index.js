@@ -4792,10 +4792,66 @@ ${authScript}
     .btn-warning { background: #ff9800; color: white; }
     .btn-warning:hover { background: #ffb74d; }
 
-    @media (max-width: 600px) {
+    /* Responsive untuk Tablet */
+    @media (max-width: 900px) {
+      .container { max-width: 100%; padding: 0 10px; }
+      .stats-row { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+      .stat-card { padding: 15px 10px; }
+      .stat-value { font-size: 1.5em; }
+      .card { padding: 15px; }
+      .form-row { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* Responsive untuk HP (landscape) */
+    @media (max-width: 768px) {
+      body { padding: 10px; }
+      .header { flex-direction: column; gap: 10px; text-align: center; }
+      .header h1 { font-size: 1.1em; }
+      .header-actions { flex-wrap: wrap; justify-content: center; }
+      .stats-row { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .stat-card { padding: 12px 8px; }
+      .stat-value { font-size: 1.3em; }
+      .stat-label { font-size: 0.75em; }
+      .form-row { grid-template-columns: 1fr; }
       .user-table { font-size: 0.85em; }
+      .user-table th, .user-table td { padding: 10px 6px; }
+      .btn { padding: 8px 12px; font-size: 0.9em; }
+      .btn-sm { padding: 5px 8px; font-size: 0.8em; }
+      .card { overflow-x: auto; }
+      .user-table { min-width: 600px; }
+    }
+
+    /* Responsive untuk HP (portrait) */
+    @media (max-width: 600px) {
+      body { padding: 8px; }
+      .header { padding: 12px 15px; }
+      .header h1 { font-size: 1em; }
+      .header-actions a { padding: 6px 10px; font-size: 0.8em; }
+      .stats-row { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+      .stat-card { padding: 10px 5px; border-radius: 8px; }
+      .stat-value { font-size: 1.1em; }
+      .stat-label { font-size: 0.7em; }
+      .card { padding: 12px; border-radius: 10px; margin-bottom: 15px; }
+      .card h2 { font-size: 1em; margin-bottom: 10px; }
+      .form-group input, .form-group select { padding: 8px; font-size: 0.95em; }
+      .btn { padding: 8px 15px; font-size: 0.85em; }
+      .btn-sm { padding: 4px 8px; font-size: 0.75em; white-space: nowrap; }
+      .user-table { min-width: 550px; font-size: 0.8em; }
       .user-table th, .user-table td { padding: 8px 5px; }
-      .stats-row { grid-template-columns: 1fr; }
+      .modal-content { padding: 20px 15px; }
+    }
+
+    /* Responsive untuk HP kecil */
+    @media (max-width: 400px) {
+      body { padding: 5px; }
+      .stats-row { gap: 5px; }
+      .stat-card { padding: 8px 4px; }
+      .stat-value { font-size: 1em; }
+      .stat-label { font-size: 0.65em; }
+      .header-actions { gap: 5px; }
+      .header-actions a { padding: 5px 8px; font-size: 0.75em; }
+      .btn-sm { padding: 3px 6px; font-size: 0.7em; }
+      .user-table { min-width: 500px; }
     }
   </style>
 </head>
