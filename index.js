@@ -3847,6 +3847,21 @@ app.get('/api/pending-registrations', async (req, res) => {
   }
 })
 
+// Force clear pending registrations
+app.get('/api/force-clear-pending', async (req, res) => {
+  try {
+    // Delete the entire key
+    const deleted = await redis.del('gold:pending_registrations')
+
+    // Verify it's gone
+    const check = await redis.hgetall('gold:pending_registrations')
+
+    res.json({ deleted: deleted, remaining: check })
+  } catch (e) {
+    res.json({ error: e.message })
+  }
+})
+
 // Debug endpoint to see raw redis data
 app.get('/api/debug-pending', async (req, res) => {
   try {
