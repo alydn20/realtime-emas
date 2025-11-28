@@ -3996,7 +3996,7 @@ app.post('/api/approve-registration', async (req, res) => {
 
     res.json({ success: true, message: 'Pendaftaran disetujui' })
   } catch (e) {
-    res.json({ success: false, message: 'Gagal menyetujui pendaftaran' })
+    res.json({ success: false, message: 'Gagal menyetujui pendaftaran: ' + e.message })
   }
 })
 
@@ -4033,7 +4033,7 @@ app.post('/api/reject-registration', async (req, res) => {
 
     res.json({ success: true, message: 'Pendaftaran ditolak' })
   } catch (e) {
-    res.json({ success: false, message: 'Gagal menolak pendaftaran' })
+    res.json({ success: false, message: 'Gagal menolak pendaftaran: ' + e.message })
   }
 })
 
