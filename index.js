@@ -5450,8 +5450,8 @@ ${authScript}
               '<td><strong>' + r.name + '</strong></td>' +
               '<td>+' + r.phone + '</td>' +
               '<td>' +
-                '<button class="btn btn-sm btn-success" onclick="approveRegistration(\x27' + r.phone + '\x27)">ACC</button> ' +
-                '<button class="btn btn-sm btn-danger" onclick="rejectRegistration(\x27' + r.phone + '\x27)">Tolak</button>' +
+                "<button class='btn btn-sm btn-success' onclick=\"approveRegistration('" + r.phone + "')\">ACC</button> " +
+                "<button class='btn btn-sm btn-danger' onclick=\"rejectRegistration('" + r.phone + "')\">Tolak</button>" +
               '</td>' +
             '</tr>';
           }).join('');
