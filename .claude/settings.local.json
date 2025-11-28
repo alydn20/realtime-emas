@@ -14,7 +14,8 @@
       "Bash(git pull:*)",
       "Bash(md5sum:*)",
       "Bash(cat:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []

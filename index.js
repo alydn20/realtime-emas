@@ -129,8 +129,7 @@ let cachedMarketData = {
 // Admin phones for notifications (dapat diubah via menu admin)
 let ADMIN_PHONES = ['62895701692525'] // Default admin phone
 
-// Pending registrations storage
-let pendingRegistrations = new Map() // phone -> {name, phone, timestamp}
+// Pending registrations now stored in Redis (REDIS_KEYS.PENDING_REGISTRATIONS)
 
 const REDIS_KEYS = {
   DAILY_STATS: 'gold:daily_stats',
@@ -144,7 +143,8 @@ const REDIS_KEYS = {
   SOUND_SETTINGS: 'gold:sound_settings', // JSON: custom sound settings (soundUp, soundDown URLs)
   LOGIN_TOKENS: 'gold:login_tokens', // Hash: token -> { phone, expires }
   LOGIN_ATTEMPTS: 'gold:login_attempts', // Hash: phone -> { attempts, lastAttempt }
-  BLOCKED_USERS: 'gold:blocked_users' // Hash: phone -> { blockedAt, reason }
+  BLOCKED_USERS: 'gold:blocked_users', // Hash: phone -> { blockedAt, reason }
+  PENDING_REGISTRATIONS: 'gold:pending_registrations' // Hash: phone -> { name, phone, timestamp }
 }
 
 // Admin password untuk akses admin panel
@@ -3763,16 +3763,17 @@ app.post('/api/register', async (req, res) => {
     }
 
     // Check if already pending
-    if (pendingRegistrations.has(normalizedPhone)) {
+    const existingPending = await redis.hget(REDIS_KEYS.PENDING_REGISTRATIONS, normalizedPhone)
+    if (existingPending) {
       return res.json({ success: false, message: 'Pendaftaran Anda sedang menunggu persetujuan admin.' })
     }
 
-    // Add to pending
-    pendingRegistrations.set(normalizedPhone, {
+    // Add to pending (stored in Redis)
+    await redis.hset(REDIS_KEYS.PENDING_REGISTRATIONS, normalizedPhone, JSON.stringify({
       name: name,
       phone: normalizedPhone,
       timestamp: Date.now()
-    })
+    }))
 
     // Send notification to all admin phones via WhatsApp
     if (isReady && sock) {
@@ -3803,8 +3804,13 @@ app.post('/api/register', async (req, res) => {
 
 // Get pending registrations (admin only)
 app.get('/api/pending-registrations', async (req, res) => {
-  const list = Array.from(pendingRegistrations.values())
-  res.json({ registrations: list })
+  try {
+    const all = await redis.hgetall(REDIS_KEYS.PENDING_REGISTRATIONS)
+    const list = Object.values(all || {}).map(v => JSON.parse(v))
+    res.json({ registrations: list })
+  } catch (e) {
+    res.json({ registrations: [] })
+  }
 })
 
 // Approve registration (admin only)
@@ -3812,11 +3818,12 @@ app.post('/api/approve-registration', async (req, res) => {
   try {
     const { phone } = req.body
 
-    if (!pendingRegistrations.has(phone)) {
+    const pendingData = await redis.hget(REDIS_KEYS.PENDING_REGISTRATIONS, phone)
+    if (!pendingData) {
       return res.json({ success: false, message: 'Pendaftaran tidak ditemukan' })
     }
 
-    const registration = pendingRegistrations.get(phone)
+    const registration = JSON.parse(pendingData)
 
     // Create user
     const userData = {
@@ -3828,8 +3835,8 @@ app.post('/api/approve-registration', async (req, res) => {
 
     await redis.hset(REDIS_KEYS.USERS, phone, JSON.stringify(userData))
 
-    // Remove from pending
-    pendingRegistrations.delete(phone)
+    // Remove from pending (Redis)
+    await redis.hdel(REDIS_KEYS.PENDING_REGISTRATIONS, phone)
 
     // Send approval message to user
     if (isReady && sock) {
@@ -3854,14 +3861,15 @@ app.post('/api/reject-registration', async (req, res) => {
   try {
     const { phone, reason } = req.body
 
-    if (!pendingRegistrations.has(phone)) {
+    const pendingData = await redis.hget(REDIS_KEYS.PENDING_REGISTRATIONS, phone)
+    if (!pendingData) {
       return res.json({ success: false, message: 'Pendaftaran tidak ditemukan' })
     }
 
-    const registration = pendingRegistrations.get(phone)
+    const registration = JSON.parse(pendingData)
 
-    // Remove from pending
-    pendingRegistrations.delete(phone)
+    // Remove from pending (Redis)
+    await redis.hdel(REDIS_KEYS.PENDING_REGISTRATIONS, phone)
 
     // Send rejection message to user
     if (isReady && sock) {
