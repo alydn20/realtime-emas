@@ -3847,6 +3847,21 @@ app.get('/api/pending-registrations', async (req, res) => {
   }
 })
 
+// Debug endpoint to see raw redis data
+app.get('/api/debug-pending', async (req, res) => {
+  try {
+    const raw = await redis.hgetall(REDIS_KEYS.PENDING_REGISTRATIONS)
+    res.json({
+      type: typeof raw,
+      isArray: Array.isArray(raw),
+      keys: raw ? Object.keys(raw) : [],
+      raw: raw
+    })
+  } catch (e) {
+    res.json({ error: e.message })
+  }
+})
+
 // Clear and add test pending registrations (admin only)
 app.post('/api/reset-pending-test', async (req, res) => {
   try {
