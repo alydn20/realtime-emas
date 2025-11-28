@@ -5382,11 +5382,11 @@ app.get('/monitoring', async (_req, res) => {
       font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
       background: #0f1419;
       min-height: 100vh;
-      padding: 20px;
+      padding: 10px;
       color: #e7e9ea;
       zoom: 1.25;
     }
-    .container { max-width: 1100px; margin: 0 auto; }
+    .container { max-width: 1600px; width: 95%; margin: 0 auto; }
 
     /* Header - Compact */
     .header {
