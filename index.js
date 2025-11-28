@@ -3865,10 +3865,18 @@ app.get('/api/debug-pending', async (req, res) => {
 // Clear and add test pending registrations (admin only)
 app.post('/api/reset-pending-test', async (req, res) => {
   try {
-    // Clear all pending
+    // First get all keys and delete them individually
+    const all = await redis.hgetall(REDIS_KEYS.PENDING_REGISTRATIONS)
+    if (all) {
+      for (const key of Object.keys(all)) {
+        await redis.hdel(REDIS_KEYS.PENDING_REGISTRATIONS, key)
+      }
+    }
+
+    // Also try del
     await redis.del(REDIS_KEYS.PENDING_REGISTRATIONS)
 
-    // Add test data
+    // Add test data - use hset with explicit key-value pairs
     const testData = [
       { name: 'Ahmad Wijaya', phone: '6281234567890', timestamp: Date.now() },
       { name: 'Budi Santoso', phone: '6282345678901', timestamp: Date.now() - 60000 },
@@ -3876,11 +3884,18 @@ app.post('/api/reset-pending-test', async (req, res) => {
     ]
 
     for (const data of testData) {
-      await redis.hset(REDIS_KEYS.PENDING_REGISTRATIONS, data.phone, JSON.stringify(data))
+      const jsonData = JSON.stringify(data)
+      await redis.hset(REDIS_KEYS.PENDING_REGISTRATIONS, data.phone, jsonData)
+      console.log('Added:', data.phone, '=', jsonData)
     }
 
-    res.json({ success: true, message: 'Test data added', count: testData.length })
+    // Verify
+    const verify = await redis.hgetall(REDIS_KEYS.PENDING_REGISTRATIONS)
+    console.log('Verify after add:', verify)
+
+    res.json({ success: true, message: 'Test data added', count: testData.length, verify: verify })
   } catch (e) {
+    console.error('Reset error:', e)
     res.json({ success: false, message: e.message })
   }
 })
