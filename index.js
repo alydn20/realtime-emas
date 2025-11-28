@@ -3847,6 +3847,41 @@ app.get('/api/pending-registrations', async (req, res) => {
   }
 })
 
+// Simple test with individual set commands
+app.get('/api/test-pending-add', async (req, res) => {
+  try {
+    const key = 'gold:pending_reg_v2'
+
+    // Use set instead of hset - store as simple string with phone as part of key
+    const testData = [
+      { name: 'Ahmad Wijaya', phone: '6281234567890', timestamp: Date.now() },
+      { name: 'Budi Santoso', phone: '6282345678901', timestamp: Date.now() - 60000 },
+      { name: 'Citra Dewi', phone: '6283456789012', timestamp: Date.now() - 120000 }
+    ]
+
+    // Clear first using del
+    await redis.del(key)
+
+    // Try different hset syntax
+    for (const data of testData) {
+      // Upstash might need: hset(key, {field: value})
+      await redis.hset(key, { [data.phone]: JSON.stringify(data) })
+    }
+
+    const verify = await redis.hgetall(key)
+
+    res.json({
+      success: true,
+      testData,
+      verifyType: typeof verify,
+      verifyIsArray: Array.isArray(verify),
+      verify
+    })
+  } catch (e) {
+    res.json({ error: e.message, stack: e.stack })
+  }
+})
+
 // Force clear pending registrations
 app.get('/api/force-clear-pending', async (req, res) => {
   try {
