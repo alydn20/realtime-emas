@@ -3849,6 +3849,22 @@ app.get('/api/pending-registrations', async (req, res) => {
   }
 })
 
+// Check if user exists in database
+app.get('/api/check-user/:phone', async (req, res) => {
+  try {
+    const phone = req.params.phone
+    const userData = await redis.hget(REDIS_KEYS.USERS, phone)
+    if (userData) {
+      const user = typeof userData === 'string' ? JSON.parse(userData) : userData
+      res.json({ exists: true, user })
+    } else {
+      res.json({ exists: false })
+    }
+  } catch (e) {
+    res.json({ error: e.message })
+  }
+})
+
 // Simple test with individual set commands
 app.get('/api/test-pending-add', async (req, res) => {
   try {
