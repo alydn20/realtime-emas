@@ -4763,18 +4763,8 @@ ${authScript}
 </head>
 <body>
   <div class="container">
-    <!-- Login Form -->
-    <div class="login-form" id="loginForm">
-      <h2>Admin Login</h2>
-      <div class="form-group">
-        <label>Password Admin</label>
-        <input type="password" id="adminPassword" placeholder="Masukkan password">
-      </div>
-      <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="adminLogin()">Login</button>
-    </div>
-
-    <!-- Main Content (hidden until login) -->
-    <div id="mainContent" style="display:none;">
+    <!-- Main Content - langsung tampil karena sudah auth via /admin-login -->
+    <div id="mainContent">
       <div class="header">
         <h1>Kelola User</h1>
         <div class="header-actions">
@@ -4998,35 +4988,16 @@ ${authScript}
   </div>
 
   <script>
-    let adminPass = '';
+    // Admin sudah terautentikasi via /admin-login
+    const adminPass = 'admin123'; // Default password untuk API calls
 
-    function adminLogin() {
-      adminPass = document.getElementById('adminPassword').value;
-      if (!adminPass) return alert('Password wajib diisi');
-
-      fetch('/api/admin/users?password=' + encodeURIComponent(adminPass))
-        .then(r => r.json())
-        .then(data => {
-          if (data.success) {
-            document.getElementById('loginForm').style.display = 'none';
-            document.getElementById('mainContent').style.display = 'block';
-            localStorage.setItem('admin_pass', adminPass);
-            loadUsers();
-            loadPendingRegistrations();
-            loadWaGroups();
-            loadSoundSettings();
-          } else {
-            alert('Password salah');
-          }
-        });
-    }
-
-    // Auto login if saved
-    const savedPass = localStorage.getItem('admin_pass');
-    if (savedPass) {
-      document.getElementById('adminPassword').value = savedPass;
-      adminLogin();
-    }
+    // Load data langsung saat halaman dibuka
+    document.addEventListener('DOMContentLoaded', function() {
+      loadUsers();
+      loadPendingRegistrations();
+      loadWaGroups();
+      loadSoundSettings();
+    });
 
     // ==================== Sound Settings Functions ====================
     let currentSoundUp = '';
