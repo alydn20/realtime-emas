@@ -3739,6 +3739,146 @@ app.post('/api/admin/wa-groups/sync', express.json(), async (req, res) => {
   }
 })
 
+
+// ==================== REGISTRATION ENDPOINTS ====================
+
+// Register endpoint - user submit pendaftaran
+app.post('/api/register', async (req, res) => {
+  try {
+    const { phone, name } = req.body
+
+    if (!phone || !name) {
+      return res.json({ success: false, message: 'Nama dan nomor HP wajib diisi' })
+    }
+
+    // Normalize phone
+    let normalizedPhone = phone.replace(/\D/g, '')
+    if (normalizedPhone.startsWith('0')) normalizedPhone = '62' + normalizedPhone.substring(1)
+    if (!normalizedPhone.startsWith('62')) normalizedPhone = '62' + normalizedPhone
+
+    // Check if already registered
+    const existing = await redis.hget(REDIS_KEYS.USERS, normalizedPhone)
+    if (existing) {
+      return res.json({ success: false, message: 'Nomor ini sudah terdaftar. Silakan login.' })
+    }
+
+    // Check if already pending
+    if (pendingRegistrations.has(normalizedPhone)) {
+      return res.json({ success: false, message: 'Pendaftaran Anda sedang menunggu persetujuan admin.' })
+    }
+
+    // Add to pending
+    pendingRegistrations.set(normalizedPhone, {
+      name: name,
+      phone: normalizedPhone,
+      timestamp: Date.now()
+    })
+
+    // Send notification to admin via WhatsApp
+    if (isReady && sock) {
+      try {
+        const adminJid = ADMIN_PHONE + '@s.whatsapp.net'
+        await sock.sendMessage(adminJid, {
+          text: `🔔 *PENDAFTARAN BARU*\n\nNama: *${name}*\nNo HP: ${normalizedPhone}\n\nSilakan ACC di menu admin:\nhttps://realtime-emas-production.up.railway.app/admin/users`
+        })
+        pushLog(`REGISTER | Notification sent to admin for ${normalizedPhone}`)
+      } catch (e) {
+        pushLog(`REGISTER | Failed to send admin notification: ${e.message}`)
+      }
+    }
+
+    pushLog(`REGISTER | New registration: ${name} (${normalizedPhone})`)
+
+    res.json({
+      success: true,
+      message: 'Pendaftaran berhasil dikirim! Tunggu persetujuan admin.'
+    })
+  } catch (e) {
+    console.error('Register error:', e)
+    res.json({ success: false, message: 'Terjadi kesalahan. Coba lagi.' })
+  }
+})
+
+// Get pending registrations (admin only)
+app.get('/api/pending-registrations', async (req, res) => {
+  const list = Array.from(pendingRegistrations.values())
+  res.json({ registrations: list })
+})
+
+// Approve registration (admin only)
+app.post('/api/approve-registration', async (req, res) => {
+  try {
+    const { phone } = req.body
+
+    if (!pendingRegistrations.has(phone)) {
+      return res.json({ success: false, message: 'Pendaftaran tidak ditemukan' })
+    }
+
+    const registration = pendingRegistrations.get(phone)
+
+    // Create user
+    const userData = {
+      phone: phone,
+      name: registration.name,
+      createdAt: new Date().toISOString(),
+      active: true
+    }
+
+    await redis.hset(REDIS_KEYS.USERS, phone, JSON.stringify(userData))
+
+    // Remove from pending
+    pendingRegistrations.delete(phone)
+
+    // Send approval message to user
+    if (isReady && sock) {
+      try {
+        const userJid = phone + '@s.whatsapp.net'
+        await sock.sendMessage(userJid, {
+          text: `✅ *PENDAFTARAN DISETUJUI*\n\nHalo ${registration.name}!\n\nPendaftaran Anda telah disetujui.\nSilakan login di:\nhttps://realtime-emas-production.up.railway.app/login\n\nGunakan nomor ini untuk login.`
+        })
+      } catch (e) {}
+    }
+
+    pushLog(`REGISTER | Approved: ${registration.name} (${phone})`)
+
+    res.json({ success: true, message: 'Pendaftaran disetujui' })
+  } catch (e) {
+    res.json({ success: false, message: 'Gagal menyetujui pendaftaran' })
+  }
+})
+
+// Reject registration (admin only)
+app.post('/api/reject-registration', async (req, res) => {
+  try {
+    const { phone, reason } = req.body
+
+    if (!pendingRegistrations.has(phone)) {
+      return res.json({ success: false, message: 'Pendaftaran tidak ditemukan' })
+    }
+
+    const registration = pendingRegistrations.get(phone)
+
+    // Remove from pending
+    pendingRegistrations.delete(phone)
+
+    // Send rejection message to user
+    if (isReady && sock) {
+      try {
+        const userJid = phone + '@s.whatsapp.net'
+        await sock.sendMessage(userJid, {
+          text: `❌ *PENDAFTARAN DITOLAK*\n\nMaaf ${registration.name},\n\nPendaftaran Anda tidak disetujui.${reason ? '\nAlasan: ' + reason : ''}\n\nSilakan hubungi admin untuk informasi lebih lanjut.`
+        })
+      } catch (e) {}
+    }
+
+    pushLog(`REGISTER | Rejected: ${registration.name} (${phone})`)
+
+    res.json({ success: true, message: 'Pendaftaran ditolak' })
+  } catch (e) {
+    res.json({ success: false, message: 'Gagal menolak pendaftaran' })
+  }
+})
+
 // ==================== LOGIN PAGE ====================
 app.get('/login', (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
