@@ -3806,9 +3806,21 @@ app.post('/api/register', async (req, res) => {
 app.get('/api/pending-registrations', async (req, res) => {
   try {
     const all = await redis.hgetall(REDIS_KEYS.PENDING_REGISTRATIONS)
-    const list = Object.values(all || {}).map(v => JSON.parse(v))
+    if (!all || Object.keys(all).length === 0) {
+      return res.json({ registrations: [] })
+    }
+    const list = []
+    for (const [phone, data] of Object.entries(all)) {
+      try {
+        const parsed = typeof data === 'string' ? JSON.parse(data) : data
+        list.push(parsed)
+      } catch (parseErr) {
+        console.error('Parse error for', phone, ':', parseErr.message)
+      }
+    }
     res.json({ registrations: list })
   } catch (e) {
+    console.error('Get pending error:', e)
     res.json({ registrations: [] })
   }
 })
