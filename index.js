@@ -5450,11 +5450,19 @@ ${authScript}
               '<td><strong>' + r.name + '</strong></td>' +
               '<td>+' + r.phone + '</td>' +
               '<td>' +
-                "<button class='btn btn-sm btn-success' onclick=\"approveRegistration('" + r.phone + "')\">ACC</button> " +
-                "<button class='btn btn-sm btn-danger' onclick=\"rejectRegistration('" + r.phone + "')\">Tolak</button>" +
+                '<button class="btn btn-sm btn-success btn-approve" data-phone="' + r.phone + '">ACC</button> ' +
+                '<button class="btn btn-sm btn-danger btn-reject" data-phone="' + r.phone + '">Tolak</button>' +
               '</td>' +
             '</tr>';
           }).join('');
+
+          // Add click handlers
+          tbody.querySelectorAll('.btn-approve').forEach(function(btn) {
+            btn.addEventListener('click', function() { approveRegistration(this.dataset.phone); });
+          });
+          tbody.querySelectorAll('.btn-reject').forEach(function(btn) {
+            btn.addEventListener('click', function() { rejectRegistration(this.dataset.phone); });
+          });
         });
     }
 
