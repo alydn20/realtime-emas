@@ -3961,7 +3961,7 @@ app.get('/login', (_req, res) => {
 
   <script>
     // Disable right-click
-    document.addEventListener('contextmenu', e => e.preventDefault());
+    // Right-click enabled
 
     let currentPhone = '';
     let resendTimer = null;
@@ -6020,6 +6020,7 @@ app.get('/monitoring', async (_req, res) => {
 
     let lastBuy = 0;
     let lastSell = 0;
+    let lastUpdatedAt = 0; // Track timestamp untuk anti flip-flop
     const PER_PAGE = 10;
     let currentPage = 1;
     let totalPages = 1;
@@ -6338,7 +6339,7 @@ app.get('/monitoring', async (_req, res) => {
     }
 
     // Disable right-click
-    document.addEventListener('contextmenu', e => e.preventDefault());
+    // Right-click enabled
 
     // ==================== PUSH NOTIFICATION SUBSCRIPTION ====================
     async function subscribeToPush() {
@@ -6515,6 +6516,15 @@ app.get('/monitoring', async (_req, res) => {
         const data = await res.json();
         const fetchTime = Date.now() - fetchStart;
 
+        // Anti flip-flop: cek timestamp
+        const dataTimestamp = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+        if (dataTimestamp > 0 && dataTimestamp <= lastUpdatedAt) {
+          return; // Skip data lama
+        }
+        if (dataTimestamp > lastUpdatedAt) {
+          lastUpdatedAt = dataTimestamp;
+        }
+
         if (data.buy) {
           document.getElementById('buyPrice').textContent = formatRupiah(data.buy);
           if (data.buy !== lastBuy && lastBuy > 0) {
@@ -6613,6 +6623,15 @@ app.get('/monitoring', async (_req, res) => {
         }
 
         if (data.type === 'price') {
+          // Anti flip-flop: cek timestamp, skip jika data lama
+          const dataTimestamp = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+          if (dataTimestamp > 0 && dataTimestamp <= lastUpdatedAt) {
+            return; // Skip data lama
+          }
+          if (dataTimestamp > lastUpdatedAt) {
+            lastUpdatedAt = dataTimestamp;
+          }
+
           // Update harga beli
           if (data.buy) {
             document.getElementById('buyPrice').textContent = formatRupiah(data.buy);
