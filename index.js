@@ -6522,9 +6522,6 @@ app.get('/monitoring', async (_req, res) => {
       const year = now.getFullYear();
       const dateStr = dayName + ', ' + date + ' ' + month + ' ' + year + ' WIB';
       
-      document.getElementById('clock').textContent = timeStr;
-      document.getElementById('dateInfo').textContent = dateStr;
-      
       // Update clock2 di pojok kanan (bawah Sound)
       const clock2 = document.getElementById('clock2');
       const dateInfo2 = document.getElementById('dateInfo2');
