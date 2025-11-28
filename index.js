@@ -144,7 +144,7 @@ const REDIS_KEYS = {
   LOGIN_TOKENS: 'gold:login_tokens', // Hash: token -> { phone, expires }
   LOGIN_ATTEMPTS: 'gold:login_attempts', // Hash: phone -> { attempts, lastAttempt }
   BLOCKED_USERS: 'gold:blocked_users', // Hash: phone -> { blockedAt, reason }
-  PENDING_REGISTRATIONS: 'gold:pending_registrations' // Hash: phone -> { name, phone, timestamp }
+  PENDING_REGISTRATIONS: 'gold:pending_reg_v2' // Hash: phone -> { name, phone, timestamp }
 }
 
 // Admin password untuk akses admin panel
