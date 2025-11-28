@@ -5582,6 +5582,32 @@ app.get('/monitoring', async (_req, res) => {
       color: #e7e9ea;
       font-weight: 600;
     }
+    .daily-item.clock-item {
+      flex-direction: column;
+      gap: 2px;
+      padding: 6px 12px;
+      background: linear-gradient(135deg, #1a1f26, #151920);
+      border: 1px solid #2f3640;
+    }
+    .clock-time {
+      font-size: 1.4em;
+      font-weight: 700;
+      color: #f7931a;
+      font-family: 'Segoe UI', monospace;
+      letter-spacing: 1px;
+    }
+    .clock-date {
+      font-size: 0.85em;
+      color: #71767b;
+    }
+    .trend-icon-up {
+      color: #00c853;
+      font-size: 1.2em;
+    }
+    .trend-icon-down {
+      color: #ff5252;
+      font-size: 1.2em;
+    }
     .daily-item .daily-value.high { color: #00c853; }
     .daily-item .daily-value.low { color: #ff5252; }
     .daily-item.sound-toggle {
@@ -5902,7 +5928,7 @@ app.get('/monitoring', async (_req, res) => {
     <div class="chart-section">
       <div class="chart-header">
         <div class="chart-title">
-          <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-3 3"/></svg>XAU/USD Chart</h2>
+          <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-3 3"/></svg>XAU/USD Chart <span id="trendIcon" style="margin-left:8px;"></span></h2>
           <span class="live-badge">Live</span>
         </div>
         <div class="chart-stats">
@@ -5935,11 +5961,15 @@ app.get('/monitoring', async (_req, res) => {
             <span class="stat-change up" id="profit30">-</span>
           </div>
         </div>
-        <!-- Sound Toggle Only -->
+        <!-- Sound Toggle & Clock - Pojok Kanan -->
         <div class="daily-stats">
           <div class="daily-item sound-toggle" id="soundToggle" onclick="toggleSound()">
             <span class="daily-label">Sound</span>
             <span class="daily-value" id="soundStatus">ON</span>
+          </div>
+          <div class="daily-item clock-item">
+            <span class="clock-time" id="clock2">--:--:--</span>
+            <span class="clock-date" id="dateInfo2">Loading...</span>
           </div>
         </div>
       </div>
@@ -6487,12 +6517,21 @@ app.get('/monitoring', async (_req, res) => {
 
     function updateClock() {
       const now = getAccurateTime();
-      document.getElementById('clock').textContent = formatTime(now);
+      const timeStr = formatTime(now);
       const dayName = days[now.getDay()];
       const date = now.getDate();
       const month = months[now.getMonth()];
       const year = now.getFullYear();
-      document.getElementById('dateInfo').textContent = dayName + ', ' + date + ' ' + month + ' ' + year + ' WIB';
+      const dateStr = dayName + ', ' + date + ' ' + month + ' ' + year + ' WIB';
+      
+      document.getElementById('clock').textContent = timeStr;
+      document.getElementById('dateInfo').textContent = dateStr;
+      
+      // Update clock2 di pojok kanan (bawah Sound)
+      const clock2 = document.getElementById('clock2');
+      const dateInfo2 = document.getElementById('dateInfo2');
+      if (clock2) clock2.textContent = timeStr;
+      if (dateInfo2) dateInfo2.textContent = dateStr;
     }
 
     // updateHistory - refresh dari server saat ada perubahan
@@ -6643,6 +6682,18 @@ app.get('/monitoring', async (_req, res) => {
               document.getElementById('buyChange').textContent = sign + change.toLocaleString('id-ID');
               document.getElementById('buyChange').className = 'stat-change ' + cls;
               playSound(change > 0 ? 'up' : 'down');
+
+              // Update trend icon di XAU/USD Chart title
+              const trendIcon = document.getElementById('trendIcon');
+              if (trendIcon) {
+                if (change > 0) {
+                  trendIcon.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="#00c853" style="vertical-align:middle;"><path d="M7 14l5-5 5 5H7z"/></svg>';
+                  trendIcon.className = 'trend-icon-up';
+                } else {
+                  trendIcon.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="#ff5252" style="vertical-align:middle;"><path d="M7 10l5 5 5-5H7z"/></svg>';
+                  trendIcon.className = 'trend-icon-down';
+                }
+              }
 
               // Browser Notification
               const notifTitle = change > 0 ? 'Harga Emas NAIK' : 'Harga Emas TURUN';
