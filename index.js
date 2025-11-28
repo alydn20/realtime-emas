@@ -126,8 +126,8 @@ let cachedMarketData = {
 
 // ==================== REDIS STORAGE ====================
 
-// Admin phone for notifications
-const ADMIN_PHONE = '62895701692525'
+// Admin phones for notifications (dapat diubah via menu admin)
+let ADMIN_PHONES = ['62895701692525'] // Default admin phone
 
 // Pending registrations storage
 let pendingRegistrations = new Map() // phone -> {name, phone, timestamp}
@@ -3774,16 +3774,18 @@ app.post('/api/register', async (req, res) => {
       timestamp: Date.now()
     })
 
-    // Send notification to admin via WhatsApp
+    // Send notification to all admin phones via WhatsApp
     if (isReady && sock) {
-      try {
-        const adminJid = ADMIN_PHONE + '@s.whatsapp.net'
-        await sock.sendMessage(adminJid, {
-          text: `🔔 *PENDAFTARAN BARU*\n\nNama: *${name}*\nNo HP: ${normalizedPhone}\n\nSilakan ACC di menu admin:\nhttps://realtime-emas-production.up.railway.app/admin/users`
-        })
-        pushLog(`REGISTER | Notification sent to admin for ${normalizedPhone}`)
-      } catch (e) {
-        pushLog(`REGISTER | Failed to send admin notification: ${e.message}`)
+      for (const adminPhone of ADMIN_PHONES) {
+        try {
+          const adminJid = adminPhone + '@s.whatsapp.net'
+          await sock.sendMessage(adminJid, {
+            text: `🔔 *PENDAFTARAN BARU*\n\nNama: *${name}*\nNo HP: ${normalizedPhone}\n\nSilakan ACC di menu admin:\nhttps://realtime-emas-production.up.railway.app/admin/users`
+          })
+          pushLog(`REGISTER | Notification sent to admin ${adminPhone} for ${normalizedPhone}`)
+        } catch (e) {
+          pushLog(`REGISTER | Failed to send admin notification to ${adminPhone}: ${e.message}`)
+        }
       }
     }
 
@@ -3876,6 +3878,42 @@ app.post('/api/reject-registration', async (req, res) => {
     res.json({ success: true, message: 'Pendaftaran ditolak' })
   } catch (e) {
     res.json({ success: false, message: 'Gagal menolak pendaftaran' })
+  }
+})
+
+
+// ==================== ADMIN PHONES MANAGEMENT ====================
+
+// Get admin phones
+app.get('/api/admin-phones', (req, res) => {
+  res.json({ success: true, phones: ADMIN_PHONES })
+})
+
+// Update admin phones
+app.post('/api/admin-phones', (req, res) => {
+  try {
+    const { phones } = req.body
+    if (!Array.isArray(phones) || phones.length === 0) {
+      return res.json({ success: false, message: 'Minimal 1 nomor admin' })
+    }
+
+    // Normalize phones
+    ADMIN_PHONES = phones.map(p => {
+      let normalized = p.replace(/\D/g, '')
+      if (normalized.startsWith('0')) normalized = '62' + normalized.substring(1)
+      if (!normalized.startsWith('62')) normalized = '62' + normalized
+      return normalized
+    }).filter(p => p.length >= 10)
+
+    if (ADMIN_PHONES.length === 0) {
+      ADMIN_PHONES = ['62895701692525'] // Fallback
+      return res.json({ success: false, message: 'Nomor tidak valid' })
+    }
+
+    pushLog(`ADMIN | Admin phones updated: ${ADMIN_PHONES.join(', ')}`)
+    res.json({ success: true, phones: ADMIN_PHONES })
+  } catch (e) {
+    res.json({ success: false, message: e.message })
   }
 })
 
@@ -4987,6 +5025,22 @@ ${authScript}
     </div>
   </div>
 
+  <!-- Admin Phones Settings -->
+  <div class="card">
+    <h2>Nomor Admin untuk Notifikasi</h2>
+    <p style="color:#71767b;font-size:0.85em;margin-bottom:15px;">Nomor yang menerima notifikasi WhatsApp saat ada pendaftaran baru. Maksimal 2 nomor.</p>
+    <div class="result-msg" id="adminPhoneResult"></div>
+    <div class="form-group">
+      <label>Nomor Admin 1 (Utama)</label>
+      <input type="tel" id="adminPhone1" placeholder="0895701692525">
+    </div>
+    <div class="form-group">
+      <label>Nomor Admin 2 (Opsional)</label>
+      <input type="tel" id="adminPhone2" placeholder="08xxxxxxxxxx">
+    </div>
+    <button class="btn btn-primary" onclick="saveAdminPhones()">Simpan Nomor Admin</button>
+  </div>
+
   <script>
     // Admin sudah terautentikasi via /admin-login
     const adminPass = 'admin123'; // Default password untuk API calls
@@ -4997,11 +5051,56 @@ ${authScript}
       loadPendingRegistrations();
       loadWaGroups();
       loadSoundSettings();
+      loadAdminPhones();
     });
 
     // ==================== Sound Settings Functions ====================
     let currentSoundUp = '';
     let currentSoundDown = '';
+
+    // ==================== Admin Phones Functions ====================
+    function loadAdminPhones() {
+      fetch('/api/admin-phones')
+        .then(r => r.json())
+        .then(data => {
+          if (data.success && data.phones) {
+            document.getElementById('adminPhone1').value = data.phones[0] ? data.phones[0].replace('62', '0') : '';
+            document.getElementById('adminPhone2').value = data.phones[1] ? data.phones[1].replace('62', '0') : '';
+          }
+        });
+    }
+
+    function saveAdminPhones() {
+      const phone1 = document.getElementById('adminPhone1').value.trim();
+      const phone2 = document.getElementById('adminPhone2').value.trim();
+      const result = document.getElementById('adminPhoneResult');
+
+      if (!phone1) {
+        result.className = 'result-msg error';
+        result.textContent = 'Nomor admin 1 wajib diisi';
+        return;
+      }
+
+      const phones = [phone1];
+      if (phone2) phones.push(phone2);
+
+      fetch('/api/admin-phones', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phones })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          result.className = 'result-msg success';
+          result.textContent = 'Nomor admin berhasil disimpan';
+          loadAdminPhones();
+        } else {
+          result.className = 'result-msg error';
+          result.textContent = data.message || 'Gagal menyimpan';
+        }
+      });
+    }
 
     function loadSoundSettings() {
       fetch('/api/sound-settings')
@@ -5351,8 +5450,8 @@ ${authScript}
               '<td><strong>' + r.name + '</strong></td>' +
               '<td>+' + r.phone + '</td>' +
               '<td>' +
-                '<button class="btn btn-sm btn-success" onclick="approveRegistration(\'' + r.phone + '\')">ACC</button> ' +
-                '<button class="btn btn-sm btn-danger" onclick="rejectRegistration(\'' + r.phone + '\')">Tolak</button>' +
+                '<button class="btn btn-sm btn-success" onclick="approveRegistration(\x27' + r.phone + '\x27)">ACC</button> ' +
+                '<button class="btn btn-sm btn-danger" onclick="rejectRegistration(\x27' + r.phone + '\x27)">Tolak</button>' +
               '</td>' +
             '</tr>';
           }).join('');
