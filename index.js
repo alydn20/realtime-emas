@@ -3956,13 +3956,17 @@ app.post('/api/reset-pending-test', async (req, res) => {
 app.post('/api/approve-registration', async (req, res) => {
   try {
     const { phone } = req.body
+    console.log('Approve request for phone:', phone)
 
     const pendingData = await redis.hget(REDIS_KEYS.PENDING_REGISTRATIONS, phone)
+    console.log('Pending data:', pendingData, typeof pendingData)
+
     if (!pendingData) {
       return res.json({ success: false, message: 'Pendaftaran tidak ditemukan' })
     }
 
-    const registration = JSON.parse(pendingData)
+    // Handle both string and object formats
+    const registration = typeof pendingData === 'string' ? JSON.parse(pendingData) : pendingData
 
     // Create user
     const userData = {
@@ -3972,7 +3976,8 @@ app.post('/api/approve-registration', async (req, res) => {
       active: true
     }
 
-    await redis.hset(REDIS_KEYS.USERS, phone, JSON.stringify(userData))
+    // Use correct Upstash hset syntax
+    await redis.hset(REDIS_KEYS.USERS, { [phone]: JSON.stringify(userData) })
 
     // Remove from pending (Redis)
     await redis.hdel(REDIS_KEYS.PENDING_REGISTRATIONS, phone)
@@ -3999,13 +4004,17 @@ app.post('/api/approve-registration', async (req, res) => {
 app.post('/api/reject-registration', async (req, res) => {
   try {
     const { phone, reason } = req.body
+    console.log('Reject request for phone:', phone)
 
     const pendingData = await redis.hget(REDIS_KEYS.PENDING_REGISTRATIONS, phone)
+    console.log('Pending data for reject:', pendingData, typeof pendingData)
+
     if (!pendingData) {
       return res.json({ success: false, message: 'Pendaftaran tidak ditemukan' })
     }
 
-    const registration = JSON.parse(pendingData)
+    // Handle both string and object formats
+    const registration = typeof pendingData === 'string' ? JSON.parse(pendingData) : pendingData
 
     // Remove from pending (Redis)
     await redis.hdel(REDIS_KEYS.PENDING_REGISTRATIONS, phone)
