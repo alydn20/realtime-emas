@@ -4338,7 +4338,7 @@ app.get('/login', (_req, res) => {
       <!-- Tabs -->
       <div class="tabs">
         <button class="tab active" id="tabLogin" onclick="showTab('login')">Login</button>
-        <button class="tab" id="tabRegister" onclick="showTab('register')">Daftar</button>
+        <button class="tab" id="tabRegister" style="opacity:0.5;cursor:not-allowed;" disabled title="Pendaftaran ditutup sementara">Daftar</button>
       </div>
 
       <div id="message" class="message"></div>
