@@ -1362,7 +1362,7 @@ ${marketSection}
 🎁 20jt→${formatGrams(grams20M)}gr (+Rp${formatRupiah(Math.round(profit20M))}) | 30jt→${formatGrams(grams30M)}gr (+Rp${formatRupiah(Math.round(profit30M))})
 ${calendarSection}
 📊 Lihat Chart & Riwayat Lengkap:
-🔗 https://realtime-emas-production.up.railway.app`
+🔗 https://ts.muhamadaliyudin.xyz`
 }
 async function fetchTreasury() {
   const res = await fetch(TREASURY_URL, {
@@ -3785,7 +3785,7 @@ app.post('/api/register', async (req, res) => {
         try {
           const adminJid = adminPhone + '@s.whatsapp.net'
           await sock.sendMessage(adminJid, {
-            text: `🔔 *PENDAFTARAN BARU*\n\nNama: *${name}*\nNo HP: ${normalizedPhone}\n\nSilakan ACC di menu admin:\nhttps://realtime-emas-production.up.railway.app/admin/users`
+            text: `🔔 *PENDAFTARAN BARU*\n\nNama: *${name}*\nNo HP: ${normalizedPhone}\n\nSilakan ACC di menu admin:\nhttps://ts.muhamadaliyudin.xyz/admin/users`
           })
           pushLog(`REGISTER | Notification sent to admin ${adminPhone} for ${normalizedPhone}`)
         } catch (e) {
@@ -4005,7 +4005,7 @@ app.post('/api/approve-registration', async (req, res) => {
       try {
         const userJid = phone + '@s.whatsapp.net'
         await sock.sendMessage(userJid, {
-          text: `✅ *PENDAFTARAN DISETUJUI*\n\nHalo ${registration.name}!\n\nPendaftaran Anda telah disetujui.\nSilakan login di:\nhttps://realtime-emas-production.up.railway.app/login\n\nGunakan nomor ini untuk login.`
+          text: `✅ *PENDAFTARAN DISETUJUI*\n\nHalo ${registration.name}!\n\nPendaftaran Anda telah disetujui.\nSilakan login di:\nhttps://ts.muhamadaliyudin.xyz/login\n\nGunakan nomor ini untuk login.`
         })
       } catch (e) {}
     }
