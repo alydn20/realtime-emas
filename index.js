@@ -4397,7 +4397,7 @@ app.get('/login', (_req, res) => {
         </button>
       </div>
 
-      <div class="wait-msg" id="waitMsg">
+      <div class="wait-msg" id="waitMsg" style="display:none !important;">
         <div class="wa-icon">📱</div>
         <h3>Cek WhatsApp Anda!</h3>
         <p>Link login telah dikirim ke <strong id="phoneDisplay">+62xxx</strong></p>
@@ -4554,7 +4554,8 @@ app.get('/login', (_req, res) => {
       setLoading(true);
 
       try {
-        const res = await fetch('/api/user/request-login', {
+        // Direct login - no WA verification needed
+        const res = await fetch('/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ phone })
@@ -4563,13 +4564,14 @@ app.get('/login', (_req, res) => {
         const data = await res.json();
 
         if (data.success) {
-          document.getElementById('loginForm').style.display = 'none';
-          document.getElementById('phoneDisplay').textContent = '+62' + phone.substring(0, 3) + '****' + phone.substring(phone.length - 3);
-          document.getElementById('waitMsg').classList.add('show');
-          startResendTimer();
-          hideMessage();
+          // Save session and redirect to monitoring
+          localStorage.setItem('goldmonitor_session', data.sessionId);
+          showMessage('Login berhasil! Mengalihkan...', 'success');
+          setTimeout(() => {
+            window.location.replace('/monitoring');
+          }, 500);
         } else {
-          showMessage(data.error || 'Gagal mengirim link login', 'error');
+          showMessage(data.error || 'Login gagal', 'error');
         }
       } catch (e) {
         showMessage('Terjadi kesalahan. Coba lagi.', 'error');
