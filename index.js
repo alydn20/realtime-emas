@@ -3769,11 +3769,13 @@ app.post('/api/register', async (req, res) => {
     }
 
     // Add to pending (stored in Redis)
-    await redis.hset(REDIS_KEYS.PENDING_REGISTRATIONS, normalizedPhone, JSON.stringify({
-      name: name,
-      phone: normalizedPhone,
-      timestamp: Date.now()
-    }))
+    await redis.hset(REDIS_KEYS.PENDING_REGISTRATIONS, {
+      [normalizedPhone]: JSON.stringify({
+        name: name,
+        phone: normalizedPhone,
+        timestamp: Date.now()
+      })
+    })
 
     // Send notification to all admin phones via WhatsApp
     if (isReady && sock) {
@@ -3935,7 +3937,7 @@ app.post('/api/reset-pending-test', async (req, res) => {
 
     for (const data of testData) {
       const jsonData = JSON.stringify(data)
-      await redis.hset(REDIS_KEYS.PENDING_REGISTRATIONS, data.phone, jsonData)
+      await redis.hset(REDIS_KEYS.PENDING_REGISTRATIONS, { [data.phone]: jsonData })
       console.log('Added:', data.phone, '=', jsonData)
     }
 
