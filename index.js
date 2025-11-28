@@ -3806,18 +3806,40 @@ app.post('/api/register', async (req, res) => {
 app.get('/api/pending-registrations', async (req, res) => {
   try {
     const all = await redis.hgetall(REDIS_KEYS.PENDING_REGISTRATIONS)
-    if (!all || Object.keys(all).length === 0) {
+
+    // Debug log
+    console.log('Pending raw data type:', typeof all, Array.isArray(all))
+    console.log('Pending raw data:', JSON.stringify(all).substring(0, 500))
+
+    if (!all) {
       return res.json({ registrations: [] })
     }
+
     const list = []
-    for (const [phone, data] of Object.entries(all)) {
-      try {
-        const parsed = typeof data === 'string' ? JSON.parse(data) : data
-        list.push(parsed)
-      } catch (parseErr) {
-        console.error('Parse error for', phone, ':', parseErr.message)
+
+    // Upstash returns object {key: value, key2: value2}
+    // Or could be array [key, value, key2, value2]
+    if (Array.isArray(all)) {
+      // Handle array format [key, val, key, val...]
+      for (let i = 0; i < all.length; i += 2) {
+        try {
+          const data = all[i + 1]
+          if (data) {
+            const parsed = typeof data === 'string' ? JSON.parse(data) : data
+            list.push(parsed)
+          }
+        } catch (e) {}
+      }
+    } else if (typeof all === 'object') {
+      // Handle object format
+      for (const data of Object.values(all)) {
+        try {
+          const parsed = typeof data === 'string' ? JSON.parse(data) : data
+          list.push(parsed)
+        } catch (e) {}
       }
     }
+
     res.json({ registrations: list })
   } catch (e) {
     console.error('Get pending error:', e)
