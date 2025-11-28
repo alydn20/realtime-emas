@@ -125,6 +125,13 @@ let cachedMarketData = {
 }
 
 // ==================== REDIS STORAGE ====================
+
+// Admin phone for notifications
+const ADMIN_PHONE = '62895701692525'
+
+// Pending registrations storage
+let pendingRegistrations = new Map() // phone -> {name, phone, timestamp}
+
 const REDIS_KEYS = {
   DAILY_STATS: 'gold:daily_stats',
   PRICE_HISTORY: 'gold:price_history',
@@ -3918,6 +3925,32 @@ app.get('/login', (_req, res) => {
       cursor: not-allowed;
       text-decoration: none;
     }
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .tab {
+      flex: 1;
+      padding: 12px;
+      border: 1px solid #2f3640;
+      border-radius: 10px;
+      background: transparent;
+      color: #71767b;
+      font-size: 0.85em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab.active {
+      background: linear-gradient(135deg, #f7931a 0%, #ff6b00 100%);
+      color: white;
+      border-color: transparent;
+    }
+    .tab:hover:not(.active) {
+      border-color: #f7931a;
+      color: #f7931a;
+    }
   </style>
 </head>
 <body>
@@ -3927,10 +3960,17 @@ app.get('/login', (_req, res) => {
         <img src="/icon.png" alt="Gold Monitor">
       </div>
       <h1>Gold Price Monitor</h1>
-      <p class="subtitle">Masuk dengan nomor HP yang terdaftar untuk monitoring harga emas real-time</p>
+      <p class="subtitle">Monitoring harga emas real-time</p>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab active" id="tabLogin" onclick="showTab('login')">Login</button>
+        <button class="tab" id="tabRegister" onclick="showTab('register')">Daftar</button>
+      </div>
 
       <div id="message" class="message"></div>
 
+      <!-- Login Form -->
       <div id="loginForm">
         <div class="form-group">
           <label>Nomor WhatsApp</label>
@@ -3941,6 +3981,35 @@ app.get('/login', (_req, res) => {
         </div>
         <button class="btn btn-primary" id="loginBtn" onclick="requestLogin()">
           Masuk
+        </button>
+      </div>
+
+      <!-- Register Form -->
+      <div id="registerForm" style="display:none;">
+        <div class="form-group">
+          <label>Nama Lengkap</label>
+          <input type="text" id="nameInput" placeholder="Masukkan nama Anda" maxlength="50">
+        </div>
+        <div class="form-group">
+          <label>Nomor WhatsApp</label>
+          <div class="phone-prefix">
+            <span>+62</span>
+            <input type="tel" id="regPhoneInput" placeholder="8xxxxxxxxxx" maxlength="12">
+          </div>
+        </div>
+        <button class="btn btn-primary" id="registerBtn" onclick="submitRegister()">
+          Daftar
+        </button>
+        <p style="font-size:0.7em;color:#71767b;margin-top:15px;">Pendaftaran akan diverifikasi oleh admin. Anda akan menerima notifikasi WhatsApp setelah disetujui.</p>
+      </div>
+
+      <!-- Success Register -->
+      <div id="registerSuccess" style="display:none;">
+        <div style="font-size:50px;margin-bottom:15px;">✅</div>
+        <h3 style="color:#00c853;margin-bottom:10px;">Pendaftaran Terkirim!</h3>
+        <p style="color:#71767b;font-size:0.8em;line-height:1.5;">Pendaftaran Anda sedang menunggu persetujuan admin. Anda akan menerima notifikasi WhatsApp setelah disetujui.</p>
+        <button class="btn" style="background:#2f3640;margin-top:20px;" onclick="showTab('login')">
+          Kembali ke Login
         </button>
       </div>
 
@@ -4030,6 +4099,58 @@ app.get('/login', (_req, res) => {
           resendBtn.innerHTML = 'Kirim ulang link';
         }
       }, 1000);
+    }
+
+    function showTab(tab) {
+      document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
+      document.getElementById('registerForm').style.display = tab === 'register' ? 'block' : 'none';
+      document.getElementById('registerSuccess').style.display = 'none';
+      document.getElementById('waitMsg').classList.remove('show');
+      document.getElementById('tabLogin').className = tab === 'login' ? 'tab active' : 'tab';
+      document.getElementById('tabRegister').className = tab === 'register' ? 'tab active' : 'tab';
+      hideMessage();
+    }
+
+    async function submitRegister() {
+      const name = document.getElementById('nameInput').value.trim();
+      let phone = document.getElementById('regPhoneInput').value.replace(/\D/g, '');
+
+      if (phone.startsWith('62')) phone = phone.substring(2);
+      if (phone.startsWith('0')) phone = phone.substring(1);
+
+      if (!name) {
+        showMessage('Masukkan nama Anda', 'error');
+        return;
+      }
+      if (!phone || phone.length < 9) {
+        showMessage('Masukkan nomor HP yang valid', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('registerBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading"></span>Mendaftar...';
+
+      try {
+        const res = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, phone })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          document.getElementById('registerForm').style.display = 'none';
+          document.getElementById('registerSuccess').style.display = 'block';
+        } else {
+          showMessage(data.message || 'Gagal mendaftar', 'error');
+        }
+      } catch (e) {
+        showMessage('Koneksi gagal. Coba lagi.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Daftar';
+      }
     }
 
     async function requestLogin() {
@@ -4488,6 +4609,11 @@ ${authScript}
     .result-msg.success { display: block; background: rgba(0,255,136,0.1); border: 1px solid #00ff88; color: #00ff88; }
     .result-msg.error { display: block; background: rgba(255,68,68,0.1); border: 1px solid #ff4444; color: #ff4444; }
 
+    .btn-success { background: #00c853; color: white; }
+    .btn-success:hover { background: #00e676; }
+    .btn-warning { background: #ff9800; color: white; }
+    .btn-warning:hover { background: #ffb74d; }
+
     @media (max-width: 600px) {
       .user-table { font-size: 0.85em; }
       .user-table th, .user-table td { padding: 8px 5px; }
@@ -4591,6 +4717,24 @@ ${authScript}
           <textarea id="bulkPhones" rows="6" style="width:100%;padding:10px;border:1px solid #2f3640;border-radius:8px;background:#0f1419;color:#e7e9ea;font-family:monospace;" placeholder="08123456789&#10;08234567890&#10;08345678901"></textarea>
         </div>
         <button class="btn btn-primary" onclick="bulkImport()">Import Semua</button>
+      </div>
+
+      <!-- Pending Registrations -->
+      <div class="card" id="pendingCard" style="border-color:#f7931a;">
+        <h2 style="color:#f7931a;">📋 Pending Registrasi <span id="pendingCount" style="background:#f7931a;color:#000;padding:2px 8px;border-radius:10px;font-size:0.7em;margin-left:5px;">0</span></h2>
+        <table class="user-table">
+          <thead>
+            <tr>
+              <th>Waktu</th>
+              <th>Nama</th>
+              <th>No WA</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="pendingList">
+            <tr><td colspan="4" class="empty-state">Tidak ada pendaftaran baru</td></tr>
+          </tbody>
+        </table>
       </div>
 
       <div class="card">
@@ -4728,6 +4872,7 @@ ${authScript}
             document.getElementById('mainContent').style.display = 'block';
             localStorage.setItem('admin_pass', adminPass);
             loadUsers();
+            loadPendingRegistrations();
             loadWaGroups();
             loadSoundSettings();
           } else {
@@ -5067,6 +5212,71 @@ ${authScript}
           result.textContent = 'Error: ' + data.error;
         }
         setTimeout(() => result.className = 'result-msg', 5000);
+      });
+    }
+
+    // Load pending registrations
+    function loadPendingRegistrations() {
+      fetch('/api/pending-registrations')
+        .then(r => r.json())
+        .then(data => {
+          const list = data.registrations || [];
+          const tbody = document.getElementById('pendingList');
+          const countEl = document.getElementById('pendingCount');
+          const card = document.getElementById('pendingCard');
+
+          countEl.textContent = list.length;
+          card.style.display = list.length > 0 ? 'block' : 'none';
+
+          if (list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Tidak ada pendaftaran baru</td></tr>';
+            return;
+          }
+
+          tbody.innerHTML = list.map(r => {
+            const time = new Date(r.timestamp).toLocaleString('id-ID');
+            return '<tr style="background:rgba(247,147,26,0.1);">' +
+              '<td>' + time + '</td>' +
+              '<td><strong>' + r.name + '</strong></td>' +
+              '<td>+' + r.phone + '</td>' +
+              '<td>' +
+                '<button class="btn btn-sm btn-success" onclick="approveRegistration(\'' + r.phone + '\')">ACC</button> ' +
+                '<button class="btn btn-sm btn-danger" onclick="rejectRegistration(\'' + r.phone + '\')">Tolak</button>' +
+              '</td>' +
+            '</tr>';
+          }).join('');
+        });
+    }
+
+    function approveRegistration(phone) {
+      if (!confirm('Setujui pendaftaran ini?')) return;
+
+      fetch('/api/approve-registration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone })
+      })
+      .then(r => r.json())
+      .then(data => {
+        alert(data.message);
+        loadPendingRegistrations();
+        loadUsers();
+      });
+    }
+
+    function rejectRegistration(phone) {
+      const reason = prompt('Alasan penolakan (opsional):');
+      if (reason === null) return; // Cancelled
+
+      fetch('/api/reject-registration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, reason })
+      })
+      .then(r => r.json())
+      .then(data => {
+        alert(data.message);
+        loadPendingRegistrations();
       });
     }
 
