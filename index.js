@@ -1372,7 +1372,7 @@ async function fetchTreasury() {
       'Connection': 'keep-alive'
     },
     agent: httpsAgent, // Reuse TCP connection
-    signal: AbortSignal.timeout(1500) // 1.5 detik timeout (lebih agresif)
+    signal: AbortSignal.timeout(5000) // 5 detik timeout (lebih toleran untuk network latency)
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const json = await res.json()
@@ -1722,6 +1722,7 @@ async function fastPoll() {
     }
 
     consecutiveErrors = 0
+    lastSuccessfulFetch = Date.now() // Track successful fetch
 
     const currentPrice = {
       buy: treasuryData.data.buying_rate,
@@ -1776,16 +1777,17 @@ async function fastPoll() {
     }
   } catch (e) {
     consecutiveErrors++
-    if (consecutiveErrors === 10) {
-      pushLog('TREASURY | 10 consecutive fetch errors: ' + e.message)
+    // Log setiap error untuk debugging
+    if (consecutiveErrors === 1 || consecutiveErrors % 100 === 0) {
+      pushLog('TREASURY | Fetch error #' + consecutiveErrors + ': ' + e.message)
     }
   } finally {
     isFastPolling = false
   }
 }
 
-// Fast poll setiap 100ms (ultra real-time)
-setInterval(fastPoll, 100)
+// Fast poll setiap 500ms (balanced - 2x per detik)
+setInterval(fastPoll, 500)
 // ==================== XAU/USD REAL-TIME ====================
 let lastXauUsdPrice = null
 let isXauFetching = false
@@ -1826,6 +1828,8 @@ checkXauUpdate() // Initial fetch
 // Kirim update harga setiap 10 detik meskipun harga tidak berubah
 // Ini memastikan client selalu mendapat data terbaru dan timestamp update
 let lastPeriodicBroadcast = 0
+let lastSuccessfulFetch = Date.now() // Track kapan terakhir fetch berhasil
+
 setInterval(() => {
   if (lastKnownPrice && sseClients.size > 0) {
     const now = Date.now()
@@ -1842,6 +1846,13 @@ setInterval(() => {
         serverTime: new Date().toISOString()
       })
     }
+  }
+
+  // Log warning jika tidak ada successful fetch dalam 30 detik
+  const now = Date.now()
+  if (now - lastSuccessfulFetch > 30000) {
+    pushLog('TREASURY | Warning: No successful fetch in 30+ seconds! Consecutive errors: ' + consecutiveErrors)
+    lastSuccessfulFetch = now // Reset untuk hindari spam log
   }
 }, 2000) // Check setiap 2 detik
 
