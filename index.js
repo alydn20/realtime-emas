@@ -2967,15 +2967,15 @@ app.post('/api/request-otp', express.json(), async (req, res) => {
 
   // Send OTP via WhatsApp
   try {
-    const jid = `62${normalizedPhone}@s.whatsapp.net`
+    const jid = `${normalizedPhone}@s.whatsapp.net`
     await sock.sendMessage(jid, {
       text: `🔐 *Kode OTP Gold Price Monitor*\n\nKode verifikasi Anda: *${otp}*\n\nKode berlaku 5 menit.\nJangan bagikan kode ini kepada siapapun.`
     })
 
-    pushLog(`OTP | Sent to +62${normalizedPhone}`)
+    pushLog(`OTP | Sent to +${normalizedPhone}`)
     res.json({ success: true, message: 'Kode OTP telah dikirim ke WhatsApp Anda' })
   } catch (e) {
-    pushLog(`OTP | Failed to send to +62${normalizedPhone}: ${e.message}`)
+    pushLog(`OTP | Failed to send to +${normalizedPhone}: ${e.message}`)
     res.json({ success: false, error: 'Gagal mengirim OTP. Pastikan nomor WhatsApp aktif.' })
   }
 })
@@ -3021,7 +3021,7 @@ app.post('/api/verify-otp', express.json(), async (req, res) => {
   const sessionId = generateSessionId()
   await redis.hset(REDIS_KEYS.SESSIONS, { [sessionId]: normalizedPhone })
 
-  pushLog(`OTP | User registered: +62${normalizedPhone}`)
+  pushLog(`OTP | User registered: +${normalizedPhone}`)
   res.json({ success: true, sessionId, user: userData })
 })
 
@@ -3056,7 +3056,7 @@ app.post('/api/login', express.json(), async (req, res) => {
   if (userSessions.length >= 2) {
     // Remove oldest session (FIFO - first in first out)
     await redis.hdel(REDIS_KEYS.SESSIONS, userSessions[0])
-    pushLog(`Auth | User +62${normalizedPhone} exceeded 2 devices, oldest session removed`)
+    pushLog(`Auth | User +${normalizedPhone} exceeded 2 devices, oldest session removed`)
   }
 
   // Create new session
@@ -3140,15 +3140,15 @@ app.post('/api/user/request-login', express.json(), async (req, res) => {
 
   // Send login link via WhatsApp
   try {
-    const jid = `62${normalizedPhone}@s.whatsapp.net`
+    const jid = `${normalizedPhone}@s.whatsapp.net`
     await sock.sendMessage(jid, {
       text: `🔐 *Login Gold Price Monitor*\n\nHalo ${check.user?.name || 'User'}!\n\nKlik link berikut untuk masuk:\n${loginUrl}\n\n⏰ Link berlaku 5 menit.\n⚠️ Jangan bagikan link ini kepada siapapun.`
     })
 
-    pushLog(`Auth | Login link sent to +62${normalizedPhone}`)
+    pushLog(`Auth | Login link sent to +${normalizedPhone}`)
     res.json({ success: true, message: 'Link login telah dikirim ke WhatsApp Anda' })
   } catch (e) {
-    pushLog(`Auth | Failed to send login link to +62${normalizedPhone}: ${e.message}`)
+    pushLog(`Auth | Failed to send login link to +${normalizedPhone}: ${e.message}`)
     res.json({ success: false, error: 'Gagal mengirim link. Pastikan nomor WhatsApp aktif.' })
   }
 })
@@ -3225,7 +3225,7 @@ app.post('/api/admin/users/block', express.json(), async (req, res) => {
     }
   }
 
-  pushLog(`Admin | Blocked user +62${normalizedPhone}`)
+  pushLog(`Admin | Blocked user +${normalizedPhone}`)
   res.json({ success: true })
 })
 
@@ -3239,7 +3239,7 @@ app.post('/api/admin/users/unblock', express.json(), async (req, res) => {
   const normalizedPhone = normalizePhone(phone)
   await redis.hdel(REDIS_KEYS.BLOCKED_USERS, normalizedPhone)
 
-  pushLog(`Admin | Unblocked user +62${normalizedPhone}`)
+  pushLog(`Admin | Unblocked user +${normalizedPhone}`)
   res.json({ success: true })
 })
 
@@ -3364,7 +3364,7 @@ app.post('/api/admin/users/kick', express.json(), async (req, res) => {
   if (!phone) return res.json({ success: false, error: 'Nomor wajib diisi' })
 
   const normalizedPhone = normalizePhone(phone)
-  const jid = `62${normalizedPhone}@s.whatsapp.net`
+  const jid = `${normalizedPhone}@s.whatsapp.net`
 
   try {
     // Check if we have a monitored group
@@ -3382,10 +3382,10 @@ app.post('/api/admin/users/kick', express.json(), async (req, res) => {
     try {
       await sock.groupParticipantsUpdate(monitoredGroupId, [jid], 'remove')
       kickedFromGroup = true
-      pushLog(`WA | Kicked +62${normalizedPhone} from group`)
+      pushLog(`WA | Kicked +${normalizedPhone} from group`)
     } catch (kickError) {
       // User might not be in group, or bot is not admin
-      pushLog(`WA | Failed to kick +62${normalizedPhone}: ${kickError.message}`)
+      pushLog(`WA | Failed to kick +${normalizedPhone}: ${kickError.message}`)
       // Continue to delete user even if kick fails
     }
 
@@ -3403,7 +3403,7 @@ app.post('/api/admin/users/kick', express.json(), async (req, res) => {
       }
     }
 
-    pushLog(`Admin | User +62${normalizedPhone} deleted (kicked: ${kickedFromGroup})`)
+    pushLog(`Admin | User +${normalizedPhone} deleted (kicked: ${kickedFromGroup})`)
 
     res.json({
       success: true,
