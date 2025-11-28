@@ -5472,28 +5472,28 @@ app.get('/monitoring', async (_req, res) => {
     .stat-item {
       display: flex;
       align-items: center;
-      gap: 6px;
-      padding: 6px 10px;
+      gap: 10px;
+      padding: 10px 16px;
       background: #1a1f26;
-      border-radius: 6px;
+      border-radius: 8px;
       border: 1px solid #2f3640;
     }
     .stat-item .stat-label {
-      font-size: 0.85em;
+      font-size: 1.1em;
       color: #71767b;
       text-transform: uppercase;
     }
     .stat-item .stat-value {
-      font-size: 0.85em;
-      font-weight: 600;
+      font-size: 1.3em;
+      font-weight: 700;
       color: #e7e9ea;
     }
     .stat-item .stat-value.green { color: #00c853; }
     .stat-item .stat-value.blue { color: #2196f3; }
     .stat-item .stat-change {
-      font-size: 0.85em;
-      padding: 2px 5px;
-      border-radius: 3px;
+      font-size: 1em;
+      padding: 3px 8px;
+      border-radius: 4px;
     }
     .stat-item .stat-change.up {
       color: #00c853;
@@ -5717,7 +5717,7 @@ app.get('/monitoring', async (_req, res) => {
     }
     .history-table .price-up { color: #00c853; font-weight: 600; }
     .history-table .price-down { color: #ff5252; font-weight: 600; }
-    .history-table .time-col { color: #71767b; font-family: monospace; font-size: 0.95em; }
+    .history-table .time-col { color: #71767b; font-family: monospace; font-size: 1.2em; }
     .history-table .no-data {
       text-align: center;
       color: #71767b;
