@@ -15,7 +15,10 @@
       "Bash(md5sum:*)",
       "Bash(cat:*)",
       "Bash(node:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(for phone in 6281234567899 6282345678901 6281234567890 62895701692525)",
+      "Bash(do echo -n \"$phone: \")",
+      "Bash(done)"
     ],
     "deny": [],
     "ask": []

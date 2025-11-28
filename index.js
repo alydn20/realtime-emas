@@ -3245,22 +3245,31 @@ app.post('/api/admin/users/unblock', express.json(), async (req, res) => {
 
 // Admin: Add user
 app.post('/api/admin/users', express.json(), async (req, res) => {
-  const { password, phone, name, expiredDays } = req.body
+  const { password, phone, name, expiredDays, expiredTimestamp } = req.body
   if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
 
   if (!phone) return res.json({ success: false, error: 'Nomor WA wajib diisi' })
 
   const normalizedPhone = normalizePhone(phone)
   const now = Date.now()
-  const expired = expiredDays ? now + (expiredDays * 24 * 60 * 60 * 1000) : null
+
+  // Support both expiredTimestamp (from date picker) and expiredDays
+  let expired = null
+  if (expiredTimestamp) {
+    expired = expiredTimestamp
+  } else if (expiredDays) {
+    expired = now + (expiredDays * 24 * 60 * 60 * 1000)
+  }
 
   const userData = {
-    name: name || 'User ' + normalizedPhone,
+    name: name || 'Member ' + normalizedPhone.substring(2),
     createdAt: now,
     expired: expired
   }
 
   await redis.hset(REDIS_KEYS.USERS, { [normalizedPhone]: JSON.stringify(userData) })
+
+  pushLog(`Admin | Added user +${normalizedPhone}, expired: ${expired ? new Date(expired).toLocaleDateString('id-ID') : 'Lifetime'}`)
 
   res.json({ success: true, user: { phone: normalizedPhone, ...userData } })
 })
@@ -3307,7 +3316,7 @@ app.post('/api/admin/users/bulk', express.json(), async (req, res) => {
 
 // Admin: Update user
 app.put('/api/admin/users', express.json(), async (req, res) => {
-  const { password, phone, name, expiredDays, addDays } = req.body
+  const { password, phone, name, expiredDays, addDays, expiredTimestamp } = req.body
   if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
 
   const normalizedPhone = normalizePhone(phone)
@@ -3319,16 +3328,19 @@ app.put('/api/admin/users', express.json(), async (req, res) => {
 
   if (name) user.name = name
 
-  if (expiredDays !== undefined) {
+  // Handle expired timestamp from date picker
+  if (expiredTimestamp) {
+    user.expired = expiredTimestamp
+  } else if (expiredDays !== undefined) {
     user.expired = expiredDays ? Date.now() + (expiredDays * 24 * 60 * 60 * 1000) : null
-  }
-
-  if (addDays) {
+  } else if (addDays) {
     const base = user.expired && user.expired > Date.now() ? user.expired : Date.now()
     user.expired = base + (addDays * 24 * 60 * 60 * 1000)
   }
 
   await redis.hset(REDIS_KEYS.USERS, { [normalizedPhone]: JSON.stringify(user) })
+
+  pushLog(`Admin | Updated user +${normalizedPhone}: name=${user.name}, expired=${user.expired ? new Date(user.expired).toLocaleDateString('id-ID') : 'Lifetime'}`)
 
   res.json({ success: true, user: { phone: normalizedPhone, ...user } })
 })
@@ -3383,6 +3395,15 @@ app.post('/api/admin/users/kick', express.json(), async (req, res) => {
       await sock.groupParticipantsUpdate(monitoredGroupId, [jid], 'remove')
       kickedFromGroup = true
       pushLog(`WA | Kicked +${normalizedPhone} from group`)
+
+      // Send kick notification to user
+      try {
+        await sock.sendMessage(jid, {
+          text: `❌ *ANDA TELAH DI-KICK*\n\nAnda telah dikeluarkan dari grup Gold Price Monitor.\n\nJika ada pertanyaan, hubungi admin:\nhttps://wa.me/6289654454210`
+        })
+      } catch (msgErr) {
+        console.log('Failed to send kick message:', msgErr.message)
+      }
     } catch (kickError) {
       // User might not be in group, or bot is not admin
       pushLog(`WA | Failed to kick +${normalizedPhone}: ${kickError.message}`)
@@ -5099,12 +5120,12 @@ ${authScript}
             <input type="text" id="newName" placeholder="Nama user">
           </div>
           <div class="form-group">
-            <label>Expired (hari)</label>
-            <input type="number" id="newExpired" placeholder="30" min="0">
+            <label>Tanggal Expired</label>
+            <input type="date" id="newExpiredDate">
           </div>
         </div>
         <button class="btn btn-primary" onclick="addUser()">Tambah User</button>
-        <small style="color:#71767b;margin-left:10px;">Kosongkan expired untuk lifetime</small>
+        <small style="color:#71767b;margin-left:10px;">Kosongkan tanggal untuk lifetime</small>
       </div>
 
       <div class="card">
@@ -5172,7 +5193,12 @@ ${authScript}
         <input type="text" id="editName">
       </div>
       <div class="form-group">
-        <label>Tambah Hari</label>
+        <label>Tanggal Expired</label>
+        <input type="date" id="editExpiredDate">
+        <small style="color:#71767b;">Kosongkan untuk lifetime</small>
+      </div>
+      <div class="form-group">
+        <label>Atau Tambah Hari dari Sekarang</label>
         <input type="number" id="editAddDays" placeholder="30" min="0">
       </div>
       <button class="btn btn-primary" style="width:100%;margin-top:15px;" onclick="saveUser()">Simpan</button>
@@ -5773,7 +5799,7 @@ ${authScript}
               : '<button class="btn btn-sm" style="background:#ff5252;" onclick="blockUser(\\'' + u.phone + '\\')">Block</button> ';
 
             return '<tr' + (u.isBlocked ? ' style="opacity:0.6;background:rgba(255,82,82,0.1);"' : '') + '>' +
-              '<td>+62' + u.phone + '</td>' +
+              '<td>+' + u.phone + '</td>' +
               '<td>' + (u.name || '-') + '</td>' +
               '<td><span class="status-badge ' + statusClass + '">' + status + '</span></td>' +
               '<td><span class="push-badge ' + (u.hasPushSubscription ? 'push-yes' : 'push-no') + '"></span></td>' +
@@ -5859,10 +5885,22 @@ ${authScript}
       });
     }
 
-    function editUser(phone, name) {
+    function editUser(phone, name, expired) {
       document.getElementById('editPhone').value = phone;
       document.getElementById('editName').value = name;
       document.getElementById('editAddDays').value = '';
+      // Set expired date if exists
+      if (expired && expired !== 'Lifetime') {
+        // Parse from timestamp or date string
+        const expDate = new Date(expired);
+        if (!isNaN(expDate.getTime())) {
+          document.getElementById('editExpiredDate').value = expDate.toISOString().split('T')[0];
+        } else {
+          document.getElementById('editExpiredDate').value = '';
+        }
+      } else {
+        document.getElementById('editExpiredDate').value = '';
+      }
       document.getElementById('editModal').classList.add('show');
     }
 
@@ -5874,24 +5912,34 @@ ${authScript}
       const phone = document.getElementById('editPhone').value;
       const name = document.getElementById('editName').value;
       const addDays = document.getElementById('editAddDays').value;
+      const expiredDate = document.getElementById('editExpiredDate').value;
+
+      const bodyData = {
+        password: adminPass,
+        phone,
+        name
+      };
+
+      // If date is set, use it
+      if (expiredDate) {
+        bodyData.expiredTimestamp = new Date(expiredDate + 'T23:59:59').getTime();
+      } else if (addDays) {
+        bodyData.addDays = parseInt(addDays);
+      }
 
       fetch('/api/admin/users', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          password: adminPass,
-          phone,
-          name,
-          addDays: addDays ? parseInt(addDays) : null
-        })
+        body: JSON.stringify(bodyData)
       })
       .then(r => r.json())
       .then(data => {
         if (data.success) {
           closeModal();
           loadUsers();
+          alert('User berhasil diupdate!');
         } else {
-          alert(data.error);
+          alert(data.error || 'Gagal update user');
         }
       });
     }
@@ -7515,6 +7563,72 @@ app.get('/monitoring/api', async (_req, res) => {
 app.get('*', (_req, res) => {
   res.redirect('/login')
 })
+
+
+
+// ====== AUTO-KICK EXPIRED USERS ======
+async function checkAndKickExpiredUsers() {
+  try {
+    const allUsers = await redis.hgetall(REDIS_KEYS.USERS)
+    if (!allUsers) return
+
+    const now = Date.now()
+
+    for (const [phone, userData] of Object.entries(allUsers)) {
+      try {
+        const user = typeof userData === 'string' ? JSON.parse(userData) : userData
+
+        // Check if expired
+        if (user.expired && user.expired < now) {
+          pushLog(`Auto-kick | User +${phone} expired, processing...`)
+
+          // Try to kick from group if connected
+          if (sock && isReady && monitoredGroupId) {
+            try {
+              const jid = phone + '@s.whatsapp.net'
+              await sock.groupParticipantsUpdate(monitoredGroupId, [jid], 'remove')
+              pushLog(`Auto-kick | Kicked +${phone} from group`)
+
+              // Send expiry notification
+              try {
+                await sock.sendMessage(jid, {
+                  text: `⏰ *LANGGANAN EXPIRED*\n\nHalo ${user.name || 'User'},\n\nLangganan Anda telah berakhir pada ${new Date(user.expired).toLocaleDateString('id-ID')}.\n\nAnda telah dikeluarkan dari grup.\n\nUntuk perpanjang, hubungi admin:\nhttps://wa.me/6289654454210`
+                })
+              } catch (msgErr) {}
+            } catch (kickErr) {
+              pushLog(`Auto-kick | Failed to kick +${phone}: ${kickErr.message}`)
+            }
+          }
+
+          // Delete from database
+          await redis.hdel(REDIS_KEYS.USERS, phone)
+          await redis.hdel(REDIS_KEYS.PUSH_SUBS, phone)
+
+          // Remove sessions
+          const sessions = await redis.hgetall(REDIS_KEYS.SESSIONS)
+          for (const [sessId, sessPhone] of Object.entries(sessions || {})) {
+            if (sessPhone === phone) {
+              await redis.hdel(REDIS_KEYS.SESSIONS, sessId)
+            }
+          }
+
+          pushLog(`Auto-kick | User +${phone} removed from database`)
+        }
+      } catch (e) {
+        console.error('Auto-kick error for', phone, ':', e.message)
+      }
+    }
+  } catch (e) {
+    console.error('Auto-kick check error:', e.message)
+  }
+}
+
+// Run auto-kick check every 5 minutes
+setInterval(checkAndKickExpiredUsers, 5 * 60 * 1000)
+
+// Also run once on startup (after 30 seconds to let WA connect)
+setTimeout(checkAndKickExpiredUsers, 30000)
+// ====== END AUTO-KICK ======
 
 app.listen(PORT, () => {
   console.log(`[SERVER] Ready on port ${PORT} | /monitoring | /stats | /health`)
