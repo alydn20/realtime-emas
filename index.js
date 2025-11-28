@@ -3825,6 +3825,29 @@ app.get('/api/pending-registrations', async (req, res) => {
   }
 })
 
+// Clear and add test pending registrations (admin only)
+app.post('/api/reset-pending-test', async (req, res) => {
+  try {
+    // Clear all pending
+    await redis.del(REDIS_KEYS.PENDING_REGISTRATIONS)
+
+    // Add test data
+    const testData = [
+      { name: 'Ahmad Wijaya', phone: '6281234567890', timestamp: Date.now() },
+      { name: 'Budi Santoso', phone: '6282345678901', timestamp: Date.now() - 60000 },
+      { name: 'Citra Dewi', phone: '6283456789012', timestamp: Date.now() - 120000 }
+    ]
+
+    for (const data of testData) {
+      await redis.hset(REDIS_KEYS.PENDING_REGISTRATIONS, data.phone, JSON.stringify(data))
+    }
+
+    res.json({ success: true, message: 'Test data added', count: testData.length })
+  } catch (e) {
+    res.json({ success: false, message: e.message })
+  }
+})
+
 // Approve registration (admin only)
 app.post('/api/approve-registration', async (req, res) => {
   try {
