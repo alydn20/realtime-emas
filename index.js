@@ -140,13 +140,12 @@ const REDIS_KEYS = {
   WA_GROUP_ID: 'gold:wa_group_id', // String: ID grup WA yang di-monitor
   WA_AUTH: 'gold:wa_auth',       // Hash: key -> auth data (creds, keys) for persistent WA session
   OTP_CODES: 'gold:otp_codes',   // Hash: phone -> OTP code for registration verification
-  SOUND_SETTINGS: 'gold:sound_settings', // JSON: custom sound settings (soundUp, soundDown URLs)
   LOGIN_TOKENS: 'gold:login_tokens', // Hash: token -> { phone, expires }
   LOGIN_ATTEMPTS: 'gold:login_attempts', // Hash: phone -> { attempts, lastAttempt }
   BLOCKED_USERS: 'gold:blocked_users', // Hash: phone -> { blockedAt, reason }
   PENDING_REGISTRATIONS: 'gold:pending_reg_v2', // Hash: phone -> { name, phone, timestamp }
   USER_PINS: 'gold:user_pins',    // Hash: phone -> { pin (hashed), pinChanged (boolean) }
-  TTS_SETTINGS: 'gold:tts_settings' // JSON: TTS voice settings { voiceName }
+  SOUND_SETTINGS: 'gold:sound_settings' // JSON: custom sound settings (soundUp, soundDown URLs)
 }
 
 // Admin password untuk akses admin panel
@@ -3884,7 +3883,6 @@ app.get('/api/sound-settings', async (_req, res) => {
       const parsed = typeof settings === 'string' ? JSON.parse(settings) : settings
       res.json({ success: true, settings: parsed })
     } else {
-      // Default settings (empty = use built-in sounds)
       res.json({ success: true, settings: { soundUp: '', soundDown: '' } })
     }
   } catch (e) {
@@ -3903,34 +3901,6 @@ app.post('/api/admin/sound-settings', express.json(), async (req, res) => {
 
     // Broadcast to all clients to update their sounds
     broadcastSSE({ type: 'sound_update', settings })
-
-    res.json({ success: true, settings })
-  } catch (e) {
-    res.json({ success: false, error: e.message })
-  }
-})
-
-// Admin: Get TTS voice settings
-app.get('/api/admin/tts-settings', async (req, res) => {
-  try {
-    const settings = await redis.get(REDIS_KEYS.TTS_SETTINGS)
-    res.json({ success: true, settings: settings ? JSON.parse(settings) : { voiceName: '' } })
-  } catch (e) {
-    res.json({ success: false, error: e.message })
-  }
-})
-
-// Admin: Update TTS voice settings
-app.post('/api/admin/tts-settings', express.json(), async (req, res) => {
-  const { password, voiceName } = req.body
-  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
-
-  try {
-    const settings = { voiceName: voiceName || '' }
-    await redis.set(REDIS_KEYS.TTS_SETTINGS, JSON.stringify(settings))
-
-    // Broadcast to all clients to update their TTS voice
-    broadcastSSE({ type: 'tts_update', settings })
 
     res.json({ success: true, settings })
   } catch (e) {
@@ -4805,8 +4775,7 @@ app.get('/login', (_req, res) => {
         </button>
       </div>
 
-      <p class="footer-text">Belum punya akun? <a href="/register">Daftar di sini</a></p>
-      <p class="footer-text" style="margin-top:8px;">Dengan masuk, Anda menyetujui ketentuan layanan kami</p>
+      <p class="footer-text">Dengan masuk, Anda menyetujui ketentuan layanan kami</p>
     </div>
   </div>
 
@@ -5909,7 +5878,7 @@ ${authScript}
 
       <!-- Section: Pengaturan -->
       <div class="section-content" id="section-settings">
-        <!-- Sound Settings -->
+        <!-- Sound Notifikasi -->
         <div class="card">
           <h2>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -5935,7 +5904,7 @@ ${authScript}
             <div id="soundUpPreview" style="margin-top:10px;display:none;">
               <audio id="soundUpAudio" controls style="width:100%;height:36px;"></audio>
             </div>
-            <button class="btn btn-sm" style="margin-top:10px;background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.25);" onclick="testSound('up')">Test Sound</button>
+            <button class="btn btn-sm" style="margin-top:10px;background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.25);" onclick="testSound('up')">Test Sound Naik</button>
           </div>
 
           <!-- Sound Turun -->
@@ -5952,64 +5921,13 @@ ${authScript}
             <div id="soundDownPreview" style="margin-top:10px;display:none;">
               <audio id="soundDownAudio" controls style="width:100%;height:36px;"></audio>
             </div>
-            <button class="btn btn-sm" style="margin-top:10px;background:rgba(248,113,113,0.15);color:#f87171;border:1px solid rgba(248,113,113,0.25);" onclick="testSound('down')">Test Sound</button>
+            <button class="btn btn-sm" style="margin-top:10px;background:rgba(248,113,113,0.15);color:#f87171;border:1px solid rgba(248,113,113,0.25);" onclick="testSound('down')">Test Sound Turun</button>
           </div>
 
           <div style="display:flex;gap:10px;flex-wrap:wrap;">
             <button class="btn btn-primary" onclick="saveSoundSettings()">Simpan Sound</button>
             <button class="btn btn-danger btn-sm" onclick="resetSounds()">Reset Default</button>
           </div>
-        </div>
-
-        <!-- TTS Voice Settings (Admin Only) -->
-        <div class="card">
-          <h2>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-              <line x1="12" y1="19" x2="12" y2="23"/>
-              <line x1="8" y1="23" x2="16" y2="23"/>
-            </svg>
-            Pengaturan Suara TTS (Text-to-Speech)
-          </h2>
-          <p style="color:#6b7280;font-size:0.82em;margin-bottom:16px;">Pilih suara untuk pengumuman harga. Pengaturan ini berlaku untuk semua user.</p>
-          <div class="result-msg" id="ttsResult"></div>
-
-          <div class="form-group" style="margin-bottom:14px;">
-            <label>Pilih Suara Indonesia</label>
-            <select id="ttsVoiceSelect" style="width:100%;padding:10px;border-radius:8px;background:#1e1e1e;border:1px solid rgba(255,255,255,0.1);color:#fff;">
-              <option value="">Loading voices...</option>
-            </select>
-          </div>
-
-          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
-            <button class="btn btn-sm" style="background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.25);" onclick="testTTSVoice('up')">
-              Test Harga Naik
-            </button>
-            <button class="btn btn-sm" style="background:rgba(248,113,113,0.15);color:#f87171;border:1px solid rgba(248,113,113,0.25);" onclick="testTTSVoice('down')">
-              Test Harga Turun
-            </button>
-            <button class="btn btn-sm" style="background:rgba(96,165,250,0.15);color:#60a5fa;border:1px solid rgba(96,165,250,0.25);" onclick="loadTTSVoices()">
-              Refresh Voices
-            </button>
-          </div>
-
-          <div id="voiceListContainer" style="background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.08);max-height:250px;overflow-y:auto;margin-bottom:16px;">
-            <table style="width:100%;border-collapse:collapse;font-size:0.85em;">
-              <thead>
-                <tr style="background:rgba(255,255,255,0.03);">
-                  <th style="padding:10px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.08);">#</th>
-                  <th style="padding:10px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.08);">Nama Voice</th>
-                  <th style="padding:10px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.08);">Test</th>
-                </tr>
-              </thead>
-              <tbody id="voiceListBody">
-                <tr><td colspan="3" style="padding:20px;text-align:center;color:#6b7280;">Memuat daftar voice Indonesia...</td></tr>
-              </tbody>
-            </table>
-          </div>
-
-          <button class="btn btn-primary" onclick="saveTTSSettings()">Simpan Pengaturan TTS</button>
         </div>
 
         <!-- Admin Phones -->
@@ -6112,13 +6030,185 @@ ${authScript}
       loadUsers();
       loadPendingRegistrations();
       loadWaGroups();
-      loadSoundSettings();
       loadAdminPhones();
+      loadSoundSettings();
     });
 
     // ==================== Sound Settings Functions ====================
     let currentSoundUp = '';
     let currentSoundDown = '';
+
+    function loadSoundSettings() {
+      fetch('/api/sound-settings')
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            currentSoundUp = data.settings.soundUp || '';
+            currentSoundDown = data.settings.soundDown || '';
+            document.getElementById('soundUpUrl').value = currentSoundUp;
+            document.getElementById('soundDownUrl').value = currentSoundDown;
+
+            if (currentSoundUp) {
+              document.getElementById('soundUpPreview').style.display = 'block';
+              document.getElementById('soundUpAudio').src = currentSoundUp;
+            }
+            if (currentSoundDown) {
+              document.getElementById('soundDownPreview').style.display = 'block';
+              document.getElementById('soundDownAudio').src = currentSoundDown;
+            }
+          }
+        });
+    }
+
+    function handleSoundUpload(direction) {
+      const fileInput = document.getElementById(direction === 'up' ? 'soundUpFile' : 'soundDownFile');
+      const urlInput = document.getElementById(direction === 'up' ? 'soundUpUrl' : 'soundDownUrl');
+      const preview = document.getElementById(direction === 'up' ? 'soundUpPreview' : 'soundDownPreview');
+      const audio = document.getElementById(direction === 'up' ? 'soundUpAudio' : 'soundDownAudio');
+      const result = document.getElementById('soundResult');
+
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      if (file.size > 500 * 1024) {
+        result.className = 'result-msg error';
+        result.textContent = 'File terlalu besar! Maksimal 500KB. File Anda: ' + Math.round(file.size/1024) + 'KB';
+        fileInput.value = '';
+        return;
+      }
+
+      if (!file.type.startsWith('audio/')) {
+        result.className = 'result-msg error';
+        result.textContent = 'File harus berformat audio (MP3, WAV, OGG, dll)';
+        fileInput.value = '';
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const dataUrl = e.target.result;
+        urlInput.value = dataUrl;
+        audio.src = dataUrl;
+        preview.style.display = 'block';
+        result.className = 'result-msg success';
+        result.textContent = 'File "' + file.name + '" berhasil dimuat. Klik "Simpan Sound" untuk menyimpan.';
+        setTimeout(() => result.className = 'result-msg', 5000);
+      };
+      reader.onerror = function() {
+        result.className = 'result-msg error';
+        result.textContent = 'Gagal membaca file';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function saveSoundSettings() {
+      const soundUp = document.getElementById('soundUpUrl').value.trim();
+      const soundDown = document.getElementById('soundDownUrl').value.trim();
+      const result = document.getElementById('soundResult');
+
+      result.className = 'result-msg success';
+      result.textContent = 'Menyimpan...';
+
+      fetch('/api/admin/sound-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass, soundUp, soundDown })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          currentSoundUp = soundUp;
+          currentSoundDown = soundDown;
+          result.className = 'result-msg success';
+          result.textContent = 'Sound berhasil disimpan!';
+        } else {
+          result.className = 'result-msg error';
+          result.textContent = 'Gagal: ' + data.error;
+        }
+        setTimeout(() => result.className = 'result-msg', 5000);
+      })
+      .catch(e => {
+        result.className = 'result-msg error';
+        result.textContent = 'Error: ' + e.message;
+      });
+    }
+
+    function resetSounds() {
+      if (!confirm('Reset semua sound ke default?')) return;
+
+      const result = document.getElementById('soundResult');
+      result.className = 'result-msg success';
+      result.textContent = 'Mereset sound...';
+
+      fetch('/api/admin/sound-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass, soundUp: '', soundDown: '' })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          currentSoundUp = '';
+          currentSoundDown = '';
+          document.getElementById('soundUpUrl').value = '';
+          document.getElementById('soundDownUrl').value = '';
+          document.getElementById('soundUpFile').value = '';
+          document.getElementById('soundDownFile').value = '';
+          document.getElementById('soundUpPreview').style.display = 'none';
+          document.getElementById('soundDownPreview').style.display = 'none';
+          result.className = 'result-msg success';
+          result.textContent = 'Sound berhasil direset ke default!';
+        } else {
+          result.className = 'result-msg error';
+          result.textContent = 'Gagal: ' + data.error;
+        }
+        setTimeout(() => result.className = 'result-msg', 5000);
+      });
+    }
+
+    function testSound(direction) {
+      const url = direction === 'up'
+        ? document.getElementById('soundUpUrl').value.trim()
+        : document.getElementById('soundDownUrl').value.trim();
+
+      if (url) {
+        const audio = new Audio(url);
+        audio.volume = 0.5;
+        audio.play().catch(e => alert('Gagal memutar sound: ' + e.message));
+      } else {
+        playDefaultSound(direction);
+      }
+    }
+
+    function playDefaultSound(direction) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+
+        if (direction === 'up') {
+          oscillator.type = 'sine';
+          oscillator.frequency.setValueAtTime(800, ctx.currentTime);
+          oscillator.frequency.setValueAtTime(1200, ctx.currentTime + 0.15);
+          gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+          oscillator.start(ctx.currentTime);
+          oscillator.stop(ctx.currentTime + 0.3);
+        } else {
+          oscillator.type = 'sawtooth';
+          oscillator.frequency.setValueAtTime(400, ctx.currentTime);
+          oscillator.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.3);
+          gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+          oscillator.start(ctx.currentTime);
+          oscillator.stop(ctx.currentTime + 0.3);
+        }
+      } catch (e) {
+        console.log('Sound error:', e);
+      }
+    }
 
     // ==================== Admin Phones Functions ====================
     function loadAdminPhones() {
@@ -6163,426 +6253,6 @@ ${authScript}
         }
       });
     }
-
-    function loadSoundSettings() {
-      fetch('/api/sound-settings')
-        .then(r => r.json())
-        .then(data => {
-          if (data.success) {
-            currentSoundUp = data.settings.soundUp || '';
-            currentSoundDown = data.settings.soundDown || '';
-            document.getElementById('soundUpUrl').value = currentSoundUp;
-            document.getElementById('soundDownUrl').value = currentSoundDown;
-
-            // Show preview if sound exists
-            if (currentSoundUp) {
-              document.getElementById('soundUpPreview').style.display = 'block';
-              document.getElementById('soundUpAudio').src = currentSoundUp;
-            }
-            if (currentSoundDown) {
-              document.getElementById('soundDownPreview').style.display = 'block';
-              document.getElementById('soundDownAudio').src = currentSoundDown;
-            }
-          }
-        });
-    }
-
-    // Handle file upload - convert to base64 data URL
-    function handleSoundUpload(direction) {
-      const fileInput = document.getElementById(direction === 'up' ? 'soundUpFile' : 'soundDownFile');
-      const urlInput = document.getElementById(direction === 'up' ? 'soundUpUrl' : 'soundDownUrl');
-      const preview = document.getElementById(direction === 'up' ? 'soundUpPreview' : 'soundDownPreview');
-      const audio = document.getElementById(direction === 'up' ? 'soundUpAudio' : 'soundDownAudio');
-      const result = document.getElementById('soundResult');
-
-      const file = fileInput.files[0];
-      if (!file) return;
-
-      // Check file size (max 500KB)
-      if (file.size > 500 * 1024) {
-        result.className = 'result-msg error';
-        result.textContent = 'File terlalu besar! Maksimal 500KB. File Anda: ' + Math.round(file.size/1024) + 'KB';
-        fileInput.value = '';
-        return;
-      }
-
-      // Check file type
-      if (!file.type.startsWith('audio/')) {
-        result.className = 'result-msg error';
-        result.textContent = 'File harus berformat audio (MP3, WAV, OGG, dll)';
-        fileInput.value = '';
-        return;
-      }
-
-      // Convert to base64
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const dataUrl = e.target.result;
-        urlInput.value = dataUrl;
-        audio.src = dataUrl;
-        preview.style.display = 'block';
-        result.className = 'result-msg success';
-        result.textContent = 'File "' + file.name + '" berhasil dimuat. Klik "Simpan Sound" untuk menyimpan.';
-        setTimeout(() => result.className = 'result-msg', 5000);
-      };
-      reader.onerror = function() {
-        result.className = 'result-msg error';
-        result.textContent = 'Gagal membaca file';
-      };
-      reader.readAsDataURL(file);
-    }
-
-    function saveSoundSettings() {
-      const soundUp = document.getElementById('soundUpUrl').value.trim();
-      const soundDown = document.getElementById('soundDownUrl').value.trim();
-      const result = document.getElementById('soundResult');
-
-      result.className = 'result-msg success';
-      result.textContent = 'Menyimpan...';
-
-      fetch('/api/admin/sound-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, soundUp, soundDown })
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          currentSoundUp = soundUp;
-          currentSoundDown = soundDown;
-          result.className = 'result-msg success';
-          result.textContent = 'Sound berhasil disimpan! Semua client akan menerima update.';
-        } else {
-          result.className = 'result-msg error';
-          result.textContent = 'Gagal: ' + data.error;
-        }
-        setTimeout(() => result.className = 'result-msg', 5000);
-      })
-      .catch(e => {
-        result.className = 'result-msg error';
-        result.textContent = 'Error: ' + e.message;
-      });
-    }
-
-    function resetSounds() {
-      if (!confirm('Reset semua sound ke default? Sound kustom akan dihapus.')) return;
-
-      const result = document.getElementById('soundResult');
-      result.className = 'result-msg success';
-      result.textContent = 'Mereset sound...';
-
-      fetch('/api/admin/sound-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, soundUp: '', soundDown: '' })
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          currentSoundUp = '';
-          currentSoundDown = '';
-          document.getElementById('soundUpUrl').value = '';
-          document.getElementById('soundDownUrl').value = '';
-          document.getElementById('soundUpFile').value = '';
-          document.getElementById('soundDownFile').value = '';
-          document.getElementById('soundUpPreview').style.display = 'none';
-          document.getElementById('soundDownPreview').style.display = 'none';
-          result.className = 'result-msg success';
-          result.textContent = 'Sound berhasil direset ke default!';
-        } else {
-          result.className = 'result-msg error';
-          result.textContent = 'Gagal: ' + data.error;
-        }
-        setTimeout(() => result.className = 'result-msg', 5000);
-      });
-    }
-
-    function testSound(direction) {
-      const url = direction === 'up'
-        ? document.getElementById('soundUpUrl').value.trim()
-        : document.getElementById('soundDownUrl').value.trim();
-
-      if (url) {
-        // Play custom sound from URL
-        const audio = new Audio(url);
-        audio.volume = 0.5;
-        audio.play().catch(e => alert('Gagal memutar sound: ' + e.message));
-      } else {
-        // Play default built-in sound
-        playDefaultSound(direction);
-      }
-    }
-
-    function playDefaultSound(direction) {
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const oscillator = ctx.createOscillator();
-        const gainNode = ctx.createGain();
-        oscillator.connect(gainNode);
-        gainNode.connect(ctx.destination);
-
-        if (direction === 'up') {
-          oscillator.type = 'sine';
-          oscillator.frequency.setValueAtTime(800, ctx.currentTime);
-          oscillator.frequency.setValueAtTime(1000, ctx.currentTime + 0.1);
-          oscillator.frequency.setValueAtTime(800, ctx.currentTime + 0.2);
-          oscillator.frequency.setValueAtTime(1200, ctx.currentTime + 0.3);
-          gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-          oscillator.start(ctx.currentTime);
-          oscillator.stop(ctx.currentTime + 0.5);
-        } else {
-          oscillator.type = 'sawtooth';
-          oscillator.frequency.setValueAtTime(400, ctx.currentTime);
-          oscillator.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.5);
-          gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-          oscillator.start(ctx.currentTime);
-          oscillator.stop(ctx.currentTime + 0.5);
-        }
-      } catch (e) {
-        console.log('Sound error:', e);
-      }
-    }
-
-    // ==================== TTS Voice Functions ====================
-    let indonesianVoices = [];
-    let savedTTSVoiceName = '';
-
-    function loadTTSVoices() {
-      if (!('speechSynthesis' in window)) {
-        document.getElementById('ttsResult').className = 'result-msg error';
-        document.getElementById('ttsResult').textContent = 'Browser tidak mendukung Speech Synthesis';
-        return;
-      }
-
-      const populateVoices = () => {
-        const allVoices = speechSynthesis.getVoices();
-        // Filter hanya voice Indonesia
-        indonesianVoices = allVoices.filter(v =>
-          v.lang.includes('id') || v.lang.includes('ID') ||
-          v.name.toLowerCase().includes('indonesia')
-        );
-
-        console.log('Indonesian voices:', indonesianVoices.length);
-
-        // Update dropdown
-        const select = document.getElementById('ttsVoiceSelect');
-        if (select) {
-          select.innerHTML = '<option value="">-- Default Browser --</option>';
-          indonesianVoices.forEach((voice, index) => {
-            const option = document.createElement('option');
-            option.value = voice.name;
-            option.textContent = voice.name + (voice.localService ? ' [Offline]' : ' [Online]');
-            if (savedTTSVoiceName && voice.name === savedTTSVoiceName) {
-              option.selected = true;
-            }
-            select.appendChild(option);
-          });
-        }
-
-        // Update voice list table
-        const tbody = document.getElementById('voiceListBody');
-        if (tbody) {
-          if (indonesianVoices.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" style="padding:20px;text-align:center;color:#f87171;">Tidak ada voice Indonesia tersedia. Coba gunakan Chrome/Edge.</td></tr>';
-          } else {
-            tbody.innerHTML = '';
-            indonesianVoices.forEach((voice, index) => {
-              const tr = document.createElement('tr');
-              tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
-              tr.innerHTML =
-                '<td style="padding:8px 10px;">' + (index + 1) + '</td>' +
-                '<td style="padding:8px 10px;">' + voice.name + (voice.localService ? ' <span style="color:#60a5fa;font-size:0.75em;">[Offline]</span>' : ' <span style="color:#fbbf24;font-size:0.75em;">[Online]</span>') + '</td>' +
-                '<td style="padding:8px 10px;text-align:center;">' +
-                  '<button class="btn btn-sm" style="padding:4px 10px;font-size:0.75em;background:rgba(96,165,250,0.15);color:#60a5fa;border:1px solid rgba(96,165,250,0.25);" onclick="testVoiceByName(\\'' + voice.name.replace(/'/g, "\\\\'") + '\\')">Test</button>' +
-                '</td>';
-              tbody.appendChild(tr);
-            });
-          }
-        }
-      };
-
-      if (speechSynthesis.onvoiceschanged !== undefined) {
-        speechSynthesis.onvoiceschanged = populateVoices;
-      }
-      populateVoices();
-    }
-
-    function numberToWords(num) {
-      const satuan = ['', 'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan'];
-      const belasan = ['sepuluh', 'sebelas', 'dua belas', 'tiga belas', 'empat belas', 'lima belas', 'enam belas', 'tujuh belas', 'delapan belas', 'sembilan belas'];
-
-      if (num === 0) return 'nol';
-      if (num < 0) return 'minus ' + numberToWords(Math.abs(num));
-
-      let words = '';
-
-      if (num >= 1000000) {
-        const juta = Math.floor(num / 1000000);
-        words += (juta === 1 ? 'satu juta ' : numberToWords(juta) + ' juta ');
-        num %= 1000000;
-      }
-
-      if (num >= 1000) {
-        const ribu = Math.floor(num / 1000);
-        words += (ribu === 1 ? 'seribu ' : numberToWords(ribu) + ' ribu ');
-        num %= 1000;
-      }
-
-      if (num >= 100) {
-        const ratus = Math.floor(num / 100);
-        words += (ratus === 1 ? 'seratus ' : satuan[ratus] + ' ratus ');
-        num %= 100;
-      }
-
-      if (num >= 20) {
-        words += satuan[Math.floor(num / 10)] + ' puluh ';
-        num %= 10;
-      } else if (num >= 10) {
-        words += belasan[num - 10] + ' ';
-        num = 0;
-      }
-
-      if (num > 0) words += satuan[num] + ' ';
-
-      return words.trim();
-    }
-
-    function testVoiceByName(voiceName) {
-      if (!('speechSynthesis' in window)) {
-        alert('Browser tidak mendukung Text-to-Speech');
-        return;
-      }
-      speechSynthesis.cancel();
-
-      const voice = indonesianVoices.find(v => v.name === voiceName);
-      if (!voice) {
-        alert('Voice tidak ditemukan');
-        return;
-      }
-
-      const testText = 'Harga naik, dua puluh ribu rupiah';
-      const utterance = new SpeechSynthesisUtterance(testText);
-      utterance.voice = voice;
-      utterance.lang = voice.lang;
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
-
-      console.log('Testing voice:', voice.name);
-      speechSynthesis.speak(utterance);
-    }
-
-    function testTTSVoice(direction) {
-      if (!('speechSynthesis' in window)) {
-        alert('Browser tidak mendukung Text-to-Speech');
-        return;
-      }
-      speechSynthesis.cancel();
-
-      const select = document.getElementById('ttsVoiceSelect');
-      const voiceName = select ? select.value : '';
-      const testPrice = direction === 'up' ? 20000 : 15000;
-      const priceText = numberToWords(testPrice);
-
-      // Get selected voice
-      let selectedVoice = null;
-      if (voiceName) {
-        selectedVoice = indonesianVoices.find(v => v.name === voiceName);
-      }
-
-      if (direction === 'up') {
-        // NAIK - Semangat!
-        const exclaim = new SpeechSynthesisUtterance('NAIKKK!');
-        exclaim.rate = 1.3;
-        exclaim.pitch = 1.4;
-        exclaim.volume = 1.0;
-        exclaim.lang = 'id-ID';
-        if (selectedVoice) exclaim.voice = selectedVoice;
-
-        const nominal = new SpeechSynthesisUtterance(priceText + ' rupiah');
-        nominal.rate = 1.1;
-        nominal.pitch = 1.2;
-        nominal.volume = 1.0;
-        nominal.lang = 'id-ID';
-        if (selectedVoice) nominal.voice = selectedVoice;
-
-        speechSynthesis.speak(exclaim);
-        speechSynthesis.speak(nominal);
-      } else {
-        // TURUN - Lemas/Lesuh!
-        const exclaim = new SpeechSynthesisUtterance('sorrrrr...');
-        exclaim.rate = 0.7;
-        exclaim.pitch = 0.6;
-        exclaim.volume = 1.0;
-        exclaim.lang = 'id-ID';
-        if (selectedVoice) exclaim.voice = selectedVoice;
-
-        const nominal = new SpeechSynthesisUtterance(priceText + ' rupiah');
-        nominal.rate = 0.85;
-        nominal.pitch = 0.7;
-        nominal.volume = 1.0;
-        nominal.lang = 'id-ID';
-        if (selectedVoice) nominal.voice = selectedVoice;
-
-        speechSynthesis.speak(exclaim);
-        speechSynthesis.speak(nominal);
-      }
-    }
-
-    function saveTTSSettings() {
-      const select = document.getElementById('ttsVoiceSelect');
-      const voiceName = select ? select.value : '';
-      const result = document.getElementById('ttsResult');
-
-      result.className = 'result-msg success';
-      result.textContent = 'Menyimpan pengaturan TTS...';
-
-      fetch('/api/admin/tts-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, voiceName })
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          savedTTSVoiceName = voiceName;
-          result.className = 'result-msg success';
-          result.textContent = 'Pengaturan TTS berhasil disimpan! Voice: ' + (voiceName || 'Default Browser');
-        } else {
-          result.className = 'result-msg error';
-          result.textContent = 'Gagal: ' + data.error;
-        }
-        setTimeout(() => result.className = 'result-msg', 5000);
-      })
-      .catch(e => {
-        result.className = 'result-msg error';
-        result.textContent = 'Error: ' + e.message;
-        setTimeout(() => result.className = 'result-msg', 5000);
-      });
-    }
-
-    function loadSavedTTSSettings() {
-      fetch('/api/admin/tts-settings')
-        .then(r => r.json())
-        .then(data => {
-          if (data.success && data.settings) {
-            savedTTSVoiceName = data.settings.voiceName || '';
-            // Re-load voices to apply saved setting
-            loadTTSVoices();
-          }
-        })
-        .catch(() => {});
-    }
-
-    // Load TTS voices on page load
-    document.addEventListener('DOMContentLoaded', function() {
-      setTimeout(() => {
-        loadTTSVoices();
-        loadSavedTTSSettings();
-      }, 500);
-    });
 
     // ==================== WhatsApp Group Functions ====================
     function loadWaGroups() {
@@ -8103,7 +7773,7 @@ app.get('/monitoring', async (_req, res) => {
     }
 
     // Daily Statistics - fetch dari server
-    // Sound Notification - berbeda untuk naik dan turun menggunakan Web Audio API
+    // Sound Notification - menggunakan audio file dari admin
     let soundEnabled = localStorage.getItem('soundEnabled') !== 'false';
     let audioContext = null;
     let customSoundUp = '';
@@ -8136,21 +7806,6 @@ app.get('/monitoring', async (_req, res) => {
     }
     loadCustomSounds();
 
-    // TTS Voice setting from admin
-    let adminTTSVoiceName = '';
-
-    async function loadTTSSettings() {
-      try {
-        const res = await fetch('/api/admin/tts-settings');
-        const data = await res.json();
-        if (data.success && data.settings) {
-          adminTTSVoiceName = data.settings.voiceName || '';
-          console.log('TTS Voice from admin:', adminTTSVoiceName || 'Default');
-        }
-      } catch (e) {}
-    }
-    loadTTSSettings();
-
     function getAudioContext() {
       if (!audioContext) {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -8175,127 +7830,54 @@ app.get('/monitoring', async (_req, res) => {
       }
     }
 
-    // Text-to-Speech: Convert number to Indonesian words
-    function numberToWords(num) {
-      const satuan = ['', 'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan'];
-      const belasan = ['sepuluh', 'sebelas', 'dua belas', 'tiga belas', 'empat belas', 'lima belas', 'enam belas', 'tujuh belas', 'delapan belas', 'sembilan belas'];
+    // Play default beep sound using Web Audio API
+    function playDefaultSound(direction) {
+      try {
+        const ctx = getAudioContext();
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
 
-      if (num === 0) return 'nol';
-      if (num < 0) return 'minus ' + numberToWords(Math.abs(num));
-
-      let words = '';
-
-      if (num >= 1000000) {
-        const juta = Math.floor(num / 1000000);
-        if (juta === 1) {
-          words += 'satu juta ';
+        if (direction === 'up') {
+          oscillator.type = 'sine';
+          oscillator.frequency.setValueAtTime(800, ctx.currentTime);
+          oscillator.frequency.setValueAtTime(1200, ctx.currentTime + 0.15);
+          gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+          oscillator.start(ctx.currentTime);
+          oscillator.stop(ctx.currentTime + 0.3);
         } else {
-          words += numberToWords(juta) + ' juta ';
+          oscillator.type = 'sawtooth';
+          oscillator.frequency.setValueAtTime(400, ctx.currentTime);
+          oscillator.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.3);
+          gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+          oscillator.start(ctx.currentTime);
+          oscillator.stop(ctx.currentTime + 0.3);
         }
-        num %= 1000000;
+      } catch (e) {
+        console.log('Sound error:', e);
       }
-
-      if (num >= 1000) {
-        const ribu = Math.floor(num / 1000);
-        if (ribu === 1) {
-          words += 'seribu ';
-        } else {
-          words += numberToWords(ribu) + ' ribu ';
-        }
-        num %= 1000;
-      }
-
-      if (num >= 100) {
-        const ratus = Math.floor(num / 100);
-        if (ratus === 1) {
-          words += 'seratus ';
-        } else {
-          words += satuan[ratus] + ' ratus ';
-        }
-        num %= 100;
-      }
-
-      if (num >= 20) {
-        const puluh = Math.floor(num / 10);
-        words += satuan[puluh] + ' puluh ';
-        num %= 10;
-      } else if (num >= 10) {
-        words += belasan[num - 10] + ' ';
-        num = 0;
-      }
-
-      if (num > 0) {
-        words += satuan[num] + ' ';
-      }
-
-      return words.trim();
     }
 
-    // Speak price using Text-to-Speech
-    function speakPrice(direction, price) {
+    function playSound(direction) {
       if (!soundEnabled) return;
-      if (!price || price === 0) return; // Don't speak if no price
-      if (!('speechSynthesis' in window)) return;
 
-      // Cancel any ongoing speech
-      speechSynthesis.cancel();
+      const soundUrl = direction === 'up' ? customSoundUp : customSoundDown;
 
-      const priceText = numberToWords(Math.round(price));
-      const voices = speechSynthesis.getVoices();
-
-      // Get the voice to use
-      let selectedVoice = null;
-      if (adminTTSVoiceName) {
-        selectedVoice = voices.find(v => v.name === adminTTSVoiceName);
-      }
-      if (!selectedVoice) {
-        selectedVoice = voices.find(v => v.lang.includes('id') || v.lang.includes('ID'));
-      }
-
-      if (direction === 'up') {
-        // NAIK - Semangat! Speak in two parts for dramatic effect
-        const exclaim = new SpeechSynthesisUtterance('NAIKKK!');
-        exclaim.rate = 1.3; // Faster = more excited
-        exclaim.pitch = 1.4; // Higher pitch = semangat
-        exclaim.volume = 1.0;
-        exclaim.lang = 'id-ID';
-        if (selectedVoice) exclaim.voice = selectedVoice;
-
-        const nominal = new SpeechSynthesisUtterance(priceText + ' rupiah');
-        nominal.rate = 1.1;
-        nominal.pitch = 1.2;
-        nominal.volume = 1.0;
-        nominal.lang = 'id-ID';
-        if (selectedVoice) nominal.voice = selectedVoice;
-
-        speechSynthesis.speak(exclaim);
-        speechSynthesis.speak(nominal);
+      if (soundUrl) {
+        // Play custom sound from admin
+        const audio = new Audio(soundUrl);
+        audio.volume = 0.5;
+        audio.play().catch(e => {
+          console.log('Custom sound error, using default:', e);
+          playDefaultSound(direction);
+        });
       } else {
-        // TURUN - Lemas/Lesuh! Speak slowly with low pitch
-        const exclaim = new SpeechSynthesisUtterance('sorrrrr...');
-        exclaim.rate = 0.7; // Slower = lemas
-        exclaim.pitch = 0.6; // Lower pitch = lesuh
-        exclaim.volume = 1.0;
-        exclaim.lang = 'id-ID';
-        if (selectedVoice) exclaim.voice = selectedVoice;
-
-        const nominal = new SpeechSynthesisUtterance(priceText + ' rupiah');
-        nominal.rate = 0.85;
-        nominal.pitch = 0.7;
-        nominal.volume = 1.0;
-        nominal.lang = 'id-ID';
-        if (selectedVoice) nominal.voice = selectedVoice;
-
-        speechSynthesis.speak(exclaim);
-        speechSynthesis.speak(nominal);
+        // Play default beep sound
+        playDefaultSound(direction);
       }
-    }
-
-    function playSound(direction, price) {
-      if (!soundEnabled) return;
-
-      // Langsung speak harga tanpa beep
-      speakPrice(direction, price);
     }
 
     // Browser Notification
@@ -8365,8 +7947,8 @@ app.get('/monitoring', async (_req, res) => {
         });
       }
 
-      // Play sound (no price for promo)
-      playSound('up', 0);
+      // Play sound for promo
+      playSound('up');
     }
 
     // Fungsi untuk tutup popup promo
@@ -8723,7 +8305,7 @@ app.get('/monitoring', async (_req, res) => {
               const cls = change > 0 ? 'up' : 'down';
               document.getElementById('buyChange').textContent = sign + change.toLocaleString('id-ID');
               document.getElementById('buyChange').className = 'stat-change ' + cls;
-              playSound(change > 0 ? 'up' : 'down', Math.abs(change));
+              playSound(change > 0 ? 'up' : 'down');
 
               // Update trend icon di XAU/USD Chart title
               const trendIcon = document.getElementById('trendIcon');
