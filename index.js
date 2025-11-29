@@ -7529,6 +7529,11 @@ app.get('/monitoring', async (_req, res) => {
             <span class="stat-value blue" id="usdIdr">-</span>
           </div>
           <div class="stat-item invest">
+            <span class="stat-label">10jt</span>
+            <span class="stat-value" id="gram10">-</span>
+            <span class="stat-change up" id="profit10">-</span>
+          </div>
+          <div class="stat-item invest">
             <span class="stat-label">20jt</span>
             <span class="stat-value" id="gram20">-</span>
             <span class="stat-change up" id="profit20">-</span>
@@ -7593,13 +7598,14 @@ app.get('/monitoring', async (_req, res) => {
             <th>Jual</th>
             <th>Spread</th>
             <th>USD/IDR</th>
+            <th>10jt</th>
             <th>20jt</th>
             <th>30jt</th>
             <th>+/-</th>
           </tr>
         </thead>
         <tbody id="historyBody">
-          <tr><td colspan="8" class="no-data">Menunggu data...</td></tr>
+          <tr><td colspan="9" class="no-data">Menunggu data...</td></tr>
         </tbody>
       </table>
       </div>
@@ -7668,7 +7674,7 @@ app.get('/monitoring', async (_req, res) => {
       const pagination = document.getElementById('historyPagination');
 
       if (!items || items.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="no-data">Belum ada data perubahan harga</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="no-data">Belum ada data perubahan harga</td></tr>';
         countEl.textContent = '0 records';
         pagination.style.display = 'none';
         return;
@@ -7677,7 +7683,7 @@ app.get('/monitoring', async (_req, res) => {
       countEl.textContent = totalRecords + ' records';
 
       let html = '';
-      items.forEach(function(item) {
+      items.forEach(function(item, index) {
         const time = new Date(item.time);
         const timeStr = time.toTimeString().substring(0, 8);
         const buyChange = item.buyChange || 0;
@@ -7692,9 +7698,23 @@ app.get('/monitoring', async (_req, res) => {
         const usdIdrVal = item.usdIdr || currentUsdIdr;
         const usdIdr = usdIdrVal ? Math.round(usdIdrVal).toLocaleString('id-ID') : '-';
 
-        // Calculate gram for 20jt and 30jt based on buy price
+        // Calculate gram for 10jt, 20jt and 30jt based on buy price
+        const gram10jt = (10000000 / item.buy).toFixed(4);
         const gram20jt = (20000000 / item.buy).toFixed(4);
         const gram30jt = (30000000 / item.buy).toFixed(4);
+
+        // Calculate profit based on sell price vs buy price (per gram profit * grams)
+        const profitPerGram = item.sell - item.buy;
+        const profit10jt = Math.round(profitPerGram * parseFloat(gram10jt));
+        const profit20jt = Math.round(profitPerGram * parseFloat(gram20jt));
+        const profit30jt = Math.round(profitPerGram * parseFloat(gram30jt));
+
+        const profitClass10 = profit10jt >= 0 ? 'price-up' : 'price-down';
+        const profitClass20 = profit20jt >= 0 ? 'price-up' : 'price-down';
+        const profitClass30 = profit30jt >= 0 ? 'price-up' : 'price-down';
+        const profitSign10 = profit10jt >= 0 ? '+' : '';
+        const profitSign20 = profit20jt >= 0 ? '+' : '';
+        const profitSign30 = profit30jt >= 0 ? '+' : '';
 
         html += '<tr>' +
           '<td class="time-col">' + timeStr + '</td>' +
@@ -7702,8 +7722,9 @@ app.get('/monitoring', async (_req, res) => {
           '<td>' + formatRupiahShort(item.sell) + '</td>' +
           '<td class="' + spreadClass + '">' + spread + '%</td>' +
           '<td>' + usdIdr + '</td>' +
-          '<td>' + gram20jt + 'g</td>' +
-          '<td>' + gram30jt + 'g</td>' +
+          '<td><span style="color:#e7e9ea;">' + gram10jt + 'g</span><br><small class="' + profitClass10 + '">' + profitSign10 + 'Rp ' + Math.abs(profit10jt).toLocaleString('id-ID') + '</small></td>' +
+          '<td><span style="color:#e7e9ea;">' + gram20jt + 'g</span><br><small class="' + profitClass20 + '">' + profitSign20 + 'Rp ' + Math.abs(profit20jt).toLocaleString('id-ID') + '</small></td>' +
+          '<td><span style="color:#e7e9ea;">' + gram30jt + 'g</span><br><small class="' + profitClass30 + '">' + profitSign30 + 'Rp ' + Math.abs(profit30jt).toLocaleString('id-ID') + '</small></td>' +
           '<td class="' + changeClass + '">' + changeSign + formatChangeShort(buyChange) + '</td>' +
           '</tr>';
       });
@@ -8369,13 +8390,17 @@ app.get('/monitoring', async (_req, res) => {
           if (data.buy && data.sell) {
             document.getElementById('spreadPercent').textContent = ((data.sell - data.buy) / data.buy * 100).toFixed(2) + '%';
 
+            const gram10 = 10000000 / data.buy;
             const gram20 = 20000000 / data.buy;
             const gram30 = 30000000 / data.buy;
+            const profit10 = (gram10 * data.sell) - (10000000 - 10000000 * 0.035);
             const profit20 = (gram20 * data.sell) - (20000000 - 20000000 * 0.03425);
             const profit30 = (gram30 * data.sell) - (30000000 - 30000000 * 0.034);
 
+            document.getElementById('gram10').textContent = gram10.toFixed(4) + ' gr';
             document.getElementById('gram20').textContent = gram20.toFixed(4) + ' gr';
             document.getElementById('gram30').textContent = gram30.toFixed(4) + ' gr';
+            document.getElementById('profit10').textContent = '+Rp ' + Math.round(profit10).toLocaleString('id-ID');
             document.getElementById('profit20').textContent = '+Rp ' + Math.round(profit20).toLocaleString('id-ID');
             document.getElementById('profit30').textContent = '+Rp ' + Math.round(profit30).toLocaleString('id-ID');
           }
