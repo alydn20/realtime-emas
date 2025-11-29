@@ -6484,26 +6484,51 @@ ${authScript}
       const select = document.getElementById('ttsVoiceSelect');
       const voiceName = select ? select.value : '';
       const testPrice = direction === 'up' ? 20000 : 15000;
-
       const priceText = numberToWords(testPrice);
-      const directionText = direction === 'up' ? 'Harga naik' : 'Harga turun';
-      const fullText = directionText + ', ' + priceText + ' rupiah';
 
-      const utterance = new SpeechSynthesisUtterance(fullText);
-      utterance.rate = 1.0;
-      utterance.pitch = direction === 'up' ? 1.1 : 0.9;
-      utterance.volume = 1.0;
-      utterance.lang = 'id-ID';
-
+      // Get selected voice
+      let selectedVoice = null;
       if (voiceName) {
-        const voice = indonesianVoices.find(v => v.name === voiceName);
-        if (voice) {
-          utterance.voice = voice;
-          utterance.lang = voice.lang;
-        }
+        selectedVoice = indonesianVoices.find(v => v.name === voiceName);
       }
 
-      speechSynthesis.speak(utterance);
+      if (direction === 'up') {
+        // NAIK - Semangat!
+        const exclaim = new SpeechSynthesisUtterance('NAIKKK!');
+        exclaim.rate = 1.3;
+        exclaim.pitch = 1.4;
+        exclaim.volume = 1.0;
+        exclaim.lang = 'id-ID';
+        if (selectedVoice) exclaim.voice = selectedVoice;
+
+        const nominal = new SpeechSynthesisUtterance(priceText + ' rupiah');
+        nominal.rate = 1.1;
+        nominal.pitch = 1.2;
+        nominal.volume = 1.0;
+        nominal.lang = 'id-ID';
+        if (selectedVoice) nominal.voice = selectedVoice;
+
+        speechSynthesis.speak(exclaim);
+        speechSynthesis.speak(nominal);
+      } else {
+        // TURUN - Lemas/Lesuh!
+        const exclaim = new SpeechSynthesisUtterance('sorrrrr...');
+        exclaim.rate = 0.7;
+        exclaim.pitch = 0.6;
+        exclaim.volume = 1.0;
+        exclaim.lang = 'id-ID';
+        if (selectedVoice) exclaim.voice = selectedVoice;
+
+        const nominal = new SpeechSynthesisUtterance(priceText + ' rupiah');
+        nominal.rate = 0.85;
+        nominal.pitch = 0.7;
+        nominal.volume = 1.0;
+        nominal.lang = 'id-ID';
+        if (selectedVoice) nominal.voice = selectedVoice;
+
+        speechSynthesis.speak(exclaim);
+        speechSynthesis.speak(nominal);
+      }
     }
 
     function saveTTSSettings() {
@@ -8216,33 +8241,54 @@ app.get('/monitoring', async (_req, res) => {
       speechSynthesis.cancel();
 
       const priceText = numberToWords(Math.round(price));
-      const directionText = direction === 'up' ? 'Harga naik' : 'Harga turun';
-      const fullText = directionText + ', ' + priceText + ' rupiah';
-
-      const utterance = new SpeechSynthesisUtterance(fullText);
-      utterance.rate = 1.0; // Normal speed for clarity
-      utterance.pitch = direction === 'up' ? 1.1 : 0.9; // Higher pitch for up, lower for down
-      utterance.volume = 1.0;
-      utterance.lang = 'id-ID';
-
-      // Use voice setting from admin (server-side)
       const voices = speechSynthesis.getVoices();
 
+      // Get the voice to use
+      let selectedVoice = null;
       if (adminTTSVoiceName) {
-        const adminVoice = voices.find(v => v.name === adminTTSVoiceName);
-        if (adminVoice) {
-          utterance.voice = adminVoice;
-          utterance.lang = adminVoice.lang;
-        }
-      } else {
-        // Fallback to Indonesian voice
-        const indonesianVoice = voices.find(v => v.lang.includes('id') || v.lang.includes('ID'));
-        if (indonesianVoice) {
-          utterance.voice = indonesianVoice;
-        }
+        selectedVoice = voices.find(v => v.name === adminTTSVoiceName);
+      }
+      if (!selectedVoice) {
+        selectedVoice = voices.find(v => v.lang.includes('id') || v.lang.includes('ID'));
       }
 
-      speechSynthesis.speak(utterance);
+      if (direction === 'up') {
+        // NAIK - Semangat! Speak in two parts for dramatic effect
+        const exclaim = new SpeechSynthesisUtterance('NAIKKK!');
+        exclaim.rate = 1.3; // Faster = more excited
+        exclaim.pitch = 1.4; // Higher pitch = semangat
+        exclaim.volume = 1.0;
+        exclaim.lang = 'id-ID';
+        if (selectedVoice) exclaim.voice = selectedVoice;
+
+        const nominal = new SpeechSynthesisUtterance(priceText + ' rupiah');
+        nominal.rate = 1.1;
+        nominal.pitch = 1.2;
+        nominal.volume = 1.0;
+        nominal.lang = 'id-ID';
+        if (selectedVoice) nominal.voice = selectedVoice;
+
+        speechSynthesis.speak(exclaim);
+        speechSynthesis.speak(nominal);
+      } else {
+        // TURUN - Lemas/Lesuh! Speak slowly with low pitch
+        const exclaim = new SpeechSynthesisUtterance('sorrrrr...');
+        exclaim.rate = 0.7; // Slower = lemas
+        exclaim.pitch = 0.6; // Lower pitch = lesuh
+        exclaim.volume = 1.0;
+        exclaim.lang = 'id-ID';
+        if (selectedVoice) exclaim.voice = selectedVoice;
+
+        const nominal = new SpeechSynthesisUtterance(priceText + ' rupiah');
+        nominal.rate = 0.85;
+        nominal.pitch = 0.7;
+        nominal.volume = 1.0;
+        nominal.lang = 'id-ID';
+        if (selectedVoice) nominal.voice = selectedVoice;
+
+        speechSynthesis.speak(exclaim);
+        speechSynthesis.speak(nominal);
+      }
     }
 
     function playSound(direction, price) {
