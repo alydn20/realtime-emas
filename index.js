@@ -7929,60 +7929,8 @@ app.get('/monitoring', async (_req, res) => {
     function playSound(direction, price) {
       if (!soundEnabled) return;
 
-      // Check for custom sound URL
-      const customUrl = direction === 'up' ? customSoundUp : customSoundDown;
-
-      if (customUrl) {
-        // Play custom sound from URL
-        try {
-          const audio = new Audio(customUrl);
-          audio.volume = 0.5;
-          audio.play().catch(e => console.log('Custom audio error:', e));
-        } catch (e) {
-          console.log('Custom audio error:', e);
-        }
-        // Also speak the price after custom sound
-        setTimeout(() => speakPrice(direction, price), 600);
-        return;
-      }
-
-      // Play default built-in sound
-      try {
-        const ctx = getAudioContext();
-        if (ctx.state === 'suspended') ctx.resume();
-
-        const oscillator = ctx.createOscillator();
-        const gainNode = ctx.createGain();
-        oscillator.connect(gainNode);
-        gainNode.connect(ctx.destination);
-
-        if (direction === 'up') {
-          // JP JP sound - 2 beep naik (cheerful)
-          oscillator.type = 'sine';
-          oscillator.frequency.setValueAtTime(800, ctx.currentTime);
-          oscillator.frequency.setValueAtTime(1000, ctx.currentTime + 0.1);
-          oscillator.frequency.setValueAtTime(800, ctx.currentTime + 0.2);
-          oscillator.frequency.setValueAtTime(1200, ctx.currentTime + 0.3);
-          gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-          oscillator.start(ctx.currentTime);
-          oscillator.stop(ctx.currentTime + 0.5);
-        } else {
-          // SORRR sound - slide down (sad)
-          oscillator.type = 'sawtooth';
-          oscillator.frequency.setValueAtTime(400, ctx.currentTime);
-          oscillator.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.5);
-          gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-          oscillator.start(ctx.currentTime);
-          oscillator.stop(ctx.currentTime + 0.5);
-        }
-      } catch (e) {
-        console.log('Audio error:', e);
-      }
-
-      // Speak the price after the beep sound
-      setTimeout(() => speakPrice(direction, price), 600);
+      // Langsung speak harga tanpa beep
+      speakPrice(direction, price);
     }
 
     // Browser Notification
