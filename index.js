@@ -4776,7 +4776,8 @@ app.get('/login', (_req, res) => {
         </button>
       </div>
 
-      <p class="footer-text">Dengan masuk, Anda menyetujui ketentuan layanan kami</p>
+      <p class="footer-text">Belum punya akun? <a href="/register">Daftar di sini</a></p>
+      <p class="footer-text" style="margin-top:8px;">Dengan masuk, Anda menyetujui ketentuan layanan kami</p>
     </div>
   </div>
 
@@ -6874,16 +6875,16 @@ app.get('/monitoring', async (_req, res) => {
       box-shadow: 0 4px 24px rgba(0,0,0,0.2);
     }
     .header-left h1 {
-      font-size: 1.3em;
+      font-size: 1.4em;
       font-weight: 700;
       color: #ffffff;
       margin-bottom: 4px;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
       letter-spacing: -0.02em;
     }
-    .header-left h1 svg { color: #f7931a; }
+    .header-left h1 svg { color: #f7931a; flex-shrink: 0; }
     .header-left .subtitle {
       font-size: 0.85em;
       color: #8b949e;
@@ -7434,17 +7435,19 @@ app.get('/monitoring', async (_req, res) => {
   <div class="container">
     <div class="header">
       <div class="header-left">
-        <h1><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f7931a" stroke-width="2" style="vertical-align:middle;margin-right:10px;"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10h8M8 14h8"/></svg>Gold Price Monitor
-        <button class="install-btn" id="installBtn" onclick="installApp()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Install
-        </button>
+        <h1>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f7931a" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10h8M8 14h8"/></svg>
+          Gold Price Monitor
         </h1>
         <div class="subtitle">Real-time Treasury Gold Rates</div>
       </div>
       <div class="header-right">
+        <button class="install-btn" id="installBtn" onclick="installApp()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Install
+        </button>
         <button class="logout-btn" id="logoutBtn" onclick="logout()" title="Logout">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         </button>
       </div>
     </div>
