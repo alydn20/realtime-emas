@@ -3378,6 +3378,34 @@ app.post('/api/logout', express.json(), async (req, res) => {
   res.json({ success: true })
 })
 
+// API: Admin Reset User PIN to default (000000)
+app.post('/api/admin/reset-pin', express.json(), async (req, res) => {
+  const { password, phone } = req.body
+  if (password !== ADMIN_PASSWORD) {
+    return res.json({ success: false, error: 'Password admin salah' })
+  }
+  if (!phone) {
+    return res.json({ success: false, error: 'Nomor HP wajib diisi' })
+  }
+
+  const normalizedPhone = normalizePhone(phone)
+
+  // Check if user exists
+  const userData = await redis.hget(REDIS_KEYS.USERS, normalizedPhone)
+  if (!userData) {
+    return res.json({ success: false, error: 'User tidak ditemukan' })
+  }
+
+  // Reset PIN to default (000000)
+  const defaultPinHash = hashPin('000000')
+  await redis.hset(REDIS_KEYS.USER_PINS, {
+    [normalizedPhone]: JSON.stringify({ pin: defaultPinHash, pinChanged: false })
+  })
+
+  pushLog(`Admin | Reset PIN for user +${normalizedPhone}`)
+  res.json({ success: true, message: 'PIN berhasil direset ke 000000' })
+})
+
 // Helper: Generate login token
 function generateLoginToken() {
   return Math.random().toString(36).substr(2, 12) + Date.now().toString(36)
@@ -3467,9 +3495,10 @@ app.get('/api/admin/users', async (req, res) => {
   if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
 
   try {
-    const [users, blockedUsers] = await Promise.all([
+    const [users, blockedUsers, pinData] = await Promise.all([
       redis.hgetall(REDIS_KEYS.USERS),
-      redis.hgetall(REDIS_KEYS.BLOCKED_USERS)
+      redis.hgetall(REDIS_KEYS.BLOCKED_USERS),
+      redis.hgetall(REDIS_KEYS.USER_PINS)
     ])
     const result = []
 
@@ -3477,11 +3506,22 @@ app.get('/api/admin/users', async (req, res) => {
       const user = typeof data === 'string' ? JSON.parse(data) : data
       const hasPushSub = await redis.hget(REDIS_KEYS.PUSH_SUBS, phone)
       const isBlocked = !!blockedUsers?.[phone]
+
+      // Check PIN status
+      let pinChanged = false
+      if (pinData && pinData[phone]) {
+        try {
+          const pinInfo = typeof pinData[phone] === 'string' ? JSON.parse(pinData[phone]) : pinData[phone]
+          pinChanged = pinInfo.pinChanged || false
+        } catch (e) { /* ignore */ }
+      }
+
       result.push({
         phone,
         ...user,
         hasPushSubscription: !!hasPushSub,
-        isBlocked
+        isBlocked,
+        pinChanged
       })
     }
 
@@ -5273,171 +5313,276 @@ ${authScript}
       padding: 20px;
       color: #e7e9ea;
     }
-    .container { max-width: 1000px; margin: 0 auto; }
+    .container { max-width: 1100px; margin: 0 auto; }
 
+    /* Header Modern */
     .header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 24px;
       padding: 18px 24px;
-      background: rgba(20, 26, 34, 0.8);
+      background: rgba(20, 26, 34, 0.9);
       backdrop-filter: blur(20px);
       border-radius: 16px;
       border: 1px solid rgba(255,255,255,0.06);
       box-shadow: 0 8px 32px rgba(0,0,0,0.2);
     }
-    .header h1 { color: #ffffff; font-size: 1.3em; font-weight: 700; letter-spacing: -0.02em; }
-    .header h1 span { color: #f7931a; }
-    .header-actions { display: flex; gap: 12px; }
+    .header h1 { color: #ffffff; font-size: 1.4em; font-weight: 700; letter-spacing: -0.02em; display: flex; align-items: center; gap: 10px; }
+    .header h1 svg { width: 24px; height: 24px; color: #f7931a; }
+    .header-actions { display: flex; gap: 10px; }
     .header-actions a {
-      padding: 10px 18px;
-      background: rgba(255,255,255,0.08);
+      padding: 10px 16px;
+      background: rgba(255,255,255,0.06);
       color: #e7e9ea;
       text-decoration: none;
       border-radius: 10px;
-      font-size: 0.9em;
+      font-size: 0.85em;
       font-weight: 500;
-      border: 1px solid rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.08);
       transition: all 0.2s ease;
     }
     .header-actions a:hover { background: rgba(247,147,26,0.15); border-color: rgba(247,147,26,0.3); color: #f7931a; }
 
-    .login-form {
-      background: rgba(20, 26, 34, 0.8);
-      backdrop-filter: blur(20px);
-      padding: 32px;
-      border-radius: 20px;
-      border: 1px solid rgba(255,255,255,0.06);
-      max-width: 420px;
-      margin: 50px auto;
+    /* Stats Cards */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 24px;
     }
-    .login-form h2 { text-align: center; margin-bottom: 24px; color: #f7931a; }
-
-    .card {
-      background: rgba(20, 26, 34, 0.8);
-      backdrop-filter: blur(20px);
-      border-radius: 18px;
-      padding: 24px;
-      margin-bottom: 20px;
+    .stat-card {
+      background: rgba(20, 26, 34, 0.85);
+      backdrop-filter: blur(10px);
+      padding: 20px 16px;
+      border-radius: 14px;
+      text-align: center;
       border: 1px solid rgba(255,255,255,0.06);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+      transition: all 0.2s;
+    }
+    .stat-card:hover { border-color: rgba(247,147,26,0.2); transform: translateY(-2px); }
+    .stat-value { font-size: 1.8em; font-weight: 700; color: #f7931a; font-family: 'JetBrains Mono', monospace; }
+    .stat-label { color: #8b949e; font-size: 0.8em; margin-top: 4px; font-weight: 500; }
+
+    /* Cards */
+    .card {
+      background: rgba(20, 26, 34, 0.85);
+      backdrop-filter: blur(20px);
+      border-radius: 16px;
+      padding: 22px;
+      margin-bottom: 18px;
+      border: 1px solid rgba(255,255,255,0.06);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
     }
     .card h2 {
       color: #ffffff;
-      font-size: 1.1em;
+      font-size: 1em;
       font-weight: 600;
-      margin-bottom: 18px;
+      margin-bottom: 16px;
       padding-bottom: 12px;
       border-bottom: 1px solid rgba(255,255,255,0.06);
-      letter-spacing: -0.02em;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
+    .card h2 svg { width: 18px; height: 18px; color: #f7931a; }
 
+    /* Section Tabs */
+    .section-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .section-tab {
+      padding: 10px 18px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      color: #8b949e;
+      font-size: 0.85em;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .section-tab:hover { background: rgba(255,255,255,0.08); color: #e7e9ea; }
+    .section-tab.active { background: rgba(247,147,26,0.15); border-color: rgba(247,147,26,0.3); color: #f7931a; }
+
+    /* Section Content */
+    .section-content { display: none; }
+    .section-content.active { display: block; }
+
+    /* Forms */
     .form-row {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
       margin-bottom: 16px;
     }
-    .form-group { margin-bottom: 12px; }
+    .form-group { margin-bottom: 14px; }
     .form-group label {
       display: block;
       margin-bottom: 8px;
       color: #8b949e;
-      font-size: 0.85em;
+      font-size: 0.82em;
       font-weight: 500;
     }
-    .form-group input, .form-group select {
+    .form-group input, .form-group select, .form-group textarea {
       width: 100%;
-      padding: 12px 14px;
-      border: 2px solid rgba(255,255,255,0.08);
+      padding: 11px 14px;
+      border: 1px solid rgba(255,255,255,0.1);
       border-radius: 10px;
-      background: rgba(15, 20, 25, 0.8);
+      background: rgba(15, 20, 25, 0.9);
       color: #e7e9ea;
-      font-size: 0.95em;
+      font-size: 0.9em;
       font-family: inherit;
       transition: all 0.2s ease;
     }
-    .form-group input:focus { outline: none; border-color: #f7931a; box-shadow: 0 0 0 4px rgba(247,147,26,0.15); }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+      outline: none;
+      border-color: #f7931a;
+      box-shadow: 0 0 0 3px rgba(247,147,26,0.12);
+    }
+    .form-group textarea { resize: vertical; min-height: 100px; }
 
+    /* Buttons */
     .btn {
-      padding: 12px 22px;
+      padding: 10px 18px;
       border: none;
       border-radius: 10px;
-      font-size: 0.95em;
+      font-size: 0.88em;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s ease;
       font-family: inherit;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
     .btn-primary {
       background: linear-gradient(135deg, #f7931a 0%, #e8850f 100%);
       color: white;
-      box-shadow: 0 4px 15px rgba(247,147,26,0.3);
+      box-shadow: 0 4px 12px rgba(247,147,26,0.25);
     }
-    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(247,147,26,0.4); }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(247,147,26,0.35); }
+    .btn-secondary { background: rgba(255,255,255,0.08); color: #e7e9ea; border: 1px solid rgba(255,255,255,0.1); }
+    .btn-secondary:hover { background: rgba(255,255,255,0.12); }
+    .btn-success { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: white; }
+    .btn-success:hover { background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%); }
     .btn-danger { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; }
     .btn-danger:hover { background: linear-gradient(135deg, #f87171 0%, #ef4444 100%); }
-    .btn-sm { padding: 8px 14px; font-size: 0.85em; }
+    .btn-warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; }
+    .btn-sm { padding: 6px 12px; font-size: 0.78em; }
+    .btn-xs { padding: 4px 8px; font-size: 0.72em; border-radius: 6px; }
 
+    /* Action Buttons Group */
+    .action-btns {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+    .action-btn {
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 0.72em;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s;
+    }
+    .action-btn.edit { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .action-btn.edit:hover { background: rgba(59,130,246,0.25); }
+    .action-btn.push { background: rgba(168,85,247,0.15); color: #c084fc; }
+    .action-btn.push:hover { background: rgba(168,85,247,0.25); }
+    .action-btn.pin { background: rgba(247,147,26,0.15); color: #f7931a; }
+    .action-btn.pin:hover { background: rgba(247,147,26,0.25); }
+    .action-btn.block { background: rgba(239,68,68,0.15); color: #f87171; }
+    .action-btn.block:hover { background: rgba(239,68,68,0.25); }
+    .action-btn.unblock { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .action-btn.unblock:hover { background: rgba(34,197,94,0.25); }
+    .action-btn.delete { background: rgba(239,68,68,0.2); color: #f87171; }
+    .action-btn.delete:hover { background: rgba(239,68,68,0.35); }
+    .action-btn.kick { background: rgba(249,115,22,0.15); color: #fb923c; }
+    .action-btn.kick:hover { background: rgba(249,115,22,0.25); }
+
+    /* User Table */
+    .user-table-wrapper {
+      overflow-x: auto;
+      margin: 0 -10px;
+      padding: 0 10px;
+    }
     .user-table {
       width: 100%;
       border-collapse: collapse;
+      min-width: 700px;
     }
     .user-table th, .user-table td {
-      padding: 14px 12px;
+      padding: 12px 10px;
       text-align: left;
       border-bottom: 1px solid rgba(255,255,255,0.04);
     }
     .user-table th {
       color: #8b949e;
-      font-size: 0.75em;
+      font-size: 0.72em;
       text-transform: uppercase;
       font-weight: 600;
       letter-spacing: 0.5px;
-      background: rgba(0,0,0,0.15);
+      background: rgba(0,0,0,0.2);
+      position: sticky;
+      top: 0;
     }
     .user-table tr:hover { background: rgba(247,147,26,0.04); }
-    .user-table td { font-family: 'JetBrains Mono', monospace; font-size: 0.9em; }
+    .user-table td { font-size: 0.85em; }
+    .user-table td.phone { font-family: 'JetBrains Mono', monospace; font-size: 0.8em; }
 
+    /* Status Badges */
     .status-badge {
-      padding: 5px 12px;
+      padding: 4px 10px;
       border-radius: 20px;
-      font-size: 0.75em;
+      font-size: 0.72em;
       font-weight: 600;
       font-family: 'Inter', sans-serif;
+      display: inline-block;
     }
     .status-active { background: rgba(74,222,128,0.15); color: #4ade80; }
     .status-expired { background: rgba(248,113,113,0.15); color: #f87171; }
     .status-lifetime { background: rgba(247,147,26,0.15); color: #f7931a; }
     .status-blocked { background: rgba(248,113,113,0.25); color: #f87171; }
 
+    /* Push Badge */
     .push-badge {
-      width: 12px;
-      height: 12px;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
       display: inline-block;
     }
-    .push-yes { background: #4ade80; box-shadow: 0 0 8px rgba(74,222,128,0.5); }
-    .push-no { background: #f87171; }
+    .push-yes { background: #4ade80; box-shadow: 0 0 6px rgba(74,222,128,0.5); }
+    .push-no { background: #6b7280; }
 
-    .stats-row {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-      margin-bottom: 24px;
+    /* PIN Badge */
+    .pin-badge {
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 0.68em;
+      font-weight: 600;
     }
-    .stat-card {
-      background: rgba(20, 26, 34, 0.8);
-      backdrop-filter: blur(10px);
-      padding: 24px 20px;
-      border-radius: 16px;
-      text-align: center;
-      border: 1px solid rgba(255,255,255,0.06);
-    }
-    .stat-value { font-size: 2.2em; font-weight: 700; color: #f7931a; font-family: 'JetBrains Mono', monospace; }
-    .stat-label { color: #8b949e; font-size: 0.85em; margin-top: 6px; font-weight: 500; }
+    .pin-changed { background: rgba(74,222,128,0.15); color: #4ade80; }
+    .pin-default { background: rgba(251,191,36,0.15); color: #fbbf24; }
 
+    /* Result Messages */
+    .result-msg {
+      padding: 12px 16px;
+      border-radius: 10px;
+      margin-bottom: 14px;
+      display: none;
+      font-weight: 500;
+      font-size: 0.88em;
+    }
+    .result-msg.success { display: block; background: rgba(74,222,128,0.1); border: 1px solid rgba(74,222,128,0.25); color: #4ade80; }
+    .result-msg.error { display: block; background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.25); color: #f87171; }
+
+    /* Modal */
     .modal {
       display: none;
       position: fixed;
@@ -5445,7 +5590,7 @@ ${authScript}
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0,0,0,0.85);
+      background: rgba(0,0,0,0.8);
       backdrop-filter: blur(4px);
       align-items: center;
       justify-content: center;
@@ -5453,131 +5598,111 @@ ${authScript}
     }
     .modal.show { display: flex; }
     .modal-content {
-      background: rgba(20, 26, 34, 0.95);
+      background: rgba(20, 26, 34, 0.98);
       backdrop-filter: blur(20px);
-      padding: 28px;
-      border-radius: 20px;
+      padding: 24px;
+      border-radius: 16px;
       width: 90%;
-      max-width: 420px;
+      max-width: 400px;
       border: 1px solid rgba(255,255,255,0.08);
-      box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.4);
     }
     .modal-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
     }
-    .modal-header h3 { color: #f7931a; font-weight: 600; }
+    .modal-header h3 { color: #ffffff; font-weight: 600; font-size: 1.05em; }
     .modal-close {
       background: rgba(255,255,255,0.08);
       border: none;
       color: #8b949e;
-      font-size: 1.3em;
+      font-size: 1.2em;
       cursor: pointer;
-      padding: 8px 12px;
+      padding: 6px 10px;
       border-radius: 8px;
       transition: all 0.2s;
     }
     .modal-close:hover { background: rgba(255,255,255,0.15); color: #fff; }
 
+    /* Empty State */
     .empty-state {
       text-align: center;
-      padding: 50px;
-      color: #8b949e;
-      font-size: 0.95em;
+      padding: 40px;
+      color: #6b7280;
+      font-size: 0.9em;
     }
 
-    .result-msg {
-      padding: 14px 18px;
-      border-radius: 12px;
-      margin-bottom: 16px;
-      display: none;
-      font-weight: 500;
+    /* Warning Box */
+    .warning-box {
+      padding: 12px 14px;
+      background: rgba(251,191,36,0.08);
+      border: 1px solid rgba(251,191,36,0.2);
+      border-radius: 10px;
+      margin-top: 14px;
     }
-    .result-msg.success { display: block; background: rgba(74,222,128,0.12); border: 1px solid rgba(74,222,128,0.3); color: #4ade80; }
-    .result-msg.error { display: block; background: rgba(248,113,113,0.12); border: 1px solid rgba(248,113,113,0.3); color: #f87171; }
+    .warning-box p { color: #fbbf24; font-size: 0.82em; margin: 0; line-height: 1.5; }
 
-    .btn-success { background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); color: white; }
-    .btn-success:hover { background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%); }
-    .btn-warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; }
-    .btn-warning:hover { background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); }
+    /* Buttons Row */
+    .btns-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
 
-    /* Responsive untuk Tablet */
+    /* Responsive */
     @media (max-width: 900px) {
-      .container { max-width: 100%; padding: 0 12px; }
-      .stats-row { grid-template-columns: repeat(3, 1fr); gap: 12px; }
-      .stat-card { padding: 18px 14px; }
-      .stat-value { font-size: 1.8em; }
-      .card { padding: 18px; }
-      .form-row { grid-template-columns: 1fr 1fr; }
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .form-row { grid-template-columns: 1fr; }
     }
-
-    /* Responsive untuk HP (landscape) */
     @media (max-width: 768px) {
       body { padding: 12px; }
-      .header { flex-direction: column; gap: 14px; text-align: center; }
-      .header h1 { font-size: 1.15em; }
-      .header-actions { flex-wrap: wrap; justify-content: center; gap: 8px; }
-      .stats-row { grid-template-columns: repeat(3, 1fr); gap: 10px; }
-      .stat-card { padding: 14px 10px; border-radius: 12px; }
+      .header { flex-direction: column; gap: 12px; text-align: center; padding: 14px 18px; }
+      .header h1 { font-size: 1.2em; }
+      .header-actions { justify-content: center; }
+      .stats-row { gap: 10px; }
+      .stat-card { padding: 16px 12px; }
       .stat-value { font-size: 1.5em; }
-      .stat-label { font-size: 0.75em; }
-      .form-row { grid-template-columns: 1fr; }
-      .user-table { font-size: 0.85em; }
-      .user-table th, .user-table td { padding: 12px 8px; }
-      .btn { padding: 10px 16px; font-size: 0.9em; }
-      .btn-sm { padding: 6px 10px; font-size: 0.8em; }
-      .card { overflow-x: auto; border-radius: 14px; }
-      .user-table { min-width: 600px; }
+      .section-tabs { gap: 6px; }
+      .section-tab { padding: 8px 14px; font-size: 0.8em; }
+      .card { padding: 16px; }
     }
-
-    /* Responsive untuk HP (portrait) */
-    @media (max-width: 600px) {
+    @media (max-width: 500px) {
       body { padding: 8px; }
-      .header { padding: 12px 15px; }
-      .header h1 { font-size: 1em; }
-      .header-actions a { padding: 6px 10px; font-size: 0.8em; }
-      .stats-row { grid-template-columns: repeat(3, 1fr); gap: 6px; }
-      .stat-card { padding: 10px 5px; border-radius: 8px; }
-      .stat-value { font-size: 1.1em; }
+      .stats-row { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .stat-card { padding: 12px 8px; }
+      .stat-value { font-size: 1.3em; }
       .stat-label { font-size: 0.7em; }
-      .card { padding: 12px; border-radius: 10px; margin-bottom: 15px; }
-      .card h2 { font-size: 1em; margin-bottom: 10px; }
-      .form-group input, .form-group select { padding: 8px; font-size: 0.95em; }
-      .btn { padding: 8px 15px; font-size: 0.85em; }
-      .btn-sm { padding: 4px 8px; font-size: 0.75em; white-space: nowrap; }
-      .user-table { min-width: 550px; font-size: 0.8em; }
-      .user-table th, .user-table td { padding: 8px 5px; }
-      .modal-content { padding: 20px 15px; }
-    }
-
-    /* Responsive untuk HP kecil */
-    @media (max-width: 400px) {
-      body { padding: 5px; }
-      .stats-row { gap: 5px; }
-      .stat-card { padding: 8px 4px; }
-      .stat-value { font-size: 1em; }
-      .stat-label { font-size: 0.65em; }
-      .header-actions { gap: 5px; }
-      .header-actions a { padding: 5px 8px; font-size: 0.75em; }
-      .btn-sm { padding: 3px 6px; font-size: 0.7em; }
-      .user-table { min-width: 500px; }
+      .header-actions a { padding: 8px 12px; font-size: 0.78em; }
+      .section-tab { padding: 7px 12px; font-size: 0.75em; }
+      .btn { padding: 8px 14px; font-size: 0.82em; }
+      .action-btn { padding: 4px 7px; font-size: 0.68em; }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <!-- Main Content - langsung tampil karena sudah auth via /admin-login -->
     <div id="mainContent">
+      <!-- Header -->
       <div class="header">
-        <h1>Kelola User</h1>
+        <h1>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          Kelola User
+        </h1>
         <div class="header-actions">
           <a href="/admin/monitoring">Notifikasi</a>
           <a href="/monitoring" target="_blank">Monitoring</a>
         </div>
       </div>
 
+      <!-- Stats -->
       <div class="stats-row">
         <div class="stat-card">
           <div class="stat-value" id="totalUsers">0</div>
@@ -5591,104 +5716,241 @@ ${authScript}
           <div class="stat-value" id="pushUsers">0</div>
           <div class="stat-label">Push Enabled</div>
         </div>
-      </div>
-
-      <!-- WhatsApp Group Sync -->
-      <div class="card">
-        <h2>Sinkronisasi Grup WhatsApp</h2>
-        <p style="color:#71767b;font-size:0.85em;margin-bottom:15px;">Member grup yang dipilih akan otomatis terdaftar dan bisa login ke website.</p>
-        <div class="result-msg" id="syncResult"></div>
-        <div class="form-row" style="align-items:flex-end;">
-          <div class="form-group" style="flex:2;">
-            <label>Pilih Grup WhatsApp</label>
-            <select id="waGroupSelect" style="width:100%;padding:10px;border:1px solid #2f3640;border-radius:8px;background:#0f1419;color:#e7e9ea;">
-              <option value="">-- Pilih Grup --</option>
-            </select>
-          </div>
-          <div class="form-group" style="flex:1;">
-            <button class="btn btn-primary" onclick="setWaGroup()" style="width:100%;">Set Grup</button>
-          </div>
-        </div>
-        <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;">
-          <button class="btn" style="background:#2f3640;color:#e7e9ea;" onclick="loadWaGroups()">Refresh Grup</button>
-          <button class="btn" style="background:#ff4444;color:white;" onclick="clearInvalidUsers()">Hapus User Invalid</button>
-          <button class="btn" style="background:#880000;color:white;" onclick="clearAllUsers()">Hapus Semua User</button>
-        </div>
-        <div id="currentGroup" style="margin-top:10px;font-size:0.85em;color:#71767b;"></div>
-        <div style="margin-top:15px;padding:12px;background:rgba(255,170,0,0.1);border:1px solid #ffaa00;border-radius:8px;">
-          <p style="color:#ffaa00;font-size:0.85em;margin:0;">
-            <strong>⚠️ Catatan:</strong> WhatsApp menggunakan format LID (privacy) sehingga nomor telepon member tidak bisa diakses otomatis.
-            User harus mendaftar sendiri via OTP atau ditambahkan manual oleh admin.
-          </p>
+        <div class="stat-card">
+          <div class="stat-value" id="pinChangedUsers">0</div>
+          <div class="stat-label">PIN Changed</div>
         </div>
       </div>
 
-      <div class="card">
-        <h2>Tambah User Manual</h2>
-        <div class="result-msg" id="addResult"></div>
-        <div class="form-row">
+      <!-- Section Tabs -->
+      <div class="section-tabs">
+        <div class="section-tab active" data-section="users">Daftar User</div>
+        <div class="section-tab" data-section="add">Tambah User</div>
+        <div class="section-tab" data-section="pending">Pending <span id="pendingBadge" style="background:#f7931a;color:#000;padding:1px 6px;border-radius:8px;font-size:0.75em;margin-left:4px;">0</span></div>
+        <div class="section-tab" data-section="whatsapp">WhatsApp</div>
+        <div class="section-tab" data-section="settings">Pengaturan</div>
+      </div>
+
+      <!-- Section: Daftar User -->
+      <div class="section-content active" id="section-users">
+        <div class="card">
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+            Daftar User
+          </h2>
+          <div class="user-table-wrapper">
+            <table class="user-table">
+              <thead>
+                <tr>
+                  <th>No WA</th>
+                  <th>Nama</th>
+                  <th>Status</th>
+                  <th>Push</th>
+                  <th>PIN</th>
+                  <th>Expired</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="userList">
+                <tr><td colspan="7" class="empty-state">Memuat data...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section: Tambah User -->
+      <div class="section-content" id="section-add">
+        <div class="card">
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <line x1="19" y1="8" x2="19" y2="14"/>
+              <line x1="22" y1="11" x2="16" y2="11"/>
+            </svg>
+            Tambah User Manual
+          </h2>
+          <div class="result-msg" id="addResult"></div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Nomor WhatsApp</label>
+              <input type="tel" id="newPhone" placeholder="08123456789">
+            </div>
+            <div class="form-group">
+              <label>Nama (opsional)</label>
+              <input type="text" id="newName" placeholder="Nama user">
+            </div>
+            <div class="form-group">
+              <label>Tanggal Expired</label>
+              <input type="date" id="newExpiredDate">
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="addUser()">Tambah User</button>
+            <small style="color:#6b7280;">Kosongkan tanggal untuk lifetime</small>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            Import Bulk User
+          </h2>
+          <div class="result-msg" id="bulkResult"></div>
           <div class="form-group">
-            <label>Nomor WhatsApp</label>
-            <input type="tel" id="newPhone" placeholder="08123456789">
+            <label>Daftar Nomor (satu per baris atau pisahkan dengan koma)</label>
+            <textarea id="bulkPhones" placeholder="08123456789&#10;08234567890&#10;08345678901"></textarea>
           </div>
-          <div class="form-group">
-            <label>Nama (opsional)</label>
-            <input type="text" id="newName" placeholder="Nama user">
-          </div>
-          <div class="form-group">
-            <label>Tanggal Expired</label>
-            <input type="date" id="newExpiredDate">
+          <button class="btn btn-primary" onclick="bulkImport()">Import Semua</button>
+        </div>
+      </div>
+
+      <!-- Section: Pending -->
+      <div class="section-content" id="section-pending">
+        <div class="card" style="border-color:rgba(247,147,26,0.3);">
+          <h2 style="color:#f7931a;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            Pending Registrasi <span id="pendingCount" style="background:#f7931a;color:#000;padding:2px 8px;border-radius:10px;font-size:0.7em;margin-left:5px;">0</span>
+          </h2>
+          <div class="user-table-wrapper">
+            <table class="user-table">
+              <thead>
+                <tr>
+                  <th>Waktu</th>
+                  <th>Nama</th>
+                  <th>No WA</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="pendingList">
+                <tr><td colspan="4" class="empty-state">Tidak ada pendaftaran baru</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
-        <button class="btn btn-primary" onclick="addUser()">Tambah User</button>
-        <small style="color:#71767b;margin-left:10px;">Kosongkan tanggal untuk lifetime</small>
       </div>
 
-      <div class="card">
-        <h2>Import Bulk User</h2>
-        <div class="result-msg" id="bulkResult"></div>
-        <div class="form-group">
-          <label>Daftar Nomor (satu per baris atau pisahkan dengan koma)</label>
-          <textarea id="bulkPhones" rows="6" style="width:100%;padding:10px;border:1px solid #2f3640;border-radius:8px;background:#0f1419;color:#e7e9ea;font-family:monospace;" placeholder="08123456789&#10;08234567890&#10;08345678901"></textarea>
+      <!-- Section: WhatsApp -->
+      <div class="section-content" id="section-whatsapp">
+        <div class="card">
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+            </svg>
+            Sinkronisasi Grup WhatsApp
+          </h2>
+          <p style="color:#6b7280;font-size:0.85em;margin-bottom:14px;">Member grup yang dipilih akan otomatis terdaftar dan bisa login ke website.</p>
+          <div class="result-msg" id="syncResult"></div>
+          <div class="form-row" style="align-items:flex-end;">
+            <div class="form-group" style="flex:2;">
+              <label>Pilih Grup WhatsApp</label>
+              <select id="waGroupSelect">
+                <option value="">-- Pilih Grup --</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex:1;">
+              <button class="btn btn-primary" onclick="setWaGroup()" style="width:100%;">Set Grup</button>
+            </div>
+          </div>
+          <div id="currentGroup" style="margin-top:8px;font-size:0.82em;color:#6b7280;"></div>
+          <div class="btns-row">
+            <button class="btn btn-secondary" onclick="loadWaGroups()">Refresh Grup</button>
+            <button class="btn btn-danger btn-sm" onclick="clearInvalidUsers()">Hapus Invalid</button>
+            <button class="btn btn-sm" style="background:#7f1d1d;color:white;" onclick="clearAllUsers()">Hapus Semua</button>
+          </div>
+          <div class="warning-box">
+            <p><strong>Catatan:</strong> WhatsApp menggunakan format LID (privacy) sehingga nomor telepon member tidak bisa diakses otomatis. User harus mendaftar sendiri via OTP atau ditambahkan manual oleh admin.</p>
+          </div>
         </div>
-        <button class="btn btn-primary" onclick="bulkImport()">Import Semua</button>
       </div>
 
-      <!-- Pending Registrations -->
-      <div class="card" id="pendingCard" style="border-color:#f7931a;">
-        <h2 style="color:#f7931a;">📋 Pending Registrasi <span id="pendingCount" style="background:#f7931a;color:#000;padding:2px 8px;border-radius:10px;font-size:0.7em;margin-left:5px;">0</span></h2>
-        <table class="user-table">
-          <thead>
-            <tr>
-              <th>Waktu</th>
-              <th>Nama</th>
-              <th>No WA</th>
-              <th>Aksi</th>
-            </tr>
-          </thead>
-          <tbody id="pendingList">
-            <tr><td colspan="4" class="empty-state">Tidak ada pendaftaran baru</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <!-- Section: Pengaturan -->
+      <div class="section-content" id="section-settings">
+        <!-- Sound Settings -->
+        <div class="card">
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+            </svg>
+            Sound Notifikasi
+          </h2>
+          <p style="color:#6b7280;font-size:0.82em;margin-bottom:16px;">Upload file audio atau masukkan URL. Max 500KB per file.</p>
+          <div class="result-msg" id="soundResult"></div>
 
-      <div class="card">
-        <h2>Daftar User</h2>
-        <table class="user-table">
-          <thead>
-            <tr>
-              <th>No WA</th>
-              <th>Nama</th>
-              <th>Status</th>
-              <th>Push</th>
-              <th>Expired</th>
-              <th>Aksi</th>
-            </tr>
-          </thead>
-          <tbody id="userList">
-            <tr><td colspan="6" class="empty-state">Memuat data...</td></tr>
-          </tbody>
-        </table>
+          <!-- Sound Naik -->
+          <div style="background:rgba(74,222,128,0.05);padding:16px;border-radius:12px;border:1px solid rgba(74,222,128,0.15);margin-bottom:14px;">
+            <label style="color:#4ade80;font-weight:600;display:block;margin-bottom:12px;font-size:0.9em;">Sound Harga Naik</label>
+            <div class="form-group" style="margin-bottom:10px;">
+              <label>Upload File Audio</label>
+              <input type="file" id="soundUpFile" accept="audio/*" onchange="handleSoundUpload('up')">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+              <label>Atau Masukkan URL</label>
+              <input type="text" id="soundUpUrl" placeholder="https://example.com/naik.mp3">
+            </div>
+            <div id="soundUpPreview" style="margin-top:10px;display:none;">
+              <audio id="soundUpAudio" controls style="width:100%;height:36px;"></audio>
+            </div>
+            <button class="btn btn-sm" style="margin-top:10px;background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.25);" onclick="testSound('up')">Test Sound</button>
+          </div>
+
+          <!-- Sound Turun -->
+          <div style="background:rgba(248,113,113,0.05);padding:16px;border-radius:12px;border:1px solid rgba(248,113,113,0.15);margin-bottom:16px;">
+            <label style="color:#f87171;font-weight:600;display:block;margin-bottom:12px;font-size:0.9em;">Sound Harga Turun</label>
+            <div class="form-group" style="margin-bottom:10px;">
+              <label>Upload File Audio</label>
+              <input type="file" id="soundDownFile" accept="audio/*" onchange="handleSoundUpload('down')">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+              <label>Atau Masukkan URL</label>
+              <input type="text" id="soundDownUrl" placeholder="https://example.com/turun.mp3">
+            </div>
+            <div id="soundDownPreview" style="margin-top:10px;display:none;">
+              <audio id="soundDownAudio" controls style="width:100%;height:36px;"></audio>
+            </div>
+            <button class="btn btn-sm" style="margin-top:10px;background:rgba(248,113,113,0.15);color:#f87171;border:1px solid rgba(248,113,113,0.25);" onclick="testSound('down')">Test Sound</button>
+          </div>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="saveSoundSettings()">Simpan Sound</button>
+            <button class="btn btn-danger btn-sm" onclick="resetSounds()">Reset Default</button>
+          </div>
+        </div>
+
+        <!-- Admin Phones -->
+        <div class="card">
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+            </svg>
+            Nomor Admin untuk Notifikasi
+          </h2>
+          <p style="color:#6b7280;font-size:0.82em;margin-bottom:14px;">Nomor yang menerima notifikasi WhatsApp saat ada pendaftaran baru. Maksimal 2 nomor.</p>
+          <div class="result-msg" id="adminPhoneResult"></div>
+          <div class="form-group">
+            <label>Nomor Admin 1 (Utama)</label>
+            <input type="tel" id="adminPhone1" placeholder="0895701692525">
+          </div>
+          <div class="form-group">
+            <label>Nomor Admin 2 (Opsional)</label>
+            <input type="tel" id="adminPhone2" placeholder="08xxxxxxxxxx">
+          </div>
+          <button class="btn btn-primary" onclick="saveAdminPhones()">Simpan Nomor Admin</button>
+        </div>
       </div>
     </div>
   </div>
@@ -5702,7 +5964,7 @@ ${authScript}
       </div>
       <div class="form-group">
         <label>Nomor WhatsApp</label>
-        <input type="text" id="editPhone" readonly style="opacity:0.7;">
+        <input type="text" id="editPhone" readonly style="opacity:0.6;">
       </div>
       <div class="form-group">
         <label>Nama</label>
@@ -5711,13 +5973,13 @@ ${authScript}
       <div class="form-group">
         <label>Tanggal Expired</label>
         <input type="date" id="editExpiredDate">
-        <small style="color:#71767b;">Kosongkan untuk lifetime</small>
+        <small style="color:#6b7280;font-size:0.8em;">Kosongkan untuk lifetime</small>
       </div>
       <div class="form-group">
         <label>Atau Tambah Hari dari Sekarang</label>
         <input type="number" id="editAddDays" placeholder="30" min="0">
       </div>
-      <button class="btn btn-primary" style="width:100%;margin-top:15px;" onclick="saveUser()">Simpan</button>
+      <button class="btn btn-primary" style="width:100%;margin-top:12px;" onclick="saveUser()">Simpan</button>
     </div>
   </div>
 
@@ -5746,78 +6008,23 @@ ${authScript}
         <label>Pesan</label>
         <input type="text" id="pushMessage" placeholder="Isi pesan">
       </div>
-      <button class="btn btn-primary" style="width:100%;margin-top:15px;" onclick="sendPush()">Kirim</button>
+      <button class="btn btn-primary" style="width:100%;margin-top:12px;" onclick="sendPush()">Kirim</button>
     </div>
-  </div>
-
-  <!-- Sound Settings -->
-  <div class="card">
-    <h2>Pengaturan Sound Notifikasi</h2>
-    <p style="color:#8b949e;font-size:0.9em;margin-bottom:20px;">Upload file audio dari perangkat atau masukkan URL. Max 500KB per file.</p>
-
-    <div class="result-msg" id="soundResult"></div>
-
-    <!-- Sound Harga Naik -->
-    <div style="background:rgba(15,20,25,0.8);padding:20px;border-radius:14px;border:1px solid rgba(74,222,128,0.2);margin-bottom:16px;">
-      <label style="color:#4ade80;font-weight:600;display:block;margin-bottom:14px;font-size:0.95em;">Sound Harga Naik</label>
-      <div style="margin-bottom:12px;">
-        <label style="display:block;margin-bottom:8px;color:#8b949e;font-size:0.85em;">Upload File Audio</label>
-        <input type="file" id="soundUpFile" accept="audio/*" onchange="handleSoundUpload('up')" style="width:100%;padding:10px;border:2px solid rgba(255,255,255,0.08);border-radius:10px;background:rgba(15,20,25,0.8);color:#e7e9ea;font-size:0.9em;box-sizing:border-box;">
-      </div>
-      <div style="margin-bottom:12px;">
-        <label style="display:block;margin-bottom:8px;color:#8b949e;font-size:0.85em;">Atau Masukkan URL</label>
-        <input type="text" id="soundUpUrl" placeholder="https://example.com/naik.mp3" style="width:100%;padding:12px 14px;border:2px solid rgba(255,255,255,0.08);border-radius:10px;background:rgba(15,20,25,0.8);color:#e7e9ea;font-size:0.95em;box-sizing:border-box;">
-      </div>
-      <div id="soundUpPreview" style="margin-top:12px;display:none;">
-        <audio id="soundUpAudio" controls style="width:100%;height:40px;border-radius:8px;"></audio>
-      </div>
-      <button class="btn btn-sm" style="margin-top:12px;background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.3);width:100%;" onclick="testSound('up')">Test Sound Naik</button>
-    </div>
-
-    <!-- Sound Harga Turun -->
-    <div style="background:rgba(15,20,25,0.8);padding:20px;border-radius:14px;border:1px solid rgba(248,113,113,0.2);margin-bottom:20px;">
-      <label style="color:#f87171;font-weight:600;display:block;margin-bottom:14px;font-size:0.95em;">Sound Harga Turun</label>
-      <div style="margin-bottom:12px;">
-        <label style="display:block;margin-bottom:8px;color:#8b949e;font-size:0.85em;">Upload File Audio</label>
-        <input type="file" id="soundDownFile" accept="audio/*" onchange="handleSoundUpload('down')" style="width:100%;padding:10px;border:2px solid rgba(255,255,255,0.08);border-radius:10px;background:rgba(15,20,25,0.8);color:#e7e9ea;font-size:0.9em;box-sizing:border-box;">
-      </div>
-      <div style="margin-bottom:12px;">
-        <label style="display:block;margin-bottom:8px;color:#8b949e;font-size:0.85em;">Atau Masukkan URL</label>
-        <input type="text" id="soundDownUrl" placeholder="https://example.com/turun.mp3" style="width:100%;padding:12px 14px;border:2px solid rgba(255,255,255,0.08);border-radius:10px;background:rgba(15,20,25,0.8);color:#e7e9ea;font-size:0.95em;box-sizing:border-box;">
-      </div>
-      <div id="soundDownPreview" style="margin-top:12px;display:none;">
-        <audio id="soundDownAudio" controls style="width:100%;height:40px;border-radius:8px;"></audio>
-      </div>
-      <button class="btn btn-sm" style="margin-top:12px;background:rgba(248,113,113,0.15);color:#f87171;border:1px solid rgba(248,113,113,0.3);width:100%;" onclick="testSound('down')">Test Sound Turun</button>
-    </div>
-
-    <div style="display:flex;gap:12px;flex-wrap:wrap;">
-      <button class="btn btn-primary" style="flex:2;min-width:150px;" onclick="saveSoundSettings()">Simpan Sound</button>
-      <button class="btn btn-danger" style="flex:1;min-width:120px;" onclick="resetSounds()">Reset Default</button>
-    </div>
-  </div>
-
-  <!-- Admin Phones Settings -->
-  <div class="card">
-    <h2>Nomor Admin untuk Notifikasi</h2>
-    <p style="color:#8b949e;font-size:0.9em;margin-bottom:20px;">Nomor yang menerima notifikasi WhatsApp saat ada pendaftaran baru. Maksimal 2 nomor.</p>
-    <div class="result-msg" id="adminPhoneResult"></div>
-    <div style="margin-bottom:16px;">
-      <div style="margin-bottom:12px;">
-        <label style="display:block;margin-bottom:8px;color:#8b949e;font-size:0.85em;font-weight:500;">Nomor Admin 1 (Utama)</label>
-        <input type="tel" id="adminPhone1" placeholder="0895701692525" style="width:100%;padding:12px 14px;border:2px solid rgba(255,255,255,0.08);border-radius:10px;background:rgba(15,20,25,0.8);color:#e7e9ea;font-size:0.95em;box-sizing:border-box;">
-      </div>
-      <div>
-        <label style="display:block;margin-bottom:8px;color:#8b949e;font-size:0.85em;font-weight:500;">Nomor Admin 2 (Opsional)</label>
-        <input type="tel" id="adminPhone2" placeholder="08xxxxxxxxxx" style="width:100%;padding:12px 14px;border:2px solid rgba(255,255,255,0.08);border-radius:10px;background:rgba(15,20,25,0.8);color:#e7e9ea;font-size:0.95em;box-sizing:border-box;">
-      </div>
-    </div>
-    <button class="btn btn-primary" onclick="saveAdminPhones()">Simpan Nomor Admin</button>
   </div>
 
   <script>
     // Admin sudah terautentikasi via /admin-login
     const adminPass = 'admin123'; // Default password untuk API calls
+
+    // Tab Navigation
+    document.querySelectorAll('.section-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.section-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.section-content').forEach(s => s.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('section-' + tab.dataset.section).classList.add('active');
+      });
+    });
 
     // Load data langsung saat halaman dibuka
     document.addEventListener('DOMContentLoaded', function() {
@@ -6207,10 +6414,11 @@ ${authScript}
           const list = data.registrations || [];
           const tbody = document.getElementById('pendingList');
           const countEl = document.getElementById('pendingCount');
-          const card = document.getElementById('pendingCard');
+          const badgeEl = document.getElementById('pendingBadge');
 
           countEl.textContent = list.length;
-          card.style.display = list.length > 0 ? 'block' : 'none';
+          badgeEl.textContent = list.length;
+          badgeEl.style.display = list.length > 0 ? 'inline' : 'none';
 
           if (list.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Tidak ada pendaftaran baru</td></tr>';
@@ -6219,13 +6427,15 @@ ${authScript}
 
           tbody.innerHTML = list.map(r => {
             const time = new Date(r.timestamp).toLocaleString('id-ID');
-            return '<tr style="background:rgba(247,147,26,0.1);">' +
+            return '<tr style="background:rgba(247,147,26,0.08);">' +
               '<td>' + time + '</td>' +
               '<td><strong>' + r.name + '</strong></td>' +
-              '<td>+' + r.phone + '</td>' +
+              '<td class="phone">+' + r.phone + '</td>' +
               '<td>' +
-                '<button class="btn btn-sm btn-success btn-approve" data-phone="' + r.phone + '">ACC</button> ' +
-                '<button class="btn btn-sm btn-danger btn-reject" data-phone="' + r.phone + '">Tolak</button>' +
+                '<div class="action-btns">' +
+                  '<button class="action-btn unblock btn-approve" data-phone="' + r.phone + '">ACC</button>' +
+                  '<button class="action-btn delete btn-reject" data-phone="' + r.phone + '">Tolak</button>' +
+                '</div>' +
               '</td>' +
             '</tr>';
           }).join('');
@@ -6284,14 +6494,16 @@ ${authScript}
           let total = users.length;
           let active = users.filter(u => !u.expired || u.expired > now).length;
           let push = users.filter(u => u.hasPushSubscription).length;
+          let pinChanged = users.filter(u => u.pinChanged).length;
 
           document.getElementById('totalUsers').textContent = total;
           document.getElementById('activeUsers').textContent = active;
           document.getElementById('pushUsers').textContent = push;
+          document.getElementById('pinChangedUsers').textContent = pinChanged;
 
           const tbody = document.getElementById('userList');
           if (users.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Belum ada user</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Belum ada user</td></tr>';
             return;
           }
 
@@ -6312,45 +6524,78 @@ ${authScript}
             }
 
             const expDate = u.expired ? new Date(u.expired).toLocaleDateString('id-ID') : '-';
+            const pinStatus = u.pinChanged
+              ? '<span class="pin-badge pin-changed">Changed</span>'
+              : '<span class="pin-badge pin-default">Default</span>';
             const blockBtn = u.isBlocked
-              ? '<button class="btn btn-sm" style="background:#00c853;" onclick="unblockUser(\\'' + u.phone + '\\')">Unblock</button> '
-              : '<button class="btn btn-sm" style="background:#ff5252;" onclick="blockUser(\\'' + u.phone + '\\')">Block</button> ';
+              ? '<button class="action-btn unblock" onclick="unblockUser(\\'' + u.phone + '\\')">Unblock</button>'
+              : '<button class="action-btn block" onclick="blockUser(\\'' + u.phone + '\\')">Block</button>';
 
-            return '<tr' + (u.isBlocked ? ' style="opacity:0.6;background:rgba(255,82,82,0.1);"' : '') + '>' +
-              '<td>+' + u.phone + '</td>' +
+            return '<tr' + (u.isBlocked ? ' style="opacity:0.6;background:rgba(255,82,82,0.05);"' : '') + '>' +
+              '<td class="phone">+' + u.phone + '</td>' +
               '<td>' + (u.name || '-') + '</td>' +
               '<td><span class="status-badge ' + statusClass + '">' + status + '</span></td>' +
               '<td><span class="push-badge ' + (u.hasPushSubscription ? 'push-yes' : 'push-no') + '"></span></td>' +
+              '<td>' + pinStatus + '</td>' +
               '<td>' + expDate + '</td>' +
               '<td>' +
-                '<button class="btn btn-sm" onclick="editUser(\\'' + u.phone + '\\',\\'' + (u.name||'') + '\\')">Edit</button> ' +
-                '<button class="btn btn-sm" onclick="openPushModal(\\'' + u.phone + '\\')">Push</button> ' +
-                blockBtn +
-                '<button class="btn btn-sm btn-danger" onclick="deleteUser(\\'' + u.phone + '\\')">Hapus</button> ' +
-                '<button class="btn btn-sm" style="background:#ff6600;" onclick="kickUser(\\'' + u.phone + '\\')">Kick</button>' +
+                '<div class="action-btns">' +
+                  '<button class="action-btn edit" onclick="editUser(\\'' + u.phone + '\\',\\'' + (u.name||'') + '\\')">Edit</button>' +
+                  '<button class="action-btn push" onclick="openPushModal(\\'' + u.phone + '\\')">Push</button>' +
+                  '<button class="action-btn pin" onclick="resetPin(\\'' + u.phone + '\\')">Reset PIN</button>' +
+                  blockBtn +
+                  '<button class="action-btn delete" onclick="deleteUser(\\'' + u.phone + '\\')">Hapus</button>' +
+                  '<button class="action-btn kick" onclick="kickUser(\\'' + u.phone + '\\')">Kick</button>' +
+                '</div>' +
               '</td>' +
             '</tr>';
           }).join('');
         });
     }
 
+    // Reset PIN user ke default (000000)
+    function resetPin(phone) {
+      if (!confirm('Reset PIN user +62' + phone + ' ke default (000000)?')) return;
+
+      fetch('/api/admin/reset-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass, phone })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          alert('PIN berhasil direset ke 000000');
+          loadUsers();
+        } else {
+          alert('Error: ' + data.error);
+        }
+      });
+    }
+
     function addUser() {
       const phone = document.getElementById('newPhone').value.trim();
       const name = document.getElementById('newName').value.trim();
-      const expired = document.getElementById('newExpired').value;
+      const expiredDate = document.getElementById('newExpiredDate').value;
       const result = document.getElementById('addResult');
 
       if (!phone) return alert('Nomor WA wajib diisi');
 
+      const bodyData = {
+        password: adminPass,
+        phone,
+        name
+      };
+
+      // If date is set, convert to timestamp
+      if (expiredDate) {
+        bodyData.expiredTimestamp = new Date(expiredDate + 'T23:59:59').getTime();
+      }
+
       fetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          password: adminPass,
-          phone,
-          name,
-          expiredDays: expired ? parseInt(expired) : null
-        })
+        body: JSON.stringify(bodyData)
       })
       .then(r => r.json())
       .then(data => {
@@ -6359,7 +6604,7 @@ ${authScript}
           result.textContent = 'User berhasil ditambahkan!';
           document.getElementById('newPhone').value = '';
           document.getElementById('newName').value = '';
-          document.getElementById('newExpired').value = '';
+          document.getElementById('newExpiredDate').value = '';
           loadUsers();
         } else {
           result.className = 'result-msg error';
