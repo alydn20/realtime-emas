@@ -145,7 +145,8 @@ const REDIS_KEYS = {
   LOGIN_ATTEMPTS: 'gold:login_attempts', // Hash: phone -> { attempts, lastAttempt }
   BLOCKED_USERS: 'gold:blocked_users', // Hash: phone -> { blockedAt, reason }
   PENDING_REGISTRATIONS: 'gold:pending_reg_v2', // Hash: phone -> { name, phone, timestamp }
-  USER_PINS: 'gold:user_pins'    // Hash: phone -> { pin (hashed), pinChanged (boolean) }
+  USER_PINS: 'gold:user_pins',    // Hash: phone -> { pin (hashed), pinChanged (boolean) }
+  TTS_SETTINGS: 'gold:tts_settings' // JSON: TTS voice settings { voiceName }
 }
 
 // Admin password untuk akses admin panel
@@ -3909,6 +3910,34 @@ app.post('/api/admin/sound-settings', express.json(), async (req, res) => {
   }
 })
 
+// Admin: Get TTS voice settings
+app.get('/api/admin/tts-settings', async (req, res) => {
+  try {
+    const settings = await redis.get(REDIS_KEYS.TTS_SETTINGS)
+    res.json({ success: true, settings: settings ? JSON.parse(settings) : { voiceName: '' } })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
+// Admin: Update TTS voice settings
+app.post('/api/admin/tts-settings', express.json(), async (req, res) => {
+  const { password, voiceName } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  try {
+    const settings = { voiceName: voiceName || '' }
+    await redis.set(REDIS_KEYS.TTS_SETTINGS, JSON.stringify(settings))
+
+    // Broadcast to all clients to update their TTS voice
+    broadcastSSE({ type: 'tts_update', settings })
+
+    res.json({ success: true, settings })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
 // ==================== WHATSAPP GROUP MANAGEMENT ====================
 
 // Admin: Get list of WhatsApp groups
@@ -5932,6 +5961,57 @@ ${authScript}
           </div>
         </div>
 
+        <!-- TTS Voice Settings (Admin Only) -->
+        <div class="card">
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              <line x1="12" y1="19" x2="12" y2="23"/>
+              <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+            Pengaturan Suara TTS (Text-to-Speech)
+          </h2>
+          <p style="color:#6b7280;font-size:0.82em;margin-bottom:16px;">Pilih suara untuk pengumuman harga. Pengaturan ini berlaku untuk semua user.</p>
+          <div class="result-msg" id="ttsResult"></div>
+
+          <div class="form-group" style="margin-bottom:14px;">
+            <label>Pilih Suara Indonesia</label>
+            <select id="ttsVoiceSelect" style="width:100%;padding:10px;border-radius:8px;background:#1e1e1e;border:1px solid rgba(255,255,255,0.1);color:#fff;">
+              <option value="">Loading voices...</option>
+            </select>
+          </div>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+            <button class="btn btn-sm" style="background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.25);" onclick="testTTSVoice('up')">
+              Test Harga Naik
+            </button>
+            <button class="btn btn-sm" style="background:rgba(248,113,113,0.15);color:#f87171;border:1px solid rgba(248,113,113,0.25);" onclick="testTTSVoice('down')">
+              Test Harga Turun
+            </button>
+            <button class="btn btn-sm" style="background:rgba(96,165,250,0.15);color:#60a5fa;border:1px solid rgba(96,165,250,0.25);" onclick="loadTTSVoices()">
+              Refresh Voices
+            </button>
+          </div>
+
+          <div id="voiceListContainer" style="background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.08);max-height:250px;overflow-y:auto;margin-bottom:16px;">
+            <table style="width:100%;border-collapse:collapse;font-size:0.85em;">
+              <thead>
+                <tr style="background:rgba(255,255,255,0.03);">
+                  <th style="padding:10px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.08);">#</th>
+                  <th style="padding:10px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.08);">Nama Voice</th>
+                  <th style="padding:10px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.08);">Test</th>
+                </tr>
+              </thead>
+              <tbody id="voiceListBody">
+                <tr><td colspan="3" style="padding:20px;text-align:center;color:#6b7280;">Memuat daftar voice Indonesia...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <button class="btn btn-primary" onclick="saveTTSSettings()">Simpan Pengaturan TTS</button>
+        </div>
+
         <!-- Admin Phones -->
         <div class="card">
           <h2>
@@ -6264,6 +6344,220 @@ ${authScript}
         console.log('Sound error:', e);
       }
     }
+
+    // ==================== TTS Voice Functions ====================
+    let indonesianVoices = [];
+    let savedTTSVoiceName = '';
+
+    function loadTTSVoices() {
+      if (!('speechSynthesis' in window)) {
+        document.getElementById('ttsResult').className = 'result-msg error';
+        document.getElementById('ttsResult').textContent = 'Browser tidak mendukung Speech Synthesis';
+        return;
+      }
+
+      const populateVoices = () => {
+        const allVoices = speechSynthesis.getVoices();
+        // Filter hanya voice Indonesia
+        indonesianVoices = allVoices.filter(v =>
+          v.lang.includes('id') || v.lang.includes('ID') ||
+          v.name.toLowerCase().includes('indonesia')
+        );
+
+        console.log('Indonesian voices:', indonesianVoices.length);
+
+        // Update dropdown
+        const select = document.getElementById('ttsVoiceSelect');
+        if (select) {
+          select.innerHTML = '<option value="">-- Default Browser --</option>';
+          indonesianVoices.forEach((voice, index) => {
+            const option = document.createElement('option');
+            option.value = voice.name;
+            option.textContent = voice.name + (voice.localService ? ' [Offline]' : ' [Online]');
+            if (savedTTSVoiceName && voice.name === savedTTSVoiceName) {
+              option.selected = true;
+            }
+            select.appendChild(option);
+          });
+        }
+
+        // Update voice list table
+        const tbody = document.getElementById('voiceListBody');
+        if (tbody) {
+          if (indonesianVoices.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" style="padding:20px;text-align:center;color:#f87171;">Tidak ada voice Indonesia tersedia. Coba gunakan Chrome/Edge.</td></tr>';
+          } else {
+            tbody.innerHTML = '';
+            indonesianVoices.forEach((voice, index) => {
+              const tr = document.createElement('tr');
+              tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+              tr.innerHTML =
+                '<td style="padding:8px 10px;">' + (index + 1) + '</td>' +
+                '<td style="padding:8px 10px;">' + voice.name + (voice.localService ? ' <span style="color:#60a5fa;font-size:0.75em;">[Offline]</span>' : ' <span style="color:#fbbf24;font-size:0.75em;">[Online]</span>') + '</td>' +
+                '<td style="padding:8px 10px;text-align:center;">' +
+                  '<button class="btn btn-sm" style="padding:4px 10px;font-size:0.75em;background:rgba(96,165,250,0.15);color:#60a5fa;border:1px solid rgba(96,165,250,0.25);" onclick="testVoiceByName(\\'' + voice.name.replace(/'/g, "\\\\'") + '\\')">Test</button>' +
+                '</td>';
+              tbody.appendChild(tr);
+            });
+          }
+        }
+      };
+
+      if (speechSynthesis.onvoiceschanged !== undefined) {
+        speechSynthesis.onvoiceschanged = populateVoices;
+      }
+      populateVoices();
+    }
+
+    function numberToWords(num) {
+      const satuan = ['', 'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan'];
+      const belasan = ['sepuluh', 'sebelas', 'dua belas', 'tiga belas', 'empat belas', 'lima belas', 'enam belas', 'tujuh belas', 'delapan belas', 'sembilan belas'];
+
+      if (num === 0) return 'nol';
+      if (num < 0) return 'minus ' + numberToWords(Math.abs(num));
+
+      let words = '';
+
+      if (num >= 1000000) {
+        const juta = Math.floor(num / 1000000);
+        words += (juta === 1 ? 'satu juta ' : numberToWords(juta) + ' juta ');
+        num %= 1000000;
+      }
+
+      if (num >= 1000) {
+        const ribu = Math.floor(num / 1000);
+        words += (ribu === 1 ? 'seribu ' : numberToWords(ribu) + ' ribu ');
+        num %= 1000;
+      }
+
+      if (num >= 100) {
+        const ratus = Math.floor(num / 100);
+        words += (ratus === 1 ? 'seratus ' : satuan[ratus] + ' ratus ');
+        num %= 100;
+      }
+
+      if (num >= 20) {
+        words += satuan[Math.floor(num / 10)] + ' puluh ';
+        num %= 10;
+      } else if (num >= 10) {
+        words += belasan[num - 10] + ' ';
+        num = 0;
+      }
+
+      if (num > 0) words += satuan[num] + ' ';
+
+      return words.trim();
+    }
+
+    function testVoiceByName(voiceName) {
+      if (!('speechSynthesis' in window)) {
+        alert('Browser tidak mendukung Text-to-Speech');
+        return;
+      }
+      speechSynthesis.cancel();
+
+      const voice = indonesianVoices.find(v => v.name === voiceName);
+      if (!voice) {
+        alert('Voice tidak ditemukan');
+        return;
+      }
+
+      const testText = 'Harga naik, dua puluh ribu rupiah';
+      const utterance = new SpeechSynthesisUtterance(testText);
+      utterance.voice = voice;
+      utterance.lang = voice.lang;
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+
+      console.log('Testing voice:', voice.name);
+      speechSynthesis.speak(utterance);
+    }
+
+    function testTTSVoice(direction) {
+      if (!('speechSynthesis' in window)) {
+        alert('Browser tidak mendukung Text-to-Speech');
+        return;
+      }
+      speechSynthesis.cancel();
+
+      const select = document.getElementById('ttsVoiceSelect');
+      const voiceName = select ? select.value : '';
+      const testPrice = direction === 'up' ? 20000 : 15000;
+
+      const priceText = numberToWords(testPrice);
+      const directionText = direction === 'up' ? 'Harga naik' : 'Harga turun';
+      const fullText = directionText + ', ' + priceText + ' rupiah';
+
+      const utterance = new SpeechSynthesisUtterance(fullText);
+      utterance.rate = 1.0;
+      utterance.pitch = direction === 'up' ? 1.1 : 0.9;
+      utterance.volume = 1.0;
+      utterance.lang = 'id-ID';
+
+      if (voiceName) {
+        const voice = indonesianVoices.find(v => v.name === voiceName);
+        if (voice) {
+          utterance.voice = voice;
+          utterance.lang = voice.lang;
+        }
+      }
+
+      speechSynthesis.speak(utterance);
+    }
+
+    function saveTTSSettings() {
+      const select = document.getElementById('ttsVoiceSelect');
+      const voiceName = select ? select.value : '';
+      const result = document.getElementById('ttsResult');
+
+      result.className = 'result-msg success';
+      result.textContent = 'Menyimpan pengaturan TTS...';
+
+      fetch('/api/admin/tts-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass, voiceName })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          savedTTSVoiceName = voiceName;
+          result.className = 'result-msg success';
+          result.textContent = 'Pengaturan TTS berhasil disimpan! Voice: ' + (voiceName || 'Default Browser');
+        } else {
+          result.className = 'result-msg error';
+          result.textContent = 'Gagal: ' + data.error;
+        }
+        setTimeout(() => result.className = 'result-msg', 5000);
+      })
+      .catch(e => {
+        result.className = 'result-msg error';
+        result.textContent = 'Error: ' + e.message;
+        setTimeout(() => result.className = 'result-msg', 5000);
+      });
+    }
+
+    function loadSavedTTSSettings() {
+      fetch('/api/admin/tts-settings')
+        .then(r => r.json())
+        .then(data => {
+          if (data.success && data.settings) {
+            savedTTSVoiceName = data.settings.voiceName || '';
+            // Re-load voices to apply saved setting
+            loadTTSVoices();
+          }
+        })
+        .catch(() => {});
+    }
+
+    // Load TTS voices on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      setTimeout(() => {
+        loadTTSVoices();
+        loadSavedTTSSettings();
+      }, 500);
+    });
 
     // ==================== WhatsApp Group Functions ====================
     function loadWaGroups() {
@@ -7482,9 +7776,6 @@ app.get('/monitoring', async (_req, res) => {
             <svg id="soundIconOn" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
             <svg id="soundIconOff" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
           </div>
-          <div class="sound-toggle-header" onclick="openTTSSettings()" title="Pengaturan Suara TTS" style="background:rgba(96,165,250,0.12);border-color:rgba(96,165,250,0.3);">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          </div>
         </h1>
         <div class="subtitle">Real-time Treasury Gold Rates</div>
       </div>
@@ -7820,6 +8111,21 @@ app.get('/monitoring', async (_req, res) => {
     }
     loadCustomSounds();
 
+    // TTS Voice setting from admin
+    let adminTTSVoiceName = '';
+
+    async function loadTTSSettings() {
+      try {
+        const res = await fetch('/api/admin/tts-settings');
+        const data = await res.json();
+        if (data.success && data.settings) {
+          adminTTSVoiceName = data.settings.voiceName || '';
+          console.log('TTS Voice from admin:', adminTTSVoiceName || 'Default');
+        }
+      } catch (e) {}
+    }
+    loadTTSSettings();
+
     function getAudioContext() {
       if (!audioContext) {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -7917,16 +8223,19 @@ app.get('/monitoring', async (_req, res) => {
       utterance.rate = 1.0; // Normal speed for clarity
       utterance.pitch = direction === 'up' ? 1.1 : 0.9; // Higher pitch for up, lower for down
       utterance.volume = 1.0;
+      utterance.lang = 'id-ID';
 
-      // Use selected voice from settings, or fallback to Indonesian voice
-      const savedVoiceIndex = localStorage.getItem('ttsVoiceIndex');
+      // Use voice setting from admin (server-side)
       const voices = speechSynthesis.getVoices();
 
-      if (savedVoiceIndex !== null && savedVoiceIndex !== '' && voices[parseInt(savedVoiceIndex)]) {
-        utterance.voice = voices[parseInt(savedVoiceIndex)];
-        utterance.lang = voices[parseInt(savedVoiceIndex)].lang;
+      if (adminTTSVoiceName) {
+        const adminVoice = voices.find(v => v.name === adminTTSVoiceName);
+        if (adminVoice) {
+          utterance.voice = adminVoice;
+          utterance.lang = adminVoice.lang;
+        }
       } else {
-        utterance.lang = 'id-ID';
+        // Fallback to Indonesian voice
         const indonesianVoice = voices.find(v => v.lang.includes('id') || v.lang.includes('ID'));
         if (indonesianVoice) {
           utterance.voice = indonesianVoice;
@@ -7942,143 +8251,6 @@ app.get('/monitoring', async (_req, res) => {
       // Langsung speak harga tanpa beep
       speakPrice(direction, price);
     }
-
-    // TTS Voice Management
-    let selectedVoiceIndex = localStorage.getItem('ttsVoiceIndex') || '';
-    let allVoices = [];
-
-    function loadTTSVoices() {
-      if (!('speechSynthesis' in window)) {
-        console.log('Browser tidak mendukung Speech Synthesis');
-        return;
-      }
-
-      // Get voices (may need to wait for voices to load)
-      const populateVoices = () => {
-        allVoices = speechSynthesis.getVoices();
-        console.log('Loaded', allVoices.length, 'voices');
-
-        // Update dropdown
-        const select = document.getElementById('ttsVoiceSelect');
-        if (select) {
-          select.innerHTML = '<option value="">-- Pilih Suara (Default Browser) --</option>';
-          allVoices.forEach((voice, index) => {
-            const option = document.createElement('option');
-            option.value = index;
-            option.textContent = voice.name + ' (' + voice.lang + ')' + (voice.localService ? ' [Offline]' : ' [Online]');
-            if (selectedVoiceIndex !== '' && parseInt(selectedVoiceIndex) === index) {
-              option.selected = true;
-            }
-            select.appendChild(option);
-          });
-        }
-
-        // Update voice list table
-        const tbody = document.getElementById('voiceListBody');
-        if (tbody) {
-          if (allVoices.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="padding:20px;text-align:center;color:#f87171;">Tidak ada voice tersedia. Coba refresh atau gunakan browser lain (Chrome/Edge).</td></tr>';
-          } else {
-            tbody.innerHTML = '';
-            allVoices.forEach((voice, index) => {
-              const isIndonesian = voice.lang.includes('id') || voice.lang.includes('ID');
-              const tr = document.createElement('tr');
-              tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
-              if (isIndonesian) {
-                tr.style.background = 'rgba(74,222,128,0.08)';
-              }
-              tr.innerHTML =
-                '<td style="padding:8px 10px;">' + (index + 1) + '</td>' +
-                '<td style="padding:8px 10px;">' + voice.name + (voice.localService ? ' <span style="color:#60a5fa;font-size:0.75em;">[Offline]</span>' : ' <span style="color:#fbbf24;font-size:0.75em;">[Online]</span>') + '</td>' +
-                '<td style="padding:8px 10px;">' + voice.lang + (isIndonesian ? ' <span style="color:#4ade80;font-size:0.75em;">ID</span>' : '') + '</td>' +
-                '<td style="padding:8px 10px;text-align:center;">' +
-                  '<button class="btn btn-sm" style="padding:4px 10px;font-size:0.75em;background:rgba(96,165,250,0.15);color:#60a5fa;border:1px solid rgba(96,165,250,0.25);" onclick="testVoiceByIndex(' + index + ')">Test</button>' +
-                '</td>';
-              tbody.appendChild(tr);
-            });
-          }
-        }
-      };
-
-      // Chrome needs to wait for voiceschanged event
-      if (speechSynthesis.onvoiceschanged !== undefined) {
-        speechSynthesis.onvoiceschanged = populateVoices;
-      }
-      populateVoices();
-    }
-
-    function testVoiceByIndex(index) {
-      if (!('speechSynthesis' in window)) {
-        alert('Browser tidak mendukung Text-to-Speech');
-        return;
-      }
-      speechSynthesis.cancel();
-
-      const voice = allVoices[index];
-      if (!voice) {
-        alert('Voice tidak ditemukan');
-        return;
-      }
-
-      const testText = 'Harga naik, dua puluh ribu rupiah';
-      const utterance = new SpeechSynthesisUtterance(testText);
-      utterance.voice = voice;
-      utterance.lang = voice.lang;
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
-
-      console.log('Testing voice:', voice.name, voice.lang);
-      speechSynthesis.speak(utterance);
-    }
-
-    function testTTSVoice(direction) {
-      if (!('speechSynthesis' in window)) {
-        alert('Browser tidak mendukung Text-to-Speech');
-        return;
-      }
-      speechSynthesis.cancel();
-
-      const select = document.getElementById('ttsVoiceSelect');
-      const voiceIndex = select ? select.value : selectedVoiceIndex;
-      const testPrice = direction === 'up' ? 20000 : 15000;
-
-      const priceText = numberToWords(testPrice);
-      const directionText = direction === 'up' ? 'Harga naik' : 'Harga turun';
-      const fullText = directionText + ', ' + priceText + ' rupiah';
-
-      const utterance = new SpeechSynthesisUtterance(fullText);
-      utterance.rate = 1.0;
-      utterance.pitch = direction === 'up' ? 1.1 : 0.9;
-      utterance.volume = 1.0;
-
-      if (voiceIndex !== '' && allVoices[parseInt(voiceIndex)]) {
-        utterance.voice = allVoices[parseInt(voiceIndex)];
-        utterance.lang = allVoices[parseInt(voiceIndex)].lang;
-      } else {
-        utterance.lang = 'id-ID';
-      }
-
-      speechSynthesis.speak(utterance);
-    }
-
-    function saveTTSSettings() {
-      const select = document.getElementById('ttsVoiceSelect');
-      if (select) {
-        selectedVoiceIndex = select.value;
-        localStorage.setItem('ttsVoiceIndex', selectedVoiceIndex);
-
-        const voiceName = selectedVoiceIndex !== '' && allVoices[parseInt(selectedVoiceIndex)]
-          ? allVoices[parseInt(selectedVoiceIndex)].name
-          : 'Default Browser';
-        alert('Pengaturan TTS disimpan!\\nSuara: ' + voiceName);
-      }
-    }
-
-    // Initialize TTS voices on page load
-    document.addEventListener('DOMContentLoaded', function() {
-      setTimeout(loadTTSVoices, 500); // Delay to ensure voices are loaded
-    });
 
     // Browser Notification
     let notifEnabled = false;
@@ -8635,86 +8807,7 @@ app.get('/monitoring', async (_req, res) => {
 
     // Load history dari localStorage saat halaman dimuat
     loadHistory();
-
-    // ==================== TTS SETTINGS MODAL ====================
-    function openTTSSettings() {
-      document.getElementById('ttsModal').style.display = 'flex';
-      loadTTSVoices();
-    }
-
-    function closeTTSModal() {
-      document.getElementById('ttsModal').style.display = 'none';
-    }
-
-    // Close modal when clicking outside
-    document.getElementById('ttsModal')?.addEventListener('click', function(e) {
-      if (e.target === this) closeTTSModal();
-    });
   </script>
-
-  <!-- TTS Settings Modal -->
-  <div id="ttsModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(8px);z-index:9999;justify-content:center;align-items:center;padding:20px;">
-    <div style="background:linear-gradient(180deg, #141a22 0%, #0f1419 100%);border-radius:20px;border:1px solid rgba(255,255,255,0.08);max-width:600px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;">
-      <!-- Modal Header -->
-      <div style="padding:20px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;">
-        <h2 style="font-size:1.1em;color:#fff;display:flex;align-items:center;gap:10px;">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-          Pengaturan Suara TTS
-        </h2>
-        <button onclick="closeTTSModal()" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;width:36px;height:36px;border-radius:10px;cursor:pointer;font-size:1.2em;">&times;</button>
-      </div>
-
-      <!-- Modal Body -->
-      <div style="padding:20px;overflow-y:auto;flex:1;">
-        <p style="color:#8b949e;font-size:0.85em;margin-bottom:16px;">Pilih suara untuk pengumuman harga naik/turun. Suara yang tersedia tergantung browser Anda.</p>
-
-        <!-- Voice Selection -->
-        <div style="margin-bottom:16px;">
-          <label style="display:block;color:#e7e9ea;font-size:0.85em;margin-bottom:8px;font-weight:500;">Pilih Suara</label>
-          <select id="ttsVoiceSelect" style="width:100%;padding:12px;border-radius:10px;background:#1a1f25;border:1px solid rgba(255,255,255,0.1);color:#fff;font-size:0.9em;">
-            <option value="">Loading voices...</option>
-          </select>
-        </div>
-
-        <!-- Test Buttons -->
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">
-          <button onclick="testTTSVoice('up')" style="flex:1;min-width:140px;padding:12px 16px;border-radius:10px;background:rgba(74,222,128,0.12);border:1px solid rgba(74,222,128,0.25);color:#4ade80;cursor:pointer;font-weight:500;font-size:0.85em;">
-            Test Harga Naik
-          </button>
-          <button onclick="testTTSVoice('down')" style="flex:1;min-width:140px;padding:12px 16px;border-radius:10px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.25);color:#f87171;cursor:pointer;font-weight:500;font-size:0.85em;">
-            Test Harga Turun
-          </button>
-        </div>
-
-        <!-- Voice List Table -->
-        <div style="background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.06);max-height:250px;overflow-y:auto;">
-          <table style="width:100%;border-collapse:collapse;font-size:0.8em;">
-            <thead>
-              <tr style="background:rgba(255,255,255,0.03);">
-                <th style="padding:10px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.06);color:#8b949e;font-weight:500;">#</th>
-                <th style="padding:10px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.06);color:#8b949e;font-weight:500;">Nama Voice</th>
-                <th style="padding:10px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.06);color:#8b949e;font-weight:500;">Bahasa</th>
-                <th style="padding:10px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.06);color:#8b949e;font-weight:500;">Test</th>
-              </tr>
-            </thead>
-            <tbody id="voiceListBody">
-              <tr><td colspan="4" style="padding:20px;text-align:center;color:#6b7280;">Memuat daftar voice...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Modal Footer -->
-      <div style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.08);display:flex;gap:10px;justify-content:flex-end;">
-        <button onclick="loadTTSVoices()" style="padding:12px 20px;border-radius:10px;background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.25);color:#60a5fa;cursor:pointer;font-weight:500;font-size:0.85em;">
-          Refresh
-        </button>
-        <button onclick="saveTTSSettings();closeTTSModal();" style="padding:12px 24px;border-radius:10px;background:linear-gradient(135deg, #f7931a 0%, #e8850f 100%);border:none;color:#fff;cursor:pointer;font-weight:600;font-size:0.85em;box-shadow:0 4px 15px rgba(247,147,26,0.3);">
-          Simpan
-        </button>
-      </div>
-    </div>
-  </div>
 </body>
 </html>`
 
