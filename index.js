@@ -6890,23 +6890,58 @@ app.get('/monitoring', async (_req, res) => {
       color: #8b949e;
       font-weight: 400;
     }
+
+    /* Sound Toggle in Header */
+    .sound-toggle-header {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 12px;
+      background: rgba(74,222,128,0.12);
+      border: 1px solid rgba(74,222,128,0.3);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-left: 8px;
+    }
+    .sound-toggle-header:hover {
+      background: rgba(74,222,128,0.2);
+      transform: scale(1.05);
+    }
+    .sound-toggle-header svg { color: #4ade80; }
+    .sound-toggle-header.off {
+      background: rgba(239,68,68,0.12);
+      border-color: rgba(239,68,68,0.3);
+    }
+    .sound-toggle-header.off svg { color: #f87171; }
+
     .header-right {
       text-align: right;
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 12px;
     }
-    .clock {
-      font-size: 1.6em;
+
+    /* Header Clock */
+    .header-clock {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      padding: 8px 14px;
+      background: rgba(247,147,26,0.08);
+      border: 1px solid rgba(247,147,26,0.2);
+      border-radius: 10px;
+    }
+    .header-clock .clock-time {
+      font-size: 1.2em;
       font-weight: 600;
       color: #f7931a;
       font-family: 'JetBrains Mono', monospace;
       letter-spacing: 1px;
     }
-    .date-info {
-      font-size: 0.8em;
+    .header-clock .clock-date {
+      font-size: 0.72em;
       color: #8b949e;
-      margin-top: 2px;
     }
 
     /* Install Button */
@@ -7352,9 +7387,11 @@ app.get('/monitoring', async (_req, res) => {
         margin-bottom: 16px;
         border-radius: 14px;
       }
-      .header-left h1 { font-size: 1.15em; }
-      .header-right { text-align: center; flex-direction: column; gap: 10px; }
-      .clock { font-size: 1.3em; }
+      .header-left h1 { font-size: 1.15em; flex-wrap: wrap; justify-content: center; }
+      .header-right { text-align: center; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 10px; }
+      .header-clock { flex-direction: row; gap: 10px; align-items: center; }
+      .header-clock .clock-time { font-size: 1.1em; }
+      .sound-toggle-header { margin-left: 0; }
       .chart-section { margin-bottom: 16px; border-radius: 16px; }
       .chart-header { padding: 14px 16px; gap: 12px; }
       .chart-header h2 { font-size: 1em; }
@@ -7381,11 +7418,14 @@ app.get('/monitoring', async (_req, res) => {
         margin-bottom: 12px;
         border-radius: 12px;
       }
-      .header-left h1 { font-size: 1.1em; }
+      .header-left h1 { font-size: 1em; }
       .header-left h1 svg { width: 18px; height: 18px; }
       .header-left .subtitle { font-size: 0.8em; }
-      .clock { font-size: 1.2em; }
-      .date-info { font-size: 0.75em; }
+      .sound-toggle-header { padding: 6px 10px; }
+      .sound-toggle-header svg { width: 16px; height: 16px; }
+      .header-clock { padding: 6px 10px; }
+      .header-clock .clock-time { font-size: 1em; }
+      .header-clock .clock-date { font-size: 0.68em; }
 
       .chart-section {
         margin-bottom: 12px;
@@ -7438,10 +7478,18 @@ app.get('/monitoring', async (_req, res) => {
         <h1>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f7931a" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10h8M8 14h8"/></svg>
           Gold Price Monitor
+          <div class="sound-toggle-header" id="soundToggle" onclick="toggleSound()" title="Toggle Sound">
+            <svg id="soundIconOn" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            <svg id="soundIconOff" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+          </div>
         </h1>
         <div class="subtitle">Real-time Treasury Gold Rates</div>
       </div>
       <div class="header-right">
+        <div class="header-clock">
+          <span class="clock-time" id="clock2">--:--:--</span>
+          <span class="clock-date" id="dateInfo2">Loading...</span>
+        </div>
         <button class="install-btn" id="installBtn" onclick="installApp()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Install
@@ -7489,17 +7537,6 @@ app.get('/monitoring', async (_req, res) => {
             <span class="stat-label">30jt</span>
             <span class="stat-value" id="gram30">-</span>
             <span class="stat-change up" id="profit30">-</span>
-          </div>
-        </div>
-        <!-- Sound Toggle & Clock - Pojok Kanan -->
-        <div class="daily-stats">
-          <div class="daily-item sound-toggle" id="soundToggle" onclick="toggleSound()">
-            <span class="daily-label">Sound</span>
-            <span class="daily-value" id="soundStatus">ON</span>
-          </div>
-          <div class="daily-item clock-item">
-            <span class="clock-time" id="clock2">--:--:--</span>
-            <span class="clock-date" id="dateInfo2">Loading...</span>
           </div>
         </div>
       </div>
@@ -7732,6 +7769,20 @@ app.get('/monitoring', async (_req, res) => {
     let customSoundUp = '';
     let customSoundDown = '';
 
+    // Initialize sound icon state on load
+    (function initSoundIcon() {
+      const toggle = document.getElementById('soundToggle');
+      const iconOn = document.getElementById('soundIconOn');
+      const iconOff = document.getElementById('soundIconOff');
+      if (toggle && iconOn && iconOff) {
+        if (!soundEnabled) {
+          toggle.classList.add('off');
+          iconOn.style.display = 'none';
+          iconOff.style.display = 'block';
+        }
+      }
+    })();
+
     // Load custom sounds from server
     async function loadCustomSounds() {
       try {
@@ -7755,8 +7806,18 @@ app.get('/monitoring', async (_req, res) => {
     function toggleSound() {
       soundEnabled = !soundEnabled;
       localStorage.setItem('soundEnabled', soundEnabled);
-      document.getElementById('soundStatus').textContent = soundEnabled ? 'ON' : 'OFF';
-      document.getElementById('soundToggle').style.opacity = soundEnabled ? '1' : '0.5';
+      const toggle = document.getElementById('soundToggle');
+      const iconOn = document.getElementById('soundIconOn');
+      const iconOff = document.getElementById('soundIconOff');
+      if (soundEnabled) {
+        toggle.classList.remove('off');
+        iconOn.style.display = 'block';
+        iconOff.style.display = 'none';
+      } else {
+        toggle.classList.add('off');
+        iconOn.style.display = 'none';
+        iconOff.style.display = 'block';
+      }
     }
 
     function playSound(direction) {
