@@ -134,7 +134,7 @@ let ADMIN_PHONES = ['62895701692525'] // Default admin phone
 const REDIS_KEYS = {
   DAILY_STATS: 'gold:daily_stats',
   PRICE_HISTORY: 'gold:price_history',
-  USERS: 'gold:users',           // Hash: phone -> user data (name, expired, createdAt)
+  USERS: 'gold:users',           // Hash: phone -> user data (name, expired, createdAt, pin, pinChanged)
   PUSH_SUBS: 'gold:push_subs',   // Hash: phone -> push subscription JSON
   SESSIONS: 'gold:sessions',     // Hash: sessionId -> phone
   WA_GROUP_ID: 'gold:wa_group_id', // String: ID grup WA yang di-monitor
@@ -144,7 +144,8 @@ const REDIS_KEYS = {
   LOGIN_TOKENS: 'gold:login_tokens', // Hash: token -> { phone, expires }
   LOGIN_ATTEMPTS: 'gold:login_attempts', // Hash: phone -> { attempts, lastAttempt }
   BLOCKED_USERS: 'gold:blocked_users', // Hash: phone -> { blockedAt, reason }
-  PENDING_REGISTRATIONS: 'gold:pending_reg_v2' // Hash: phone -> { name, phone, timestamp }
+  PENDING_REGISTRATIONS: 'gold:pending_reg_v2', // Hash: phone -> { name, phone, timestamp }
+  USER_PINS: 'gold:user_pins'    // Hash: phone -> { pin (hashed), pinChanged (boolean) }
 }
 
 // Admin password untuk akses admin panel
@@ -3162,7 +3163,27 @@ app.post('/api/verify-otp', express.json(), async (req, res) => {
 })
 
 // API: Login user
-app.post('/api/login', express.json(), async (req, res) => {
+// Helper: Get default PIN from phone number (first 6 digits)
+function getDefaultPin(phone) {
+  const cleanPhone = phone.replace(/\D/g, '')
+  return cleanPhone.substring(0, 6)
+}
+
+// Helper: Simple hash PIN for security (not storing plain text)
+function hashPin(pin) {
+  // Simple hash using base64 encoding with salt
+  const salt = 'goldmonitor2024'
+  const combined = pin + salt
+  return Buffer.from(combined).toString('base64')
+}
+
+// Helper: Verify PIN
+function verifyPin(inputPin, storedHash) {
+  return hashPin(inputPin) === storedHash
+}
+
+// API: Check user exists (step 1 of login)
+app.post('/api/check-user', express.json(), async (req, res) => {
   const { phone } = req.body
   if (!phone) return res.json({ success: false, error: 'Nomor HP wajib diisi' })
 
@@ -3177,6 +3198,71 @@ app.post('/api/login', express.json(), async (req, res) => {
       return res.json({ success: false, error: 'Akun sudah expired. Hubungi admin untuk perpanjang.' })
     }
     return res.json({ success: false, error: 'Terjadi kesalahan' })
+  }
+
+  // Check if user has PIN set
+  const pinData = await redis.hget(REDIS_KEYS.USER_PINS, normalizedPhone)
+  let pinChanged = false
+  if (pinData) {
+    try {
+      const parsed = typeof pinData === 'string' ? JSON.parse(pinData) : pinData
+      pinChanged = parsed.pinChanged || false
+    } catch (e) {}
+  }
+
+  res.json({
+    success: true,
+    user: { name: check.user.name },
+    pinChanged // true if user already changed default PIN
+  })
+})
+
+// API: Login with PIN (step 2 of login)
+app.post('/api/login', express.json(), async (req, res) => {
+  const { phone, pin } = req.body
+  if (!phone) return res.json({ success: false, error: 'Nomor HP wajib diisi' })
+  if (!pin) return res.json({ success: false, error: 'PIN wajib diisi' })
+
+  const normalizedPhone = normalizePhone(phone)
+  const check = await isUserValid(normalizedPhone)
+
+  if (!check.valid) {
+    if (check.reason === 'not_found') {
+      return res.json({ success: false, error: 'Nomor tidak terdaftar. Silakan daftar dulu.', needRegister: true })
+    }
+    if (check.reason === 'expired') {
+      return res.json({ success: false, error: 'Akun sudah expired. Hubungi admin untuk perpanjang.' })
+    }
+    return res.json({ success: false, error: 'Terjadi kesalahan' })
+  }
+
+  // Check PIN
+  const pinData = await redis.hget(REDIS_KEYS.USER_PINS, normalizedPhone)
+  let storedPin = null
+  let pinChanged = false
+
+  if (pinData) {
+    try {
+      const parsed = typeof pinData === 'string' ? JSON.parse(pinData) : pinData
+      storedPin = parsed.pin
+      pinChanged = parsed.pinChanged || false
+    } catch (e) {}
+  }
+
+  // If no PIN set, use default PIN (first 6 digits of phone)
+  if (!storedPin) {
+    const defaultPin = getDefaultPin(normalizedPhone)
+    storedPin = hashPin(defaultPin)
+    // Save default PIN to database
+    await redis.hset(REDIS_KEYS.USER_PINS, {
+      [normalizedPhone]: JSON.stringify({ pin: storedPin, pinChanged: false })
+    })
+    pinChanged = false
+  }
+
+  // Verify PIN
+  if (!verifyPin(pin, storedPin)) {
+    return res.json({ success: false, error: 'PIN salah. Silakan coba lagi.' })
   }
 
   // Check existing sessions for this user (max 2 devices)
@@ -3199,7 +3285,75 @@ app.post('/api/login', express.json(), async (req, res) => {
   const sessionId = generateSessionId()
   await redis.hset(REDIS_KEYS.SESSIONS, { [sessionId]: normalizedPhone })
 
-  res.json({ success: true, sessionId, user: check.user })
+  res.json({
+    success: true,
+    sessionId,
+    user: check.user,
+    requirePinChange: !pinChanged // true if user must change PIN
+  })
+})
+
+// API: Change PIN
+app.post('/api/change-pin', express.json(), async (req, res) => {
+  const { session, oldPin, newPin } = req.body
+
+  if (!session) return res.json({ success: false, error: 'Session tidak valid' })
+  if (!newPin || newPin.length !== 6 || !/^\d{6}$/.test(newPin)) {
+    return res.json({ success: false, error: 'PIN baru harus 6 digit angka' })
+  }
+
+  const phone = await redis.hget(REDIS_KEYS.SESSIONS, session)
+  if (!phone) return res.json({ success: false, error: 'Session tidak valid' })
+
+  // Get current PIN
+  const pinData = await redis.hget(REDIS_KEYS.USER_PINS, phone)
+  let storedPin = null
+  let pinChanged = false
+
+  if (pinData) {
+    try {
+      const parsed = typeof pinData === 'string' ? JSON.parse(pinData) : pinData
+      storedPin = parsed.pin
+      pinChanged = parsed.pinChanged || false
+    } catch (e) {}
+  }
+
+  // If PIN already changed, verify old PIN
+  if (pinChanged && oldPin) {
+    if (!verifyPin(oldPin, storedPin)) {
+      return res.json({ success: false, error: 'PIN lama salah' })
+    }
+  }
+
+  // Save new PIN
+  const newPinHash = hashPin(newPin)
+  await redis.hset(REDIS_KEYS.USER_PINS, {
+    [phone]: JSON.stringify({ pin: newPinHash, pinChanged: true })
+  })
+
+  pushLog(`Auth | User +${phone} changed PIN`)
+  res.json({ success: true, message: 'PIN berhasil diubah' })
+})
+
+// API: Check if PIN needs to be changed
+app.get('/api/check-pin-status', async (req, res) => {
+  const session = req.query.session
+  if (!session) return res.json({ success: false })
+
+  const phone = await redis.hget(REDIS_KEYS.SESSIONS, session)
+  if (!phone) return res.json({ success: false })
+
+  const pinData = await redis.hget(REDIS_KEYS.USER_PINS, phone)
+  let pinChanged = false
+
+  if (pinData) {
+    try {
+      const parsed = typeof pinData === 'string' ? JSON.parse(pinData) : pinData
+      pinChanged = parsed.pinChanged || false
+    } catch (e) {}
+  }
+
+  res.json({ success: true, pinChanged, requirePinChange: !pinChanged })
 })
 
 // API: Verify session
@@ -4310,9 +4464,7 @@ app.get('/login', (_req, res) => {
       box-shadow: 0 25px 80px rgba(0,0,0,0.5),
                   0 0 0 1px rgba(255,255,255,0.05) inset;
     }
-    .logo-container {
-      margin-bottom: 28px;
-    }
+    .logo-container { margin-bottom: 28px; }
     .icon {
       width: 88px;
       height: 88px;
@@ -4325,32 +4477,11 @@ app.get('/login', (_req, res) => {
     }
     .icon:hover { transform: scale(1.05); }
     .icon img { width: 100%; height: 100%; object-fit: cover; }
-    h1 {
-      color: #ffffff;
-      font-size: 1.6em;
-      font-weight: 700;
-      margin-bottom: 8px;
-      letter-spacing: -0.02em;
-    }
+    h1 { color: #ffffff; font-size: 1.6em; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.02em; }
     h1 span { color: #f7931a; }
-    .subtitle {
-      color: #8b949e;
-      font-size: 0.9em;
-      margin-bottom: 32px;
-      line-height: 1.5;
-      font-weight: 400;
-    }
-    .form-group {
-      margin-bottom: 20px;
-      text-align: left;
-    }
-    .form-group label {
-      display: block;
-      color: #8b949e;
-      font-size: 0.85em;
-      margin-bottom: 10px;
-      font-weight: 500;
-    }
+    .subtitle { color: #8b949e; font-size: 0.9em; margin-bottom: 32px; line-height: 1.5; font-weight: 400; }
+    .form-group { margin-bottom: 20px; text-align: left; }
+    .form-group label { display: block; color: #8b949e; font-size: 0.85em; margin-bottom: 10px; font-weight: 500; }
     .form-group input {
       width: 100%;
       padding: 16px 18px;
@@ -4368,9 +4499,7 @@ app.get('/login', (_req, res) => {
       background: rgba(15, 20, 25, 1);
       box-shadow: 0 0 0 4px rgba(247,147,26,0.15);
     }
-    .form-group input::placeholder {
-      color: #4a5568;
-    }
+    .form-group input::placeholder { color: #4a5568; }
     .btn {
       width: 100%;
       padding: 16px;
@@ -4388,18 +4517,15 @@ app.get('/login', (_req, res) => {
       color: white;
       box-shadow: 0 4px 20px rgba(247,147,26,0.35);
     }
-    .btn-primary:hover:not(:disabled) {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 30px rgba(247,147,26,0.45);
+    .btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(247,147,26,0.45); }
+    .btn-primary:active:not(:disabled) { transform: translateY(0); }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .btn-secondary {
+      background: rgba(255,255,255,0.08);
+      color: #8b949e;
+      border: 1px solid rgba(255,255,255,0.1);
     }
-    .btn-primary:active:not(:disabled) {
-      transform: translateY(0);
-    }
-    .btn-primary:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-      transform: none;
-    }
+    .btn-secondary:hover:not(:disabled) { background: rgba(255,255,255,0.12); color: #e7e9ea; }
     .message {
       padding: 14px 16px;
       border-radius: 12px;
@@ -4409,24 +4535,9 @@ app.get('/login', (_req, res) => {
       text-align: left;
       font-weight: 500;
     }
-    .message.error {
-      background: rgba(239,68,68,0.12);
-      border: 1px solid rgba(239,68,68,0.3);
-      color: #f87171;
-      display: block;
-    }
-    .message.success {
-      background: rgba(34,197,94,0.12);
-      border: 1px solid rgba(34,197,94,0.3);
-      color: #4ade80;
-      display: block;
-    }
-    .message.info {
-      background: rgba(247,147,26,0.12);
-      border: 1px solid rgba(247,147,26,0.3);
-      color: #f7931a;
-      display: block;
-    }
+    .message.error { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: #f87171; display: block; }
+    .message.success { background: rgba(34,197,94,0.12); border: 1px solid rgba(34,197,94,0.3); color: #4ade80; display: block; }
+    .message.info { background: rgba(247,147,26,0.12); border: 1px solid rgba(247,147,26,0.3); color: #f7931a; display: block; }
     .phone-prefix {
       display: flex;
       align-items: center;
@@ -4441,9 +4552,7 @@ app.get('/login', (_req, res) => {
       border: 1px solid rgba(247,147,26,0.2);
       font-size: 0.95em;
     }
-    .phone-prefix input {
-      flex: 1;
-    }
+    .phone-prefix input { flex: 1; }
     .loading {
       display: inline-block;
       width: 20px;
@@ -4455,79 +4564,103 @@ app.get('/login', (_req, res) => {
       margin-right: 10px;
       vertical-align: middle;
     }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .pin-input-container {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 20px;
     }
-    .wait-msg {
-      display: none;
+    .pin-input {
+      width: 48px;
+      height: 56px;
+      text-align: center;
+      font-size: 1.5em;
+      font-weight: 700;
+      border: 2px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      background: rgba(15, 20, 25, 0.8);
+      color: #f7931a;
+      font-family: 'JetBrains Mono', monospace;
+      transition: all 0.2s ease;
+    }
+    .pin-input:focus {
+      outline: none;
+      border-color: #f7931a;
+      background: rgba(15, 20, 25, 1);
+      box-shadow: 0 0 0 4px rgba(247,147,26,0.15);
+    }
+    .pin-note {
       background: rgba(247,147,26,0.08);
       border: 1px solid rgba(247,147,26,0.2);
-      border-radius: 16px;
-      padding: 24px;
-      margin-top: 24px;
-    }
-    .wait-msg.show { display: block; }
-    .wait-msg h3 { color: #f7931a; margin-bottom: 12px; font-size: 1.1em; }
-    .wait-msg p { color: #8b949e; font-size: 0.9em; line-height: 1.6; }
-    .wa-icon { font-size: 48px; margin-bottom: 12px; }
-    .resend-btn {
-      background: none;
-      border: none;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 20px;
+      font-size: 0.85em;
       color: #f7931a;
-      cursor: pointer;
-      font-size: 0.9em;
-      margin-top: 16px;
-      text-decoration: underline;
-      font-family: inherit;
-      font-weight: 500;
+      text-align: left;
     }
-    .resend-btn:disabled {
-      color: #4a5568;
-      cursor: not-allowed;
-      text-decoration: none;
+    .user-info {
+      background: rgba(74,222,128,0.08);
+      border: 1px solid rgba(74,222,128,0.2);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 20px;
+      text-align: left;
     }
-    .tabs {
+    .user-info .name { color: #4ade80; font-weight: 600; font-size: 1.1em; }
+    .user-info .phone { color: #8b949e; font-size: 0.9em; margin-top: 4px; }
+    .step-indicator {
       display: flex;
-      gap: 12px;
-      margin-bottom: 28px;
-      background: rgba(15, 20, 25, 0.5);
-      padding: 6px;
-      border-radius: 14px;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 24px;
     }
-    .tab {
-      flex: 1;
-      padding: 12px 16px;
-      border: none;
+    .step {
+      width: 32px;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.1);
+      transition: all 0.3s ease;
+    }
+    .step.active { background: #f7931a; width: 48px; }
+    .step.completed { background: #4ade80; }
+    .footer-text { margin-top: 24px; font-size: 0.8em; color: #4a5568; }
+    .footer-text a { color: #f7931a; text-decoration: none; }
+    /* Modal for PIN Change */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.8);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: rgba(20, 26, 34, 0.98);
+      border-radius: 24px;
+      padding: 32px;
+      max-width: 400px;
+      width: 100%;
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 25px 80px rgba(0,0,0,0.5);
+    }
+    .modal h2 { color: #f7931a; font-size: 1.3em; margin-bottom: 12px; }
+    .modal p { color: #8b949e; font-size: 0.9em; line-height: 1.6; margin-bottom: 24px; }
+    .modal .warning {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.2);
       border-radius: 10px;
-      background: transparent;
-      color: #8b949e;
-      font-size: 0.95em;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      font-family: inherit;
-    }
-    .tab.active {
-      background: linear-gradient(135deg, #f7931a 0%, #e8850f 100%);
-      color: white;
-      box-shadow: 0 4px 15px rgba(247,147,26,0.3);
-    }
-    .tab:hover:not(.active):not(:disabled) {
-      background: rgba(247,147,26,0.1);
-      color: #f7931a;
-    }
-    .tab:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-    .footer-text {
-      margin-top: 24px;
-      font-size: 0.8em;
-      color: #4a5568;
-    }
-    .footer-text a {
-      color: #f7931a;
-      text-decoration: none;
+      padding: 12px;
+      margin-bottom: 20px;
+      color: #f87171;
+      font-size: 0.85em;
     }
     @media (max-width: 480px) {
       .card { padding: 32px 24px; border-radius: 20px; }
@@ -4536,6 +4669,7 @@ app.get('/login', (_req, res) => {
       .subtitle { font-size: 0.85em; }
       .form-group input { padding: 14px 16px; }
       .btn { padding: 14px; }
+      .pin-input { width: 42px; height: 50px; font-size: 1.3em; }
     }
   </style>
 </head>
@@ -4550,16 +4684,16 @@ app.get('/login', (_req, res) => {
         <p class="subtitle">Pantau harga emas real-time dengan akurat</p>
       </div>
 
-      <!-- Tabs -->
-      <div class="tabs">
-        <button class="tab active" id="tabLogin" onclick="showTab('login')">Masuk</button>
-        <button class="tab" id="tabRegister" style="opacity:0.5;cursor:not-allowed;" disabled title="Pendaftaran ditutup sementara">Daftar</button>
+      <!-- Step Indicator -->
+      <div class="step-indicator">
+        <div class="step active" id="step1"></div>
+        <div class="step" id="step2"></div>
       </div>
 
       <div id="message" class="message"></div>
 
-      <!-- Login Form -->
-      <div id="loginForm">
+      <!-- Step 1: Phone Number -->
+      <div id="phoneForm">
         <div class="form-group">
           <label>Nomor WhatsApp</label>
           <div class="phone-prefix">
@@ -4567,49 +4701,38 @@ app.get('/login', (_req, res) => {
             <input type="tel" id="phoneInput" placeholder="8xxxxxxxxxx" maxlength="12" autocomplete="tel">
           </div>
         </div>
-        <button class="btn btn-primary" id="loginBtn" onclick="requestLogin()">
+        <button class="btn btn-primary" id="checkBtn" onclick="checkUser()">
           Masuk ke Akun
         </button>
       </div>
 
-      <!-- Register Form -->
-      <div id="registerForm" style="display:none;">
-        <div class="form-group">
-          <label>Nama Lengkap</label>
-          <input type="text" id="nameInput" placeholder="Masukkan nama Anda" maxlength="50">
+      <!-- Step 2: PIN Input -->
+      <div id="pinForm" style="display:none;">
+        <div class="user-info" id="userInfo">
+          <div class="name" id="userName">-</div>
+          <div class="phone" id="userPhone">+62xxx</div>
         </div>
-        <div class="form-group">
-          <label>Nomor WhatsApp</label>
-          <div class="phone-prefix">
-            <span>+62</span>
-            <input type="tel" id="regPhoneInput" placeholder="8xxxxxxxxxx" maxlength="12">
+
+        <div class="form-group" style="text-align:center;">
+          <label style="text-align:center;">Masukkan PIN 6 Digit</label>
+          <div class="pin-input-container">
+            <input type="password" class="pin-input" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+            <input type="password" class="pin-input" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+            <input type="password" class="pin-input" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+            <input type="password" class="pin-input" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+            <input type="password" class="pin-input" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+            <input type="password" class="pin-input" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
           </div>
         </div>
-        <button class="btn btn-primary" id="registerBtn" onclick="submitRegister()">
-          Daftar Sekarang
-        </button>
-        <p style="font-size:0.85em;color:#8b949e;margin-top:16px;line-height:1.5;">Pendaftaran akan diverifikasi oleh admin. Anda akan menerima notifikasi WhatsApp setelah disetujui.</p>
-      </div>
 
-      <!-- Success Register -->
-      <div id="registerSuccess" style="display:none;">
-        <div style="font-size:56px;margin-bottom:16px;">✅</div>
-        <h3 style="color:#4ade80;margin-bottom:12px;font-size:1.2em;">Pendaftaran Terkirim!</h3>
-        <p style="color:#8b949e;font-size:0.9em;line-height:1.6;">Pendaftaran Anda sedang menunggu persetujuan admin. Anda akan menerima notifikasi WhatsApp setelah disetujui.</p>
-        <button class="btn" style="background:rgba(255,255,255,0.08);margin-top:24px;border:1px solid rgba(255,255,255,0.1);" onclick="showTab('login')">
-          Kembali ke Login
-        </button>
-      </div>
+        <div class="pin-note">
+          PIN default: 6 digit pertama nomor HP Anda
+        </div>
 
-      <div class="wait-msg" id="waitMsg" style="display:none !important;">
-        <div class="wa-icon">📱</div>
-        <h3>Cek WhatsApp Anda!</h3>
-        <p>Link login telah dikirim ke <strong id="phoneDisplay">+62xxx</strong></p>
-        <p style="margin-top:12px;">Klik link tersebut untuk masuk ke aplikasi.</p>
-        <button class="resend-btn" id="resendBtn" onclick="requestLogin()" disabled>
-          Kirim ulang (<span id="countdown">60</span>s)
+        <button class="btn btn-primary" id="loginBtn" onclick="submitLogin()">
+          Masuk
         </button>
-        <button class="btn" style="background:rgba(255,255,255,0.08);margin-top:16px;border:1px solid rgba(255,255,255,0.1);" onclick="resetForm()">
+        <button class="btn btn-secondary" onclick="backToPhone()">
           Ganti Nomor
         </button>
       </div>
@@ -4618,12 +4741,51 @@ app.get('/login', (_req, res) => {
     </div>
   </div>
 
-  <script>
-    // Disable right-click
-    // Right-click enabled
+  <!-- Modal: Change PIN (Required) -->
+  <div class="modal-overlay" id="changePinModal">
+    <div class="modal">
+      <h2>Ganti PIN Anda</h2>
+      <p>Untuk keamanan akun, Anda wajib mengganti PIN default sebelum melanjutkan.</p>
+      <div class="warning">
+        Anda tidak dapat melewati langkah ini. PIN baru harus berbeda dari PIN default.
+      </div>
 
+      <div id="changePinMessage" class="message" style="display:none;"></div>
+
+      <div class="form-group" style="text-align:center;">
+        <label style="text-align:center;">PIN Baru (6 digit)</label>
+        <div class="pin-input-container" id="newPinInputs">
+          <input type="password" class="pin-input new-pin" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+          <input type="password" class="pin-input new-pin" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+          <input type="password" class="pin-input new-pin" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+          <input type="password" class="pin-input new-pin" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+          <input type="password" class="pin-input new-pin" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+          <input type="password" class="pin-input new-pin" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+        </div>
+      </div>
+
+      <div class="form-group" style="text-align:center;">
+        <label style="text-align:center;">Konfirmasi PIN Baru</label>
+        <div class="pin-input-container" id="confirmPinInputs">
+          <input type="password" class="pin-input confirm-pin" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+          <input type="password" class="pin-input confirm-pin" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+          <input type="password" class="pin-input confirm-pin" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+          <input type="password" class="pin-input confirm-pin" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+          <input type="password" class="pin-input confirm-pin" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+          <input type="password" class="pin-input confirm-pin" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="savePinBtn" onclick="saveNewPin()">
+        Simpan PIN Baru
+      </button>
+    </div>
+  </div>
+
+  <script>
     let currentPhone = '';
-    let resendTimer = null;
+    let currentSession = '';
+    let userName = '';
 
     // Check if already logged in
     const existingSession = localStorage.getItem('goldmonitor_session');
@@ -4632,7 +4794,19 @@ app.get('/login', (_req, res) => {
         .then(r => r.json())
         .then(data => {
           if (data.valid) {
-            window.location.replace('/monitoring');
+            // Check if PIN change required
+            fetch('/api/check-pin-status?session=' + existingSession)
+              .then(r => r.json())
+              .then(pinData => {
+                if (pinData.requirePinChange) {
+                  currentSession = existingSession;
+                  document.getElementById('changePinModal').classList.add('show');
+                  setupPinInputs(document.querySelectorAll('.new-pin'));
+                  setupPinInputs(document.querySelectorAll('.confirm-pin'));
+                } else {
+                  window.location.replace('/monitoring');
+                }
+              });
           } else {
             localStorage.removeItem('goldmonitor_session');
           }
@@ -4640,114 +4814,74 @@ app.get('/login', (_req, res) => {
         .catch(() => {});
     }
 
-    function showMessage(text, type) {
-      const msg = document.getElementById('message');
+    function showMessage(text, type, elementId = 'message') {
+      const msg = document.getElementById(elementId);
       msg.textContent = text;
       msg.className = 'message ' + type;
+      msg.style.display = 'block';
     }
 
-    function hideMessage() {
-      document.getElementById('message').className = 'message';
+    function hideMessage(elementId = 'message') {
+      const msg = document.getElementById(elementId);
+      msg.className = 'message';
+      msg.style.display = 'none';
     }
 
-    function setLoading(loading) {
-      const btn = document.getElementById('loginBtn');
+    function setLoading(btn, loading, text = 'Memproses...') {
       if (loading) {
         btn.disabled = true;
-        btn.innerHTML = '<span class="loading"></span>Mengirim...';
+        btn.dataset.originalText = btn.textContent;
+        btn.innerHTML = '<span class="loading"></span>' + text;
       } else {
         btn.disabled = false;
-        btn.textContent = 'Masuk';
+        btn.textContent = btn.dataset.originalText || 'Submit';
       }
     }
 
-    function resetForm() {
-      document.getElementById('loginForm').style.display = 'block';
-      document.getElementById('waitMsg').classList.remove('show');
-      document.getElementById('phoneInput').value = '';
-      hideMessage();
-      if (resendTimer) clearInterval(resendTimer);
-    }
-
-    function startResendTimer() {
-      let seconds = 60;
-      const resendBtn = document.getElementById('resendBtn');
-      const countdown = document.getElementById('countdown');
-
-      resendBtn.disabled = true;
-      countdown.textContent = seconds;
-
-      if (resendTimer) clearInterval(resendTimer);
-
-      resendTimer = setInterval(() => {
-        seconds--;
-        countdown.textContent = seconds;
-
-        if (seconds <= 0) {
-          clearInterval(resendTimer);
-          resendBtn.disabled = false;
-          resendBtn.innerHTML = 'Kirim ulang link';
-        }
-      }, 1000);
-    }
-
-    function showTab(tab) {
-      document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
-      document.getElementById('registerForm').style.display = tab === 'register' ? 'block' : 'none';
-      document.getElementById('registerSuccess').style.display = 'none';
-      document.getElementById('waitMsg').classList.remove('show');
-      document.getElementById('tabLogin').className = tab === 'login' ? 'tab active' : 'tab';
-      document.getElementById('tabRegister').className = tab === 'register' ? 'tab active' : 'tab';
-      hideMessage();
-    }
-
-    async function submitRegister() {
-      const name = document.getElementById('nameInput').value.trim();
-      let phone = document.getElementById('regPhoneInput').value.replace(/\D/g, '');
-
-      if (phone.startsWith('62')) phone = phone.substring(2);
-      if (phone.startsWith('0')) phone = phone.substring(1);
-
-      if (!name) {
-        showMessage('Masukkan nama Anda', 'error');
-        return;
-      }
-      if (!phone || phone.length < 9) {
-        showMessage('Masukkan nomor HP yang valid', 'error');
-        return;
-      }
-
-      const btn = document.getElementById('registerBtn');
-      btn.disabled = true;
-      btn.innerHTML = '<span class="loading"></span>Mendaftar...';
-
-      try {
-        const res = await fetch('/api/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, phone })
+    // Setup PIN input auto-focus
+    function setupPinInputs(inputs) {
+      inputs.forEach((input, index) => {
+        input.addEventListener('input', (e) => {
+          const value = e.target.value;
+          if (value && index < inputs.length - 1) {
+            inputs[index + 1].focus();
+          }
         });
-        const data = await res.json();
-
-        if (data.success) {
-          document.getElementById('registerForm').style.display = 'none';
-          document.getElementById('registerSuccess').style.display = 'block';
-        } else {
-          showMessage(data.message || 'Gagal mendaftar', 'error');
-        }
-      } catch (e) {
-        showMessage('Koneksi gagal. Coba lagi.', 'error');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Daftar';
-      }
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Backspace' && !e.target.value && index > 0) {
+            inputs[index - 1].focus();
+          }
+        });
+        input.addEventListener('paste', (e) => {
+          e.preventDefault();
+          const paste = (e.clipboardData || window.clipboardData).getData('text');
+          const digits = paste.replace(/\\D/g, '').split('').slice(0, 6);
+          digits.forEach((digit, i) => {
+            if (inputs[i]) inputs[i].value = digit;
+          });
+          if (digits.length > 0) {
+            inputs[Math.min(digits.length, inputs.length - 1)].focus();
+          }
+        });
+      });
     }
 
-    async function requestLogin() {
+    // Get PIN value from inputs
+    function getPinValue(inputs) {
+      return Array.from(inputs).map(i => i.value).join('');
+    }
+
+    // Clear PIN inputs
+    function clearPinInputs(inputs) {
+      inputs.forEach(i => i.value = '');
+      if (inputs[0]) inputs[0].focus();
+    }
+
+    // Step 1: Check if user exists
+    async function checkUser() {
       const phoneInput = document.getElementById('phoneInput');
       let phone = phoneInput.value.replace(/\\D/g, '');
 
-      // Remove leading 0 or 62 if present
       if (phone.startsWith('62')) phone = phone.substring(2);
       if (phone.startsWith('0')) phone = phone.substring(1);
 
@@ -4757,11 +4891,12 @@ app.get('/login', (_req, res) => {
       }
 
       currentPhone = phone;
-      setLoading(true);
+      const btn = document.getElementById('checkBtn');
+      setLoading(btn, true, 'Memeriksa...');
+      hideMessage();
 
       try {
-        // Direct login - no WA verification needed
-        const res = await fetch('/api/login', {
+        const res = await fetch('/api/check-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ phone })
@@ -4770,25 +4905,154 @@ app.get('/login', (_req, res) => {
         const data = await res.json();
 
         if (data.success) {
-          // Save session and redirect to monitoring
-          localStorage.setItem('goldmonitor_session', data.sessionId);
-          showMessage('Login berhasil! Mengalihkan...', 'success');
-          setTimeout(() => {
-            window.location.replace('/monitoring');
-          }, 500);
+          userName = data.user.name;
+          document.getElementById('userName').textContent = data.user.name;
+          document.getElementById('userPhone').textContent = '+62' + phone;
+
+          // Show PIN form
+          document.getElementById('phoneForm').style.display = 'none';
+          document.getElementById('pinForm').style.display = 'block';
+          document.getElementById('step1').classList.remove('active');
+          document.getElementById('step1').classList.add('completed');
+          document.getElementById('step2').classList.add('active');
+
+          // Setup PIN inputs
+          const pinInputs = document.querySelectorAll('#pinForm .pin-input');
+          setupPinInputs(pinInputs);
+          pinInputs[0].focus();
         } else {
-          showMessage(data.error || 'Login gagal', 'error');
+          showMessage(data.error || 'Gagal memeriksa nomor', 'error');
         }
       } catch (e) {
         showMessage('Terjadi kesalahan. Coba lagi.', 'error');
       }
 
-      setLoading(false);
+      setLoading(btn, false);
+      btn.textContent = 'Masuk ke Akun';
     }
 
-    // Enter key handler
+    // Back to phone input
+    function backToPhone() {
+      document.getElementById('phoneForm').style.display = 'block';
+      document.getElementById('pinForm').style.display = 'none';
+      document.getElementById('step1').classList.add('active');
+      document.getElementById('step1').classList.remove('completed');
+      document.getElementById('step2').classList.remove('active');
+      hideMessage();
+      clearPinInputs(document.querySelectorAll('#pinForm .pin-input'));
+    }
+
+    // Step 2: Submit login with PIN
+    async function submitLogin() {
+      const pinInputs = document.querySelectorAll('#pinForm .pin-input');
+      const pin = getPinValue(pinInputs);
+
+      if (pin.length !== 6) {
+        showMessage('Masukkan PIN 6 digit', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('loginBtn');
+      setLoading(btn, true, 'Masuk...');
+      hideMessage();
+
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: currentPhone, pin })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          localStorage.setItem('goldmonitor_session', data.sessionId);
+          currentSession = data.sessionId;
+
+          if (data.requirePinChange) {
+            // Show PIN change modal
+            document.getElementById('changePinModal').classList.add('show');
+            setupPinInputs(document.querySelectorAll('.new-pin'));
+            setupPinInputs(document.querySelectorAll('.confirm-pin'));
+            document.querySelector('.new-pin').focus();
+          } else {
+            showMessage('Login berhasil! Mengalihkan...', 'success');
+            setTimeout(() => {
+              window.location.replace('/monitoring');
+            }, 500);
+          }
+        } else {
+          showMessage(data.error || 'Login gagal', 'error');
+          clearPinInputs(pinInputs);
+        }
+      } catch (e) {
+        showMessage('Terjadi kesalahan. Coba lagi.', 'error');
+      }
+
+      setLoading(btn, false);
+      btn.textContent = 'Masuk';
+    }
+
+    // Save new PIN
+    async function saveNewPin() {
+      const newPinInputs = document.querySelectorAll('.new-pin');
+      const confirmPinInputs = document.querySelectorAll('.confirm-pin');
+      const newPin = getPinValue(newPinInputs);
+      const confirmPin = getPinValue(confirmPinInputs);
+
+      hideMessage('changePinMessage');
+
+      if (newPin.length !== 6) {
+        showMessage('PIN baru harus 6 digit', 'error', 'changePinMessage');
+        return;
+      }
+
+      if (newPin !== confirmPin) {
+        showMessage('Konfirmasi PIN tidak cocok', 'error', 'changePinMessage');
+        clearPinInputs(confirmPinInputs);
+        return;
+      }
+
+      // Check if new PIN is same as default (first 6 digits of phone)
+      const defaultPin = ('62' + currentPhone).substring(0, 6);
+      if (newPin === defaultPin) {
+        showMessage('PIN baru tidak boleh sama dengan PIN default', 'error', 'changePinMessage');
+        clearPinInputs(newPinInputs);
+        clearPinInputs(confirmPinInputs);
+        return;
+      }
+
+      const btn = document.getElementById('savePinBtn');
+      setLoading(btn, true, 'Menyimpan...');
+
+      try {
+        const res = await fetch('/api/change-pin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session: currentSession, newPin })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          showMessage('PIN berhasil diubah! Mengalihkan...', 'success', 'changePinMessage');
+          setTimeout(() => {
+            window.location.replace('/monitoring');
+          }, 1000);
+        } else {
+          showMessage(data.error || 'Gagal mengubah PIN', 'error', 'changePinMessage');
+        }
+      } catch (e) {
+        showMessage('Terjadi kesalahan. Coba lagi.', 'error', 'changePinMessage');
+      }
+
+      setLoading(btn, false);
+      btn.textContent = 'Simpan PIN Baru';
+    }
+
+    // Enter key handlers
     document.getElementById('phoneInput').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') requestLogin();
+      if (e.key === 'Enter') checkUser();
     });
 
     // Register Service Worker
@@ -7520,7 +7784,7 @@ app.get('/monitoring', async (_req, res) => {
       window.location.replace('/login');
     }
 
-    // Check session validity on page load
+    // Check session validity and PIN status on page load
     (function checkSession() {
       const session = localStorage.getItem('goldmonitor_session');
       if (!session) {
@@ -7533,6 +7797,16 @@ app.get('/monitoring', async (_req, res) => {
         .then(data => {
           if (!data.valid) {
             localStorage.removeItem('goldmonitor_session');
+            window.location.replace('/login');
+            return;
+          }
+          // Check if PIN change is required
+          return fetch('/api/check-pin-status?session=' + session);
+        })
+        .then(r => r ? r.json() : null)
+        .then(pinData => {
+          if (pinData && pinData.requirePinChange) {
+            // Redirect to login to change PIN
             window.location.replace('/login');
           }
         })
