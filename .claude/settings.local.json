@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(node --check:*)",
+      "Bash(railway:*)",
+      "Bash(npm install:*)",
+      "WebFetch(domain:realtime-emas-production.up.railway.app)",
+      "Bash(npx web-push:*)",
+      "Bash(git checkout:*)",
+      "WebFetch(domain:treasury.muhamadaliyudin.xyz)",
+      "Bash(git pull:*)",
+      "Bash(md5sum:*)",
+      "Bash(cat:*)",
+      "Bash(node:*)",
+      "Bash(curl:*)",
+      "Bash(for phone in 6281234567899 6282345678901 6281234567890 62895701692525)",
+      "Bash(do echo -n \"$phone: \")",
+      "Bash(done)",
+      "Bash(git init:*)",
+      "Bash(git remote add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
