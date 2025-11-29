@@ -5495,38 +5495,41 @@ ${authScript}
 
     <div class="result-msg" id="soundResult"></div>
 
-    <!-- Sound Harga Naik -->
-    <div style="background:rgba(15,20,25,0.8);padding:20px;border-radius:14px;margin-bottom:16px;border:1px solid rgba(74,222,128,0.2);">
-      <label style="color:#4ade80;font-weight:600;display:block;margin-bottom:14px;font-size:0.95em;">Sound Harga Naik</label>
-      <div class="form-group">
-        <label>Upload File Audio</label>
-        <input type="file" id="soundUpFile" accept="audio/*" onchange="handleSoundUpload('up')">
+    <!-- Sound Grid Container -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+      <!-- Sound Harga Naik -->
+      <div style="background:rgba(15,20,25,0.8);padding:20px;border-radius:14px;border:1px solid rgba(74,222,128,0.2);">
+        <label style="color:#4ade80;font-weight:600;display:block;margin-bottom:14px;font-size:0.95em;">Sound Harga Naik</label>
+        <div style="margin-bottom:12px;">
+          <label style="display:block;margin-bottom:8px;color:#8b949e;font-size:0.85em;">Upload File Audio</label>
+          <input type="file" id="soundUpFile" accept="audio/*" onchange="handleSoundUpload('up')" style="width:100%;padding:10px;border:2px solid rgba(255,255,255,0.08);border-radius:10px;background:rgba(15,20,25,0.8);color:#e7e9ea;font-size:0.9em;">
+        </div>
+        <div style="margin-bottom:12px;">
+          <label style="display:block;margin-bottom:8px;color:#8b949e;font-size:0.85em;">Atau Masukkan URL</label>
+          <input type="text" id="soundUpUrl" placeholder="https://example.com/naik.mp3" style="width:100%;padding:12px 14px;border:2px solid rgba(255,255,255,0.08);border-radius:10px;background:rgba(15,20,25,0.8);color:#e7e9ea;font-size:0.95em;box-sizing:border-box;">
+        </div>
+        <div id="soundUpPreview" style="margin-top:12px;display:none;">
+          <audio id="soundUpAudio" controls style="width:100%;height:40px;border-radius:8px;"></audio>
+        </div>
+        <button class="btn btn-sm" style="margin-top:12px;background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.3);width:100%;" onclick="testSound('up')">Test Sound Naik</button>
       </div>
-      <div class="form-group">
-        <label>Atau Masukkan URL</label>
-        <input type="text" id="soundUpUrl" placeholder="https://example.com/naik.mp3">
-      </div>
-      <div id="soundUpPreview" style="margin-top:12px;display:none;">
-        <audio id="soundUpAudio" controls style="width:100%;height:40px;border-radius:8px;"></audio>
-      </div>
-      <button class="btn btn-sm" style="margin-top:12px;background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.3);" onclick="testSound('up')">Test Sound Naik</button>
-    </div>
 
-    <!-- Sound Harga Turun -->
-    <div style="background:rgba(15,20,25,0.8);padding:20px;border-radius:14px;margin-bottom:16px;border:1px solid rgba(248,113,113,0.2);">
-      <label style="color:#f87171;font-weight:600;display:block;margin-bottom:14px;font-size:0.95em;">Sound Harga Turun</label>
-      <div class="form-group">
-        <label>Upload File Audio</label>
-        <input type="file" id="soundDownFile" accept="audio/*" onchange="handleSoundUpload('down')">
+      <!-- Sound Harga Turun -->
+      <div style="background:rgba(15,20,25,0.8);padding:20px;border-radius:14px;border:1px solid rgba(248,113,113,0.2);">
+        <label style="color:#f87171;font-weight:600;display:block;margin-bottom:14px;font-size:0.95em;">Sound Harga Turun</label>
+        <div style="margin-bottom:12px;">
+          <label style="display:block;margin-bottom:8px;color:#8b949e;font-size:0.85em;">Upload File Audio</label>
+          <input type="file" id="soundDownFile" accept="audio/*" onchange="handleSoundUpload('down')" style="width:100%;padding:10px;border:2px solid rgba(255,255,255,0.08);border-radius:10px;background:rgba(15,20,25,0.8);color:#e7e9ea;font-size:0.9em;">
+        </div>
+        <div style="margin-bottom:12px;">
+          <label style="display:block;margin-bottom:8px;color:#8b949e;font-size:0.85em;">Atau Masukkan URL</label>
+          <input type="text" id="soundDownUrl" placeholder="https://example.com/turun.mp3" style="width:100%;padding:12px 14px;border:2px solid rgba(255,255,255,0.08);border-radius:10px;background:rgba(15,20,25,0.8);color:#e7e9ea;font-size:0.95em;box-sizing:border-box;">
+        </div>
+        <div id="soundDownPreview" style="margin-top:12px;display:none;">
+          <audio id="soundDownAudio" controls style="width:100%;height:40px;border-radius:8px;"></audio>
+        </div>
+        <button class="btn btn-sm" style="margin-top:12px;background:rgba(248,113,113,0.15);color:#f87171;border:1px solid rgba(248,113,113,0.3);width:100%;" onclick="testSound('down')">Test Sound Turun</button>
       </div>
-      <div class="form-group">
-        <label>Atau Masukkan URL</label>
-        <input type="text" id="soundDownUrl" placeholder="https://example.com/turun.mp3">
-      </div>
-      <div id="soundDownPreview" style="margin-top:12px;display:none;">
-        <audio id="soundDownAudio" controls style="width:100%;height:40px;border-radius:8px;"></audio>
-      </div>
-      <button class="btn btn-sm" style="margin-top:12px;background:rgba(248,113,113,0.15);color:#f87171;border:1px solid rgba(248,113,113,0.3);" onclick="testSound('down')">Test Sound Turun</button>
     </div>
 
     <div style="display:flex;gap:12px;flex-wrap:wrap;">
@@ -5540,14 +5543,14 @@ ${authScript}
     <h2>Nomor Admin untuk Notifikasi</h2>
     <p style="color:#8b949e;font-size:0.9em;margin-bottom:20px;">Nomor yang menerima notifikasi WhatsApp saat ada pendaftaran baru. Maksimal 2 nomor.</p>
     <div class="result-msg" id="adminPhoneResult"></div>
-    <div class="form-row" style="grid-template-columns: 1fr 1fr;">
-      <div class="form-group">
-        <label>Nomor Admin 1 (Utama)</label>
-        <input type="tel" id="adminPhone1" placeholder="0895701692525">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+      <div>
+        <label style="display:block;margin-bottom:8px;color:#8b949e;font-size:0.85em;font-weight:500;">Nomor Admin 1 (Utama)</label>
+        <input type="tel" id="adminPhone1" placeholder="0895701692525" style="width:100%;padding:12px 14px;border:2px solid rgba(255,255,255,0.08);border-radius:10px;background:rgba(15,20,25,0.8);color:#e7e9ea;font-size:0.95em;box-sizing:border-box;">
       </div>
-      <div class="form-group">
-        <label>Nomor Admin 2 (Opsional)</label>
-        <input type="tel" id="adminPhone2" placeholder="08xxxxxxxxxx">
+      <div>
+        <label style="display:block;margin-bottom:8px;color:#8b949e;font-size:0.85em;font-weight:500;">Nomor Admin 2 (Opsional)</label>
+        <input type="tel" id="adminPhone2" placeholder="08xxxxxxxxxx" style="width:100%;padding:12px 14px;border:2px solid rgba(255,255,255,0.08);border-radius:10px;background:rgba(15,20,25,0.8);color:#e7e9ea;font-size:0.95em;box-sizing:border-box;">
       </div>
     </div>
     <button class="btn btn-primary" onclick="saveAdminPhones()">Simpan Nomor Admin</button>
