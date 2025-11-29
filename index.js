@@ -7841,7 +7841,92 @@ app.get('/monitoring', async (_req, res) => {
       }
     }
 
-    function playSound(direction) {
+    // Text-to-Speech: Convert number to Indonesian words
+    function numberToWords(num) {
+      const satuan = ['', 'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan'];
+      const belasan = ['sepuluh', 'sebelas', 'dua belas', 'tiga belas', 'empat belas', 'lima belas', 'enam belas', 'tujuh belas', 'delapan belas', 'sembilan belas'];
+
+      if (num === 0) return 'nol';
+      if (num < 0) return 'minus ' + numberToWords(Math.abs(num));
+
+      let words = '';
+
+      if (num >= 1000000) {
+        const juta = Math.floor(num / 1000000);
+        if (juta === 1) {
+          words += 'satu juta ';
+        } else {
+          words += numberToWords(juta) + ' juta ';
+        }
+        num %= 1000000;
+      }
+
+      if (num >= 1000) {
+        const ribu = Math.floor(num / 1000);
+        if (ribu === 1) {
+          words += 'seribu ';
+        } else {
+          words += numberToWords(ribu) + ' ribu ';
+        }
+        num %= 1000;
+      }
+
+      if (num >= 100) {
+        const ratus = Math.floor(num / 100);
+        if (ratus === 1) {
+          words += 'seratus ';
+        } else {
+          words += satuan[ratus] + ' ratus ';
+        }
+        num %= 100;
+      }
+
+      if (num >= 20) {
+        const puluh = Math.floor(num / 10);
+        words += satuan[puluh] + ' puluh ';
+        num %= 10;
+      } else if (num >= 10) {
+        words += belasan[num - 10] + ' ';
+        num = 0;
+      }
+
+      if (num > 0) {
+        words += satuan[num] + ' ';
+      }
+
+      return words.trim();
+    }
+
+    // Speak price using Text-to-Speech
+    function speakPrice(direction, price) {
+      if (!soundEnabled) return;
+      if (!price || price === 0) return; // Don't speak if no price
+      if (!('speechSynthesis' in window)) return;
+
+      // Cancel any ongoing speech
+      speechSynthesis.cancel();
+
+      const priceText = numberToWords(Math.round(price));
+      const directionText = direction === 'up' ? 'Harga naik' : 'Harga turun';
+      const fullText = directionText + ', ' + priceText + ' rupiah';
+
+      const utterance = new SpeechSynthesisUtterance(fullText);
+      utterance.lang = 'id-ID';
+      utterance.rate = 1.0; // Normal speed for clarity
+      utterance.pitch = direction === 'up' ? 1.1 : 0.9; // Higher pitch for up, lower for down
+      utterance.volume = 1.0;
+
+      // Try to use Indonesian voice if available
+      const voices = speechSynthesis.getVoices();
+      const indonesianVoice = voices.find(v => v.lang.includes('id') || v.lang.includes('ID'));
+      if (indonesianVoice) {
+        utterance.voice = indonesianVoice;
+      }
+
+      speechSynthesis.speak(utterance);
+    }
+
+    function playSound(direction, price) {
       if (!soundEnabled) return;
 
       // Check for custom sound URL
@@ -7856,6 +7941,8 @@ app.get('/monitoring', async (_req, res) => {
         } catch (e) {
           console.log('Custom audio error:', e);
         }
+        // Also speak the price after custom sound
+        setTimeout(() => speakPrice(direction, price), 600);
         return;
       }
 
@@ -7893,11 +7980,10 @@ app.get('/monitoring', async (_req, res) => {
       } catch (e) {
         console.log('Audio error:', e);
       }
-    }
 
-    // Update sound status on load
-    document.getElementById('soundStatus').textContent = soundEnabled ? 'ON' : 'OFF';
-    document.getElementById('soundToggle').style.opacity = soundEnabled ? '1' : '0.5';
+      // Speak the price after the beep sound
+      setTimeout(() => speakPrice(direction, price), 600);
+    }
 
     // Browser Notification
     let notifEnabled = false;
@@ -7966,8 +8052,8 @@ app.get('/monitoring', async (_req, res) => {
         });
       }
 
-      // Play sound
-      playSound('up');
+      // Play sound (no price for promo)
+      playSound('up', 0);
     }
 
     // Fungsi untuk tutup popup promo
@@ -8324,7 +8410,7 @@ app.get('/monitoring', async (_req, res) => {
               const cls = change > 0 ? 'up' : 'down';
               document.getElementById('buyChange').textContent = sign + change.toLocaleString('id-ID');
               document.getElementById('buyChange').className = 'stat-change ' + cls;
-              playSound(change > 0 ? 'up' : 'down');
+              playSound(change > 0 ? 'up' : 'down', data.buy);
 
               // Update trend icon di XAU/USD Chart title
               const trendIcon = document.getElementById('trendIcon');
