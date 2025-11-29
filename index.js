@@ -7688,15 +7688,15 @@ app.get('/monitoring', async (_req, res) => {
         const usdIdr = usdIdrVal ? Math.round(usdIdrVal).toLocaleString('id-ID') : '-';
 
         // Calculate gram for 10jt, 20jt and 30jt based on buy price
-        const gram10jt = (10000000 / item.buy).toFixed(4);
-        const gram20jt = (20000000 / item.buy).toFixed(4);
-        const gram30jt = (30000000 / item.buy).toFixed(4);
+        const gram10jt = 10000000 / item.buy;
+        const gram20jt = 20000000 / item.buy;
+        const gram30jt = 30000000 / item.buy;
 
-        // Calculate profit based on sell price vs buy price (per gram profit * grams)
-        const profitPerGram = item.sell - item.buy;
-        const profit10jt = Math.round(profitPerGram * parseFloat(gram10jt));
-        const profit20jt = Math.round(profitPerGram * parseFloat(gram20jt));
-        const profit30jt = Math.round(profitPerGram * parseFloat(gram30jt));
+        // Calculate profit: (gram * harga_jual) - (modal - potongan)
+        // Potongan: 10jt=3.5%, 20jt=3.425%, 30jt=3.4%
+        const profit10jt = Math.round((gram10jt * item.sell) - (10000000 - 10000000 * 0.035));
+        const profit20jt = Math.round((gram20jt * item.sell) - (20000000 - 20000000 * 0.03425));
+        const profit30jt = Math.round((gram30jt * item.sell) - (30000000 - 30000000 * 0.034));
 
         const profitClass10 = profit10jt >= 0 ? 'price-up' : 'price-down';
         const profitClass20 = profit20jt >= 0 ? 'price-up' : 'price-down';
@@ -7711,9 +7711,9 @@ app.get('/monitoring', async (_req, res) => {
           '<td>' + formatRupiahShort(item.sell) + '</td>' +
           '<td class="' + spreadClass + '">' + spread + '%</td>' +
           '<td>' + usdIdr + '</td>' +
-          '<td><span style="color:#e7e9ea;">' + gram10jt + 'g</span><br><small class="' + profitClass10 + '">' + profitSign10 + 'Rp ' + Math.abs(profit10jt).toLocaleString('id-ID') + '</small></td>' +
-          '<td><span style="color:#e7e9ea;">' + gram20jt + 'g</span><br><small class="' + profitClass20 + '">' + profitSign20 + 'Rp ' + Math.abs(profit20jt).toLocaleString('id-ID') + '</small></td>' +
-          '<td><span style="color:#e7e9ea;">' + gram30jt + 'g</span><br><small class="' + profitClass30 + '">' + profitSign30 + 'Rp ' + Math.abs(profit30jt).toLocaleString('id-ID') + '</small></td>' +
+          '<td><span style="color:#e7e9ea;">' + gram10jt.toFixed(4) + 'g</span><br><small class="' + profitClass10 + '">' + profitSign10 + 'Rp ' + Math.abs(profit10jt).toLocaleString('id-ID') + '</small></td>' +
+          '<td><span style="color:#e7e9ea;">' + gram20jt.toFixed(4) + 'g</span><br><small class="' + profitClass20 + '">' + profitSign20 + 'Rp ' + Math.abs(profit20jt).toLocaleString('id-ID') + '</small></td>' +
+          '<td><span style="color:#e7e9ea;">' + gram30jt.toFixed(4) + 'g</span><br><small class="' + profitClass30 + '">' + profitSign30 + 'Rp ' + Math.abs(profit30jt).toLocaleString('id-ID') + '</small></td>' +
           '<td class="' + changeClass + '">' + changeSign + formatChangeShort(buyChange) + '</td>' +
           '</tr>';
       });
