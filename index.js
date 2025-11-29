@@ -3163,10 +3163,9 @@ app.post('/api/verify-otp', express.json(), async (req, res) => {
 })
 
 // API: Login user
-// Helper: Get default PIN from phone number (first 6 digits)
+// Helper: Get default PIN (000000 for all users)
 function getDefaultPin(phone) {
-  const cleanPhone = phone.replace(/\D/g, '')
-  return cleanPhone.substring(0, 6)
+  return '000000'
 }
 
 // Helper: Simple hash PIN for security (not storing plain text)
@@ -4726,7 +4725,7 @@ app.get('/login', (_req, res) => {
         </div>
 
         <div class="pin-note">
-          PIN default: 6 digit pertama nomor HP Anda
+          PIN default: 000000
         </div>
 
         <button class="btn btn-primary" id="loginBtn" onclick="submitLogin()">
@@ -5013,10 +5012,9 @@ app.get('/login', (_req, res) => {
         return;
       }
 
-      // Check if new PIN is same as default (first 6 digits of phone)
-      const defaultPin = ('62' + currentPhone).substring(0, 6);
-      if (newPin === defaultPin) {
-        showMessage('PIN baru tidak boleh sama dengan PIN default', 'error', 'changePinMessage');
+      // Check if new PIN is same as default (000000)
+      if (newPin === '000000') {
+        showMessage('PIN baru tidak boleh sama dengan PIN default (000000)', 'error', 'changePinMessage');
         clearPinInputs(newPinInputs);
         clearPinInputs(confirmPinInputs);
         return;
