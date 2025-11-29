@@ -5932,57 +5932,6 @@ ${authScript}
           </div>
         </div>
 
-        <!-- TTS Voice Settings -->
-        <div class="card">
-          <h2>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-              <line x1="12" y1="19" x2="12" y2="23"/>
-              <line x1="8" y1="23" x2="16" y2="23"/>
-            </svg>
-            Pengaturan Suara TTS (Text-to-Speech)
-          </h2>
-          <p style="color:#6b7280;font-size:0.82em;margin-bottom:16px;">Pilih suara untuk pengumuman harga naik/turun. Suara yang tersedia tergantung browser Anda.</p>
-
-          <div class="form-group" style="margin-bottom:14px;">
-            <label>Pilih Suara</label>
-            <select id="ttsVoiceSelect" style="width:100%;padding:10px;border-radius:8px;background:#1e1e1e;border:1px solid rgba(255,255,255,0.1);color:#fff;">
-              <option value="">Loading voices...</option>
-            </select>
-          </div>
-
-          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
-            <button class="btn btn-sm" style="background:rgba(74,222,128,0.15);color:#4ade80;border:1px solid rgba(74,222,128,0.25);" onclick="testTTSVoice('up')">
-              Test Harga Naik
-            </button>
-            <button class="btn btn-sm" style="background:rgba(248,113,113,0.15);color:#f87171;border:1px solid rgba(248,113,113,0.25);" onclick="testTTSVoice('down')">
-              Test Harga Turun
-            </button>
-            <button class="btn btn-sm" style="background:rgba(96,165,250,0.15);color:#60a5fa;border:1px solid rgba(96,165,250,0.25);" onclick="loadTTSVoices()">
-              Refresh Voices
-            </button>
-          </div>
-
-          <div id="voiceListContainer" style="background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.08);max-height:300px;overflow-y:auto;">
-            <table style="width:100%;border-collapse:collapse;font-size:0.85em;">
-              <thead>
-                <tr style="background:rgba(255,255,255,0.03);">
-                  <th style="padding:10px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.08);">#</th>
-                  <th style="padding:10px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.08);">Nama Voice</th>
-                  <th style="padding:10px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.08);">Bahasa</th>
-                  <th style="padding:10px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.08);">Test</th>
-                </tr>
-              </thead>
-              <tbody id="voiceListBody">
-                <tr><td colspan="4" style="padding:20px;text-align:center;color:#6b7280;">Memuat daftar voice...</td></tr>
-              </tbody>
-            </table>
-          </div>
-
-          <button class="btn btn-primary" style="margin-top:14px;" onclick="saveTTSSettings()">Simpan Pengaturan TTS</button>
-        </div>
-
         <!-- Admin Phones -->
         <div class="card">
           <h2>
@@ -7533,6 +7482,9 @@ app.get('/monitoring', async (_req, res) => {
             <svg id="soundIconOn" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
             <svg id="soundIconOff" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
           </div>
+          <div class="sound-toggle-header" onclick="openTTSSettings()" title="Pengaturan Suara TTS" style="background:rgba(96,165,250,0.12);border-color:rgba(96,165,250,0.3);">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </div>
         </h1>
         <div class="subtitle">Real-time Treasury Gold Rates</div>
       </div>
@@ -8683,7 +8635,86 @@ app.get('/monitoring', async (_req, res) => {
 
     // Load history dari localStorage saat halaman dimuat
     loadHistory();
+
+    // ==================== TTS SETTINGS MODAL ====================
+    function openTTSSettings() {
+      document.getElementById('ttsModal').style.display = 'flex';
+      loadTTSVoices();
+    }
+
+    function closeTTSModal() {
+      document.getElementById('ttsModal').style.display = 'none';
+    }
+
+    // Close modal when clicking outside
+    document.getElementById('ttsModal')?.addEventListener('click', function(e) {
+      if (e.target === this) closeTTSModal();
+    });
   </script>
+
+  <!-- TTS Settings Modal -->
+  <div id="ttsModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(8px);z-index:9999;justify-content:center;align-items:center;padding:20px;">
+    <div style="background:linear-gradient(180deg, #141a22 0%, #0f1419 100%);border-radius:20px;border:1px solid rgba(255,255,255,0.08);max-width:600px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;">
+      <!-- Modal Header -->
+      <div style="padding:20px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;">
+        <h2 style="font-size:1.1em;color:#fff;display:flex;align-items:center;gap:10px;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          Pengaturan Suara TTS
+        </h2>
+        <button onclick="closeTTSModal()" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;width:36px;height:36px;border-radius:10px;cursor:pointer;font-size:1.2em;">&times;</button>
+      </div>
+
+      <!-- Modal Body -->
+      <div style="padding:20px;overflow-y:auto;flex:1;">
+        <p style="color:#8b949e;font-size:0.85em;margin-bottom:16px;">Pilih suara untuk pengumuman harga naik/turun. Suara yang tersedia tergantung browser Anda.</p>
+
+        <!-- Voice Selection -->
+        <div style="margin-bottom:16px;">
+          <label style="display:block;color:#e7e9ea;font-size:0.85em;margin-bottom:8px;font-weight:500;">Pilih Suara</label>
+          <select id="ttsVoiceSelect" style="width:100%;padding:12px;border-radius:10px;background:#1a1f25;border:1px solid rgba(255,255,255,0.1);color:#fff;font-size:0.9em;">
+            <option value="">Loading voices...</option>
+          </select>
+        </div>
+
+        <!-- Test Buttons -->
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">
+          <button onclick="testTTSVoice('up')" style="flex:1;min-width:140px;padding:12px 16px;border-radius:10px;background:rgba(74,222,128,0.12);border:1px solid rgba(74,222,128,0.25);color:#4ade80;cursor:pointer;font-weight:500;font-size:0.85em;">
+            Test Harga Naik
+          </button>
+          <button onclick="testTTSVoice('down')" style="flex:1;min-width:140px;padding:12px 16px;border-radius:10px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.25);color:#f87171;cursor:pointer;font-weight:500;font-size:0.85em;">
+            Test Harga Turun
+          </button>
+        </div>
+
+        <!-- Voice List Table -->
+        <div style="background:rgba(255,255,255,0.02);border-radius:12px;border:1px solid rgba(255,255,255,0.06);max-height:250px;overflow-y:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:0.8em;">
+            <thead>
+              <tr style="background:rgba(255,255,255,0.03);">
+                <th style="padding:10px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.06);color:#8b949e;font-weight:500;">#</th>
+                <th style="padding:10px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.06);color:#8b949e;font-weight:500;">Nama Voice</th>
+                <th style="padding:10px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.06);color:#8b949e;font-weight:500;">Bahasa</th>
+                <th style="padding:10px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.06);color:#8b949e;font-weight:500;">Test</th>
+              </tr>
+            </thead>
+            <tbody id="voiceListBody">
+              <tr><td colspan="4" style="padding:20px;text-align:center;color:#6b7280;">Memuat daftar voice...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div style="padding:16px 20px;border-top:1px solid rgba(255,255,255,0.08);display:flex;gap:10px;justify-content:flex-end;">
+        <button onclick="loadTTSVoices()" style="padding:12px 20px;border-radius:10px;background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.25);color:#60a5fa;cursor:pointer;font-weight:500;font-size:0.85em;">
+          Refresh
+        </button>
+        <button onclick="saveTTSSettings();closeTTSModal();" style="padding:12px 24px;border-radius:10px;background:linear-gradient(135deg, #f7931a 0%, #e8850f 100%);border:none;color:#fff;cursor:pointer;font-weight:600;font-size:0.85em;box-shadow:0 4px 15px rgba(247,147,26,0.3);">
+          Simpan
+        </button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>`
 
