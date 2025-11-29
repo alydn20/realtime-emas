@@ -8358,7 +8358,7 @@ app.get('/monitoring', async (_req, res) => {
               const cls = change > 0 ? 'up' : 'down';
               document.getElementById('buyChange').textContent = sign + change.toLocaleString('id-ID');
               document.getElementById('buyChange').className = 'stat-change ' + cls;
-              playSound(change > 0 ? 'up' : 'down', data.buy);
+              playSound(change > 0 ? 'up' : 'down', Math.abs(change));
 
               // Update trend icon di XAU/USD Chart title
               const trendIcon = document.getElementById('trendIcon');
