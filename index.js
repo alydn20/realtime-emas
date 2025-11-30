@@ -2066,6 +2066,10 @@ app.get('/admin-login', (req, res) => {
 
         if (data.success) {
           localStorage.setItem('super_admin_token', data.token);
+          // Save monitoring session so admin can access /monitoring
+          if (data.monitoringSession) {
+            localStorage.setItem('goldmonitor_session', data.monitoringSession);
+          }
           window.location.href = '${redirect || '/admin/users'}';
         } else {
           error.classList.add('show');
@@ -2081,12 +2085,21 @@ app.get('/admin-login', (req, res) => {
 })
 
 // API untuk login
-app.post('/api/admin-login', (req, res) => {
+app.post('/api/admin-login', async (req, res) => {
   const { username, password } = req.body
   if (username === SUPER_ADMIN.username && password === SUPER_ADMIN.password) {
     // Generate simple token
     const token = Buffer.from(username + ':' + password + ':' + Date.now()).toString('base64')
-    res.json({ success: true, token })
+
+    // Create admin session for monitoring access
+    const adminSessionId = 'admin_' + crypto.randomBytes(16).toString('hex')
+    await redis.hset(REDIS_KEYS.SESSIONS, { [adminSessionId]: 'admin' })
+
+    // Also add admin to users hash if not exists (for session validation)
+    const adminUserData = JSON.stringify({ name: 'Administrator', phone: 'admin', isAdmin: true })
+    await redis.hset(REDIS_KEYS.USERS, { 'admin': adminUserData })
+
+    res.json({ success: true, token, monitoringSession: adminSessionId })
   } else {
     res.json({ success: false, error: 'Invalid credentials' })
   }
@@ -3152,6 +3165,11 @@ function normalizePhone(phone) {
 // Helper: Check if user is valid (exists and not expired)
 async function isUserValid(phone) {
   try {
+    // Admin is always valid
+    if (phone === 'admin') {
+      return { valid: true, user: { name: 'Administrator', phone: 'admin', isAdmin: true } }
+    }
+
     const userData = await redis.hget(REDIS_KEYS.USERS, phone)
     if (!userData) return { valid: false, reason: 'not_found' }
 
@@ -3431,6 +3449,11 @@ app.get('/api/check-pin-status', async (req, res) => {
 
   const phone = await redis.hget(REDIS_KEYS.SESSIONS, session)
   if (!phone) return res.json({ success: false })
+
+  // Admin doesn't need PIN
+  if (phone === 'admin') {
+    return res.json({ success: true, pinChanged: true, requirePinChange: false })
+  }
 
   const pinData = await redis.hget(REDIS_KEYS.USER_PINS, phone)
   let pinChanged = false
