@@ -2430,14 +2430,33 @@ app.get('/cleanup-history', async (req, res) => {
 })
 
 // SSE (Server-Sent Events) untuk real-time push ke frontend
-const sseClients = new Set()
+// Map: res -> { phone, name, connectedAt, lastActivity }
+const sseClients = new Map()
 
-app.get('/sse', (req, res) => {
+app.get('/sse', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.flushHeaders()
+
+  // Get user info from session
+  const session = req.query.session || ''
+  let userInfo = { phone: 'anonymous', name: 'Anonymous', connectedAt: new Date().toISOString(), lastActivity: Date.now() }
+
+  if (session) {
+    try {
+      const phone = await redis.hget(REDIS_KEYS.SESSIONS, session)
+      if (phone) {
+        const userData = await redis.hget(REDIS_KEYS.USERS, phone)
+        if (userData) {
+          const parsed = JSON.parse(userData)
+          userInfo.phone = phone
+          userInfo.name = parsed.name || phone
+        }
+      }
+    } catch (e) {}
+  }
 
   // Kirim data awal
   if (lastKnownPrice) {
@@ -2451,10 +2470,15 @@ app.get('/sse', (req, res) => {
     })}\n\n`)
   }
 
-  sseClients.add(res)
+  sseClients.set(res, userInfo)
+
+  // Broadcast online users update to admin
+  broadcastOnlineUsers()
 
   req.on('close', () => {
     sseClients.delete(res)
+    // Broadcast online users update when someone disconnects
+    broadcastOnlineUsers()
   })
 })
 
@@ -2462,7 +2486,7 @@ app.get('/sse', (req, res) => {
 function broadcastSSE(data) {
   const message = `data: ${JSON.stringify(data)}\n\n`
   console.log(`[BROADCAST] Type: ${data.type}, Clients: ${sseClients.size}`)
-  sseClients.forEach(client => {
+  sseClients.forEach((userInfo, client) => {
     try {
       client.write(message)
     } catch (e) {
@@ -2470,6 +2494,72 @@ function broadcastSSE(data) {
     }
   })
 }
+
+// Fungsi untuk get online users list
+function getOnlineUsers() {
+  const users = []
+  const seen = new Set()
+  sseClients.forEach((userInfo, client) => {
+    // Avoid duplicates by phone
+    if (!seen.has(userInfo.phone)) {
+      seen.add(userInfo.phone)
+      users.push({
+        phone: userInfo.phone,
+        name: userInfo.name,
+        connectedAt: userInfo.connectedAt
+      })
+    }
+  })
+  return users
+}
+
+// Broadcast online users ke admin SSE (separate channel)
+const adminSseClients = new Set()
+
+function broadcastOnlineUsers() {
+  const users = getOnlineUsers()
+  const message = `data: ${JSON.stringify({ type: 'online_users', users, count: sseClients.size })}\n\n`
+  adminSseClients.forEach(client => {
+    try {
+      client.write(message)
+    } catch (e) {
+      adminSseClients.delete(client)
+    }
+  })
+}
+
+// SSE endpoint untuk admin (online users monitoring)
+app.get('/admin-sse', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.flushHeaders()
+
+  // Send initial online users data
+  const users = getOnlineUsers()
+  res.write(`data: ${JSON.stringify({ type: 'online_users', users, count: sseClients.size })}\n\n`)
+
+  adminSseClients.add(res)
+
+  req.on('close', () => {
+    adminSseClients.delete(res)
+  })
+})
+
+// API untuk get online users (non-realtime)
+app.get('/api/admin/online-users', (req, res) => {
+  const { password } = req.query
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  const users = getOnlineUsers()
+  res.json({
+    success: true,
+    count: sseClients.size,
+    uniqueUsers: users.length,
+    users
+  })
+})
 
 // API untuk broadcast notifikasi/promo ke semua user
 // Contoh: /send-notif?title=Promo&message=Diskon%2050%25&type=promo
@@ -5743,6 +5833,7 @@ ${authScript}
       <!-- Section Tabs -->
       <div class="section-tabs">
         <div class="section-tab active" data-section="users">Daftar User</div>
+        <div class="section-tab" data-section="online">Online <span id="onlineBadge" style="background:#22c55e;color:#fff;padding:1px 6px;border-radius:8px;font-size:0.75em;margin-left:4px;">0</span></div>
         <div class="section-tab" data-section="add">Tambah User</div>
         <div class="section-tab" data-section="pending">Pending <span id="pendingBadge" style="background:#f7931a;color:#000;padding:1px 6px;border-radius:8px;font-size:0.75em;margin-left:4px;">0</span></div>
         <div class="section-tab" data-section="whatsapp">WhatsApp</div>
@@ -5776,6 +5867,36 @@ ${authScript}
               </thead>
               <tbody id="userList">
                 <tr><td colspan="7" class="empty-state">Memuat data...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section: Online Users -->
+      <div class="section-content" id="section-online">
+        <div class="card">
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <circle cx="12" cy="12" r="3" fill="#22c55e"/>
+            </svg>
+            User Online
+            <span id="onlineCount" style="background:#22c55e;color:#fff;padding:2px 10px;border-radius:12px;font-size:0.75em;margin-left:8px;">0</span>
+          </h2>
+          <p style="color:#6b7280;font-size:0.82em;margin-bottom:14px;">Daftar user yang sedang membuka halaman monitoring secara realtime.</p>
+          <div class="user-table-wrapper">
+            <table class="user-table">
+              <thead>
+                <tr>
+                  <th style="width:40px;">#</th>
+                  <th>Nama</th>
+                  <th>No WA</th>
+                  <th>Waktu Terhubung</th>
+                </tr>
+              </thead>
+              <tbody id="onlineUsersList">
+                <tr><td colspan="4" class="empty-state">Tidak ada user online</td></tr>
               </tbody>
             </table>
           </div>
@@ -6052,7 +6173,71 @@ ${authScript}
       loadWaGroups();
       loadAdminPhones();
       loadSoundSettings();
+      connectAdminSSE();
     });
+
+    // ==================== Online Users SSE ====================
+    let adminEvtSource = null;
+
+    function connectAdminSSE() {
+      if (adminEvtSource) {
+        adminEvtSource.close();
+      }
+      adminEvtSource = new EventSource('/admin-sse');
+
+      adminEvtSource.onmessage = function(event) {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'online_users') {
+            updateOnlineUsers(data.users, data.count);
+          }
+        } catch (e) {}
+      };
+
+      adminEvtSource.onerror = function() {
+        // Reconnect after 5 seconds
+        setTimeout(connectAdminSSE, 5000);
+      };
+    }
+
+    function updateOnlineUsers(users, count) {
+      // Update badge
+      document.getElementById('onlineBadge').textContent = count;
+      document.getElementById('onlineCount').textContent = count;
+
+      // Update table
+      const tbody = document.getElementById('onlineUsersList');
+      if (!tbody) return;
+
+      if (!users || users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Tidak ada user online</td></tr>';
+        return;
+      }
+
+      let html = '';
+      users.forEach((user, index) => {
+        const connectedAt = new Date(user.connectedAt);
+        const timeStr = connectedAt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const isAnonymous = user.phone === 'anonymous';
+
+        html += '<tr>' +
+          '<td>' + (index + 1) + '</td>' +
+          '<td>' + (isAnonymous ? '<span style="color:#6b7280;">-</span>' : user.name) + '</td>' +
+          '<td>' + (isAnonymous ? '<span style="color:#6b7280;">Guest</span>' : formatPhone(user.phone)) + '</td>' +
+          '<td>' + timeStr + '</td>' +
+          '</tr>';
+      });
+      tbody.innerHTML = html;
+    }
+
+    function formatPhone(phone) {
+      if (!phone) return '-';
+      // Format: 628xxx -> 08xxx
+      if (phone.startsWith('62')) {
+        return '0' + phone.substring(2);
+      }
+      return phone;
+    }
 
     // ==================== Sound Settings Functions ====================
     let currentSoundUp = '';
@@ -8294,7 +8479,9 @@ app.get('/monitoring', async (_req, res) => {
       if (evtSource) {
         evtSource.close();
       }
-      evtSource = new EventSource('/sse');
+      // Include session for online user tracking
+      const session = localStorage.getItem('session') || '';
+      evtSource = new EventSource('/sse?session=' + encodeURIComponent(session));
       setupSSEHandlers();
     }
 
