@@ -7450,36 +7450,30 @@ app.get('/monitoring', async (_req, res) => {
       box-shadow: 0 8px 32px rgba(0,0,0,0.2);
       transition: border-color 0.3s ease, box-shadow 0.3s ease;
     }
-    /* Glow effect classes - apply to all bordered elements */
+    /* Glow effect classes - blinking animation for 5 seconds */
     .glow-up {
       border-color: #00c853 !important;
-      box-shadow: 0 0 15px rgba(0, 200, 83, 0.6), 0 0 30px rgba(0, 200, 83, 0.4), inset 0 0 15px rgba(0, 200, 83, 0.1) !important;
+      animation: glowBlinkUp 0.5s ease-in-out 10;
     }
     .glow-down {
       border-color: #ff5252 !important;
-      box-shadow: 0 0 15px rgba(255, 82, 82, 0.6), 0 0 30px rgba(255, 82, 82, 0.4), inset 0 0 15px rgba(255, 82, 82, 0.1) !important;
+      animation: glowBlinkDown 0.5s ease-in-out 10;
     }
-    .header.glow-up, .chart-section.glow-up, .history-section.glow-up {
-      box-shadow: 0 0 20px rgba(0, 200, 83, 0.5), 0 0 40px rgba(0, 200, 83, 0.3), inset 0 0 20px rgba(0, 200, 83, 0.1) !important;
+    @keyframes glowBlinkUp {
+      0%, 100% {
+        box-shadow: 0 0 5px rgba(0, 200, 83, 0.3), 0 0 10px rgba(0, 200, 83, 0.2);
+      }
+      50% {
+        box-shadow: 0 0 20px rgba(0, 200, 83, 0.7), 0 0 40px rgba(0, 200, 83, 0.5), 0 0 60px rgba(0, 200, 83, 0.3);
+      }
     }
-    .header.glow-down, .chart-section.glow-down, .history-section.glow-down {
-      box-shadow: 0 0 20px rgba(255, 82, 82, 0.5), 0 0 40px rgba(255, 82, 82, 0.3), inset 0 0 20px rgba(255, 82, 82, 0.1) !important;
-    }
-    .stat-item.glow-up {
-      border-color: #00c853 !important;
-      box-shadow: 0 0 12px rgba(0, 200, 83, 0.5), 0 0 25px rgba(0, 200, 83, 0.3) !important;
-    }
-    .stat-item.glow-down {
-      border-color: #ff5252 !important;
-      box-shadow: 0 0 12px rgba(255, 82, 82, 0.5), 0 0 25px rgba(255, 82, 82, 0.3) !important;
-    }
-    .chart-info-row.glow-up {
-      border-color: #00c853 !important;
-      box-shadow: 0 0 10px rgba(0, 200, 83, 0.5), 0 0 20px rgba(0, 200, 83, 0.3) !important;
-    }
-    .chart-info-row.glow-down {
-      border-color: #ff5252 !important;
-      box-shadow: 0 0 10px rgba(255, 82, 82, 0.5), 0 0 20px rgba(255, 82, 82, 0.3) !important;
+    @keyframes glowBlinkDown {
+      0%, 100% {
+        box-shadow: 0 0 5px rgba(255, 82, 82, 0.3), 0 0 10px rgba(255, 82, 82, 0.2);
+      }
+      50% {
+        box-shadow: 0 0 20px rgba(255, 82, 82, 0.7), 0 0 40px rgba(255, 82, 82, 0.5), 0 0 60px rgba(255, 82, 82, 0.3);
+      }
     }
     .chart-header {
       padding: 16px 20px;
@@ -10183,48 +10177,31 @@ app.get('/monitoring', async (_req, res) => {
               void buyCard.offsetWidth;
               buyCard.classList.add(change > 0 ? 'updated-up' : 'updated-down', change > 0 ? 'price-up' : 'price-down');
 
-              // Glow effect on ALL bordered elements - stays on until next price change
+              // Glow effect on ALL bordered elements - blink for 5 seconds
               const glowClass = change > 0 ? 'glow-up' : 'glow-down';
-              const removeGlowClass = change > 0 ? 'glow-down' : 'glow-up';
 
-              // Apply glow to header
-              const header = document.querySelector('.header');
-              if (header) {
-                header.classList.remove('glow-up', 'glow-down');
-                void header.offsetWidth;
-                header.classList.add(glowClass);
-              }
+              // All elements to apply glow
+              const glowElements = [
+                document.querySelector('.header'),
+                document.querySelector('.chart-section'),
+                document.querySelector('.chart-info-row'),
+                document.querySelector('.history-section'),
+                ...document.querySelectorAll('.stat-item')
+              ].filter(el => el);
 
-              // Apply glow to chart section
-              const chartSection = document.querySelector('.chart-section');
-              if (chartSection) {
-                chartSection.classList.remove('glow-up', 'glow-down');
-                void chartSection.offsetWidth;
-                chartSection.classList.add(glowClass);
-              }
-
-              // Apply glow to all stat items
-              document.querySelectorAll('.stat-item').forEach(el => {
+              // Apply glow to all elements
+              glowElements.forEach(el => {
                 el.classList.remove('glow-up', 'glow-down');
                 void el.offsetWidth;
                 el.classList.add(glowClass);
               });
 
-              // Apply glow to chart info row
-              const chartInfoRow = document.querySelector('.chart-info-row');
-              if (chartInfoRow) {
-                chartInfoRow.classList.remove('glow-up', 'glow-down');
-                void chartInfoRow.offsetWidth;
-                chartInfoRow.classList.add(glowClass);
-              }
-
-              // Apply glow to history section
-              const historySection = document.querySelector('.history-section');
-              if (historySection) {
-                historySection.classList.remove('glow-up', 'glow-down');
-                void historySection.offsetWidth;
-                historySection.classList.add(glowClass);
-              }
+              // Remove glow after 5 seconds
+              setTimeout(() => {
+                glowElements.forEach(el => {
+                  el.classList.remove('glow-up', 'glow-down');
+                });
+              }, 5000);
 
               // Save ke localStorage
               addToLocalHistory({
