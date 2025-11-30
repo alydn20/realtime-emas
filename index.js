@@ -8093,8 +8093,6 @@ app.get('/monitoring', async (_req, res) => {
           "studies": [
             "MASimple@tv-basicstudies",
             "BB@tv-basicstudies",
-            "RSI@tv-basicstudies",
-            "MACD@tv-basicstudies",
             "PivotPointsStandard@tv-basicstudies"
           ],
           "support_host": "https://www.tradingview.com"
