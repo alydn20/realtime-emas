@@ -8071,7 +8071,7 @@ app.get('/monitoring', async (_req, res) => {
           "height": "600",
           "symbol": "OANDA:XAUUSD",
           "interval": "1",
-          "range": "60",
+          "range": "1D",
           "timezone": "Asia/Jakarta",
           "theme": "dark",
           "style": "1",
