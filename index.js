@@ -7650,15 +7650,19 @@ app.get('/monitoring', async (_req, res) => {
       height: 100% !important;
     }
 
-    /* Indicator Guide Button */
-    .indicator-guide-btn {
+    /* Indicator Buttons Container */
+    .indicator-buttons {
       position: absolute;
       top: 10px;
       right: 10px;
       z-index: 100;
-      background: rgba(247, 147, 26, 0.9);
+      display: flex;
+      gap: 8px;
+    }
+    .indicator-btn {
+      background: rgba(30, 40, 50, 0.95);
       color: #fff;
-      border: none;
+      border: 1px solid rgba(255,255,255,0.1);
       border-radius: 8px;
       padding: 6px 12px;
       font-size: 0.75em;
@@ -7668,12 +7672,181 @@ app.get('/monitoring', async (_req, res) => {
       align-items: center;
       gap: 5px;
       transition: all 0.2s ease;
-      box-shadow: 0 2px 8px rgba(247, 147, 26, 0.3);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
-    .indicator-guide-btn:hover {
-      background: rgba(247, 147, 26, 1);
+    .indicator-btn:hover {
+      background: rgba(40, 50, 60, 0.95);
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(247, 147, 26, 0.4);
+    }
+    .indicator-btn.guide {
+      background: rgba(247, 147, 26, 0.9);
+      border-color: rgba(247, 147, 26, 0.5);
+    }
+    .indicator-btn.guide:hover {
+      background: rgba(247, 147, 26, 1);
+    }
+    .indicator-btn.settings {
+      background: rgba(59, 130, 246, 0.9);
+      border-color: rgba(59, 130, 246, 0.5);
+    }
+    .indicator-btn.settings:hover {
+      background: rgba(59, 130, 246, 1);
+    }
+
+    /* Indicator Settings Modal */
+    .indicator-settings-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 9999;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    .indicator-settings-overlay.active {
+      display: flex;
+    }
+    .indicator-settings-modal {
+      background: linear-gradient(145deg, #1a1f26 0%, #0f1419 100%);
+      border-radius: 16px;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      max-width: 500px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+    .indicator-settings-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      background: #1a1f26;
+      border-radius: 16px 16px 0 0;
+    }
+    .indicator-settings-header h3 {
+      color: #3b82f6;
+      font-size: 1.1em;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .indicator-settings-body {
+      padding: 20px 24px;
+    }
+    .indicator-settings-body p.hint {
+      color: #8b949e;
+      font-size: 0.8em;
+      margin-bottom: 16px;
+    }
+    .indicator-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .indicator-item {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.2s;
+    }
+    .indicator-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+    .indicator-item.active {
+      border-color: rgba(34, 197, 94, 0.5);
+      background: rgba(34, 197, 94, 0.08);
+    }
+    .indicator-item-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .indicator-item-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+    }
+    .indicator-item-details h5 {
+      color: #e7e9ea;
+      font-size: 0.9em;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    .indicator-item-details span {
+      color: #8b949e;
+      font-size: 0.75em;
+    }
+    .indicator-toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .indicator-toggle.active {
+      background: #22c55e;
+    }
+    .indicator-toggle::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background: #fff;
+      border-radius: 50%;
+      transition: all 0.3s;
+    }
+    .indicator-toggle.active::after {
+      left: 22px;
+    }
+    .indicator-settings-footer {
+      padding: 16px 24px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .indicator-settings-footer button {
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 0.85em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .indicator-settings-footer .cancel-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      color: #8b949e;
+    }
+    .indicator-settings-footer .cancel-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #e7e9ea;
+    }
+    .indicator-settings-footer .apply-btn {
+      background: #3b82f6;
+      border: none;
+      color: #fff;
+    }
+    .indicator-settings-footer .apply-btn:hover {
+      background: #2563eb;
     }
 
     /* Indicator Guide Modal */
@@ -7763,8 +7936,29 @@ app.get('/monitoring', async (_req, res) => {
       font-weight: 500;
     }
     .indicator-section h4 .badge.ma { background: rgba(33, 150, 243, 0.2); color: #2196F3; }
+    .indicator-section h4 .badge.ema { background: rgba(0, 188, 212, 0.2); color: #00BCD4; }
     .indicator-section h4 .badge.bb { background: rgba(156, 39, 176, 0.2); color: #9C27B0; }
     .indicator-section h4 .badge.vwap { background: rgba(255, 152, 0, 0.2); color: #FF9800; }
+    .indicator-section h4 .badge.rsi { background: rgba(233, 30, 99, 0.2); color: #E91E63; }
+    .indicator-section h4 .badge.macd { background: rgba(76, 175, 80, 0.2); color: #4CAF50; }
+    .indicator-section h4 .badge.stoch { background: rgba(255, 87, 34, 0.2); color: #FF5722; }
+    .indicator-section h4 .badge.atr { background: rgba(121, 85, 72, 0.2); color: #8D6E63; }
+    .indicator-section h4 .badge.vol { background: rgba(96, 125, 139, 0.2); color: #78909C; }
+    .indicator-section h4 .badge.ichimoku { background: rgba(103, 58, 183, 0.2); color: #7C4DFF; }
+    .no-indicator-msg {
+      text-align: center;
+      padding: 40px 20px;
+      color: #8b949e;
+    }
+    .no-indicator-msg svg {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+    .no-indicator-msg p {
+      font-size: 0.9em;
+    }
     .indicator-desc {
       color: #8b949e;
       font-size: 0.85em;
@@ -8144,6 +8338,27 @@ app.get('/monitoring', async (_req, res) => {
 <body>
   <div class="toast-container" id="toastContainer"></div>
 
+  <!-- Indicator Settings Modal -->
+  <div class="indicator-settings-overlay" id="indicatorSettingsModal">
+    <div class="indicator-settings-modal">
+      <div class="indicator-settings-header">
+        <h3>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Pengaturan Indikator
+        </h3>
+        <button class="indicator-modal-close" onclick="closeIndicatorSettings()">&times;</button>
+      </div>
+      <div class="indicator-settings-body">
+        <p class="hint">Aktifkan indikator yang ingin ditampilkan di chart. Perubahan memerlukan refresh halaman.</p>
+        <div class="indicator-list" id="indicatorList"></div>
+      </div>
+      <div class="indicator-settings-footer">
+        <button class="cancel-btn" onclick="closeIndicatorSettings()">Batal</button>
+        <button class="apply-btn" onclick="applyIndicatorSettings()">Terapkan & Refresh</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Indicator Guide Modal -->
   <div class="indicator-modal-overlay" id="indicatorModal">
     <div class="indicator-modal">
@@ -8154,95 +8369,8 @@ app.get('/monitoring', async (_req, res) => {
         </h3>
         <button class="indicator-modal-close" onclick="closeIndicatorGuide()">&times;</button>
       </div>
-      <div class="indicator-modal-body">
-
-        <!-- MA Section -->
-        <div class="indicator-section">
-          <h4>Moving Average (MA) <span class="badge ma">Garis Biru</span></h4>
-          <p class="indicator-desc">Garis rata-rata harga dalam periode tertentu. Membantu melihat arah trend secara keseluruhan.</p>
-          <div class="indicator-signals">
-            <div class="signal-item">
-              <div class="signal-icon buy">BUY</div>
-              <div class="signal-text">
-                <strong>Harga di ATAS garis MA</strong>
-                <p>Trend naik (bullish), pertimbangkan untuk buy/hold</p>
-              </div>
-            </div>
-            <div class="signal-item">
-              <div class="signal-icon sell">SELL</div>
-              <div class="signal-text">
-                <strong>Harga di BAWAH garis MA</strong>
-                <p>Trend turun (bearish), waspada atau pertimbangkan sell</p>
-              </div>
-            </div>
-            <div class="signal-item">
-              <div class="signal-icon info">TIP</div>
-              <div class="signal-text">
-                <strong>Harga memotong MA dari bawah ke atas</strong>
-                <p>Sinyal potensial pembalikan ke trend naik</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Bollinger Bands Section -->
-        <div class="indicator-section">
-          <h4>Bollinger Bands (BB) <span class="badge bb">Garis Ungu</span></h4>
-          <p class="indicator-desc">3 garis (atas, tengah, bawah) yang menunjukkan volatilitas dan area overbought/oversold.</p>
-          <div class="indicator-signals">
-            <div class="signal-item">
-              <div class="signal-icon warn">OB</div>
-              <div class="signal-text">
-                <strong>Harga menyentuh/melewati garis ATAS</strong>
-                <p>Overbought - harga mungkin terlalu tinggi, potensi koreksi turun</p>
-              </div>
-            </div>
-            <div class="signal-item">
-              <div class="signal-icon buy">OS</div>
-              <div class="signal-text">
-                <strong>Harga menyentuh/melewati garis BAWAH</strong>
-                <p>Oversold - harga mungkin terlalu rendah, potensi rebound naik</p>
-              </div>
-            </div>
-            <div class="signal-item">
-              <div class="signal-icon info">TIP</div>
-              <div class="signal-text">
-                <strong>Band menyempit (squeeze)</strong>
-                <p>Volatilitas rendah, siap-siap ada pergerakan besar</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- VWAP Section -->
-        <div class="indicator-section">
-          <h4>VWAP <span class="badge vwap">Garis Oranye</span></h4>
-          <p class="indicator-desc">Volume Weighted Average Price - harga rata-rata tertimbang volume. Indikator favorit trader institusional.</p>
-          <div class="indicator-signals">
-            <div class="signal-item">
-              <div class="signal-icon buy">BUY</div>
-              <div class="signal-text">
-                <strong>Harga di ATAS VWAP</strong>
-                <p>Buyer lebih dominan, trend bullish intraday</p>
-              </div>
-            </div>
-            <div class="signal-item">
-              <div class="signal-icon sell">SELL</div>
-              <div class="signal-text">
-                <strong>Harga di BAWAH VWAP</strong>
-                <p>Seller lebih dominan, trend bearish intraday</p>
-              </div>
-            </div>
-            <div class="signal-item">
-              <div class="signal-icon info">S/R</div>
-              <div class="signal-text">
-                <strong>Harga mendekati VWAP</strong>
-                <p>VWAP sering jadi area support/resistance dinamis</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
+      <div class="indicator-modal-body" id="indicatorGuideBody">
+        <!-- Dynamic content will be inserted here -->
       </div>
     </div>
   </div>
@@ -8335,44 +8463,90 @@ app.get('/monitoring', async (_req, res) => {
         </div>
       </div>
       <div class="tradingview-widget-container">
-        <button class="indicator-guide-btn" onclick="openIndicatorGuide()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          Panduan Indikator
-        </button>
-        <!-- TradingView Widget BEGIN - FULL FEATURES -->
-        <div class="tradingview-widget-container__widget"></div>
-        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
-        {
-          "autosize": true,
-          "height": "600",
-          "symbol": "OANDA:XAUUSD",
-          "interval": "1",
-          "timezone": "Asia/Jakarta",
-          "theme": "dark",
-          "style": "1",
-          "locale": "en",
-          "backgroundColor": "#1a1f26",
-          "gridColor": "#2f3640",
-          "hide_top_toolbar": false,
-          "hide_legend": false,
-          "allow_symbol_change": true,
-          "save_image": true,
-          "calendar": true,
-          "hide_volume": true,
-          "hide_side_toolbar": false,
-          "withdateranges": true,
-          "details": false,
-          "hotlist": false,
-          "show_popup_button": true,
-          "popup_width": "1000",
-          "popup_height": "650",
-          "studies": [
-            "MASimple@tv-basicstudies",
-            "BB@tv-basicstudies",
-            "VWAP@tv-basicstudies"
-          ],
-          "support_host": "https://www.tradingview.com"
-        }
+        <div class="indicator-buttons">
+          <button class="indicator-btn settings" onclick="openIndicatorSettings()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Indikator
+          </button>
+          <button class="indicator-btn guide" onclick="openIndicatorGuide()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Panduan
+          </button>
+        </div>
+        <!-- TradingView Widget - Dynamic Loading -->
+        <div class="tradingview-widget-container__widget" id="tradingview-widget"></div>
+        <script type="text/javascript">
+        (function() {
+          // Get saved indicators from localStorage
+          const INDICATOR_KEY = 'gold_monitor_indicators';
+          const DEFAULT_IND = ['ma', 'bb', 'vwap'];
+          const STUDY_MAP = {
+            ma: 'MASimple@tv-basicstudies',
+            ema: 'MAExp@tv-basicstudies',
+            bb: 'BB@tv-basicstudies',
+            vwap: 'VWAP@tv-basicstudies',
+            rsi: 'RSI@tv-basicstudies',
+            macd: 'MACD@tv-basicstudies',
+            stoch: 'Stochastic@tv-basicstudies',
+            atr: 'ATR@tv-basicstudies',
+            vol: 'Volume@tv-basicstudies',
+            ichimoku: 'IchimokuCloud@tv-basicstudies'
+          };
+
+          let activeIndicators = DEFAULT_IND;
+          try {
+            const saved = localStorage.getItem(INDICATOR_KEY);
+            if (saved) {
+              const parsed = JSON.parse(saved);
+              if (Array.isArray(parsed)) activeIndicators = parsed;
+            }
+          } catch(e) {}
+
+          // Build studies array
+          const studies = activeIndicators
+            .map(id => STUDY_MAP[id])
+            .filter(s => s);
+
+          // Check if volume is active to show/hide
+          const hideVolume = !activeIndicators.includes('vol');
+
+          // Create widget config
+          const config = {
+            autosize: true,
+            height: 600,
+            symbol: "OANDA:XAUUSD",
+            interval: "1",
+            timezone: "Asia/Jakarta",
+            theme: "dark",
+            style: "1",
+            locale: "en",
+            backgroundColor: "#1a1f26",
+            gridColor: "#2f3640",
+            hide_top_toolbar: false,
+            hide_legend: false,
+            allow_symbol_change: true,
+            save_image: true,
+            calendar: true,
+            hide_volume: hideVolume,
+            hide_side_toolbar: false,
+            withdateranges: true,
+            details: false,
+            hotlist: false,
+            show_popup_button: true,
+            popup_width: "1000",
+            popup_height: "650",
+            studies: studies,
+            support_host: "https://www.tradingview.com"
+          };
+
+          // Load TradingView widget script
+          const container = document.getElementById('tradingview-widget');
+          const script = document.createElement('script');
+          script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+          script.async = true;
+          script.innerHTML = JSON.stringify(config);
+          container.appendChild(script);
+        })();
         </script>
         <!-- TradingView Widget END -->
       </div>
@@ -8446,8 +8620,304 @@ app.get('/monitoring', async (_req, res) => {
       if (confirmResolver) { confirmResolver(result); confirmResolver = null; }
     }
 
+    // ========== INDICATOR SYSTEM ==========
+    const INDICATOR_STORAGE_KEY = 'gold_monitor_indicators';
+
+    // All available indicators with TradingView study names
+    const ALL_INDICATORS = {
+      ma: {
+        id: 'ma',
+        name: 'Moving Average (MA)',
+        desc: 'Simple Moving Average',
+        study: 'MASimple@tv-basicstudies',
+        color: '#2196F3',
+        badgeClass: 'ma',
+        guide: {
+          title: 'Moving Average (MA)',
+          badge: 'Garis Biru',
+          description: 'Garis rata-rata harga dalam periode tertentu. Membantu melihat arah trend secara keseluruhan.',
+          signals: [
+            { icon: 'buy', label: 'BUY', title: 'Harga di ATAS garis MA', desc: 'Trend naik (bullish), pertimbangkan untuk buy/hold' },
+            { icon: 'sell', label: 'SELL', title: 'Harga di BAWAH garis MA', desc: 'Trend turun (bearish), waspada atau pertimbangkan sell' },
+            { icon: 'info', label: 'TIP', title: 'Harga memotong MA dari bawah ke atas', desc: 'Sinyal potensial pembalikan ke trend naik' }
+          ]
+        }
+      },
+      ema: {
+        id: 'ema',
+        name: 'Exponential MA (EMA)',
+        desc: 'Exponential Moving Average',
+        study: 'MAExp@tv-basicstudies',
+        color: '#00BCD4',
+        badgeClass: 'ema',
+        guide: {
+          title: 'Exponential Moving Average (EMA)',
+          badge: 'Garis Cyan',
+          description: 'Seperti MA tapi lebih responsif terhadap perubahan harga terbaru. Cocok untuk trading jangka pendek.',
+          signals: [
+            { icon: 'buy', label: 'BUY', title: 'Harga di ATAS EMA', desc: 'Momentum bullish, trend naik aktif' },
+            { icon: 'sell', label: 'SELL', title: 'Harga di BAWAH EMA', desc: 'Momentum bearish, trend turun aktif' },
+            { icon: 'info', label: 'TIP', title: 'EMA cross di atas MA', desc: 'Golden cross - sinyal bullish kuat' }
+          ]
+        }
+      },
+      bb: {
+        id: 'bb',
+        name: 'Bollinger Bands',
+        desc: 'Volatility bands',
+        study: 'BB@tv-basicstudies',
+        color: '#9C27B0',
+        badgeClass: 'bb',
+        guide: {
+          title: 'Bollinger Bands (BB)',
+          badge: 'Garis Ungu',
+          description: '3 garis (atas, tengah, bawah) yang menunjukkan volatilitas dan area overbought/oversold.',
+          signals: [
+            { icon: 'warn', label: 'OB', title: 'Harga menyentuh/melewati garis ATAS', desc: 'Overbought - harga mungkin terlalu tinggi, potensi koreksi turun' },
+            { icon: 'buy', label: 'OS', title: 'Harga menyentuh/melewati garis BAWAH', desc: 'Oversold - harga mungkin terlalu rendah, potensi rebound naik' },
+            { icon: 'info', label: 'TIP', title: 'Band menyempit (squeeze)', desc: 'Volatilitas rendah, siap-siap ada pergerakan besar' }
+          ]
+        }
+      },
+      vwap: {
+        id: 'vwap',
+        name: 'VWAP',
+        desc: 'Volume Weighted Avg Price',
+        study: 'VWAP@tv-basicstudies',
+        color: '#FF9800',
+        badgeClass: 'vwap',
+        guide: {
+          title: 'VWAP',
+          badge: 'Garis Oranye',
+          description: 'Volume Weighted Average Price - harga rata-rata tertimbang volume. Indikator favorit trader institusional.',
+          signals: [
+            { icon: 'buy', label: 'BUY', title: 'Harga di ATAS VWAP', desc: 'Buyer lebih dominan, trend bullish intraday' },
+            { icon: 'sell', label: 'SELL', title: 'Harga di BAWAH VWAP', desc: 'Seller lebih dominan, trend bearish intraday' },
+            { icon: 'info', label: 'S/R', title: 'Harga mendekati VWAP', desc: 'VWAP sering jadi area support/resistance dinamis' }
+          ]
+        }
+      },
+      rsi: {
+        id: 'rsi',
+        name: 'RSI',
+        desc: 'Relative Strength Index',
+        study: 'RSI@tv-basicstudies',
+        color: '#E91E63',
+        badgeClass: 'rsi',
+        guide: {
+          title: 'RSI (Relative Strength Index)',
+          badge: 'Garis Pink',
+          description: 'Oscillator yang mengukur kekuatan trend. Nilai 0-100, dengan level penting di 30 dan 70.',
+          signals: [
+            { icon: 'buy', label: 'BUY', title: 'RSI di bawah 30', desc: 'Oversold - harga terlalu murah, potensi rebound' },
+            { icon: 'sell', label: 'SELL', title: 'RSI di atas 70', desc: 'Overbought - harga terlalu mahal, potensi koreksi' },
+            { icon: 'info', label: 'DIV', title: 'Divergence RSI vs Harga', desc: 'Jika RSI naik tapi harga turun = bullish divergence' }
+          ]
+        }
+      },
+      macd: {
+        id: 'macd',
+        name: 'MACD',
+        desc: 'Moving Average Convergence',
+        study: 'MACD@tv-basicstudies',
+        color: '#4CAF50',
+        badgeClass: 'macd',
+        guide: {
+          title: 'MACD',
+          badge: 'Garis Hijau',
+          description: 'Indikator momentum yang menunjukkan hubungan antara dua moving average. Terdiri dari MACD line, signal line, dan histogram.',
+          signals: [
+            { icon: 'buy', label: 'BUY', title: 'MACD cross di atas Signal', desc: 'Bullish crossover - momentum naik, sinyal buy' },
+            { icon: 'sell', label: 'SELL', title: 'MACD cross di bawah Signal', desc: 'Bearish crossover - momentum turun, sinyal sell' },
+            { icon: 'info', label: 'TIP', title: 'Histogram membesar', desc: 'Momentum menguat ke arah trend saat ini' }
+          ]
+        }
+      },
+      stoch: {
+        id: 'stoch',
+        name: 'Stochastic',
+        desc: 'Stochastic Oscillator',
+        study: 'Stochastic@tv-basicstudies',
+        color: '#FF5722',
+        badgeClass: 'stoch',
+        guide: {
+          title: 'Stochastic Oscillator',
+          badge: 'Garis Merah-Oranye',
+          description: 'Oscillator yang membandingkan harga penutupan dengan range harga. Level penting: 20 (oversold) dan 80 (overbought).',
+          signals: [
+            { icon: 'buy', label: 'BUY', title: '%K di bawah 20 lalu cross ke atas', desc: 'Oversold + bullish cross = sinyal buy kuat' },
+            { icon: 'sell', label: 'SELL', title: '%K di atas 80 lalu cross ke bawah', desc: 'Overbought + bearish cross = sinyal sell kuat' },
+            { icon: 'info', label: 'TIP', title: '%K dan %D bergerak bersamaan', desc: 'Konfirmasi trend lebih kuat' }
+          ]
+        }
+      },
+      atr: {
+        id: 'atr',
+        name: 'ATR',
+        desc: 'Average True Range',
+        study: 'ATR@tv-basicstudies',
+        color: '#8D6E63',
+        badgeClass: 'atr',
+        guide: {
+          title: 'ATR (Average True Range)',
+          badge: 'Garis Coklat',
+          description: 'Mengukur volatilitas pasar. Tidak menunjukkan arah, hanya seberapa besar pergerakan harga.',
+          signals: [
+            { icon: 'warn', label: 'HIGH', title: 'ATR tinggi/naik', desc: 'Volatilitas tinggi - pasar aktif, pergerakan besar' },
+            { icon: 'info', label: 'LOW', title: 'ATR rendah/turun', desc: 'Volatilitas rendah - pasar tenang, siap-siap breakout' },
+            { icon: 'info', label: 'SL', title: 'Gunakan untuk Stop Loss', desc: 'SL = 1.5-2x ATR dari entry point' }
+          ]
+        }
+      },
+      vol: {
+        id: 'vol',
+        name: 'Volume',
+        desc: 'Trading Volume',
+        study: 'Volume@tv-basicstudies',
+        color: '#78909C',
+        badgeClass: 'vol',
+        guide: {
+          title: 'Volume',
+          badge: 'Bar Abu-abu',
+          description: 'Jumlah transaksi dalam periode waktu. Volume tinggi = banyak partisipan, pergerakan lebih valid.',
+          signals: [
+            { icon: 'buy', label: 'CONF', title: 'Harga naik + Volume tinggi', desc: 'Kenaikan valid, banyak buyer masuk' },
+            { icon: 'sell', label: 'CONF', title: 'Harga turun + Volume tinggi', desc: 'Penurunan valid, banyak seller masuk' },
+            { icon: 'warn', label: 'WARN', title: 'Harga naik + Volume rendah', desc: 'Kenaikan lemah, bisa jadi false breakout' }
+          ]
+        }
+      },
+      ichimoku: {
+        id: 'ichimoku',
+        name: 'Ichimoku Cloud',
+        desc: 'Ichimoku Kinko Hyo',
+        study: 'IchimokuCloud@tv-basicstudies',
+        color: '#7C4DFF',
+        badgeClass: 'ichimoku',
+        guide: {
+          title: 'Ichimoku Cloud',
+          badge: 'Cloud Ungu',
+          description: 'Sistem trading lengkap dari Jepang. Menunjukkan support/resistance, momentum, dan arah trend sekaligus.',
+          signals: [
+            { icon: 'buy', label: 'BUY', title: 'Harga di ATAS cloud', desc: 'Trend bullish kuat, cloud jadi support' },
+            { icon: 'sell', label: 'SELL', title: 'Harga di BAWAH cloud', desc: 'Trend bearish kuat, cloud jadi resistance' },
+            { icon: 'info', label: 'WAIT', title: 'Harga DI DALAM cloud', desc: 'Zona netral/konsolidasi, tunggu breakout' }
+          ]
+        }
+      }
+    };
+
+    // Default active indicators
+    const DEFAULT_INDICATORS = ['ma', 'bb', 'vwap'];
+
+    // Get saved indicators or use defaults
+    function getActiveIndicators() {
+      try {
+        const saved = localStorage.getItem(INDICATOR_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          return Array.isArray(parsed) ? parsed : DEFAULT_INDICATORS;
+        }
+      } catch (e) {}
+      return DEFAULT_INDICATORS;
+    }
+
+    // Save indicators to localStorage
+    function saveIndicators(indicators) {
+      localStorage.setItem(INDICATOR_STORAGE_KEY, JSON.stringify(indicators));
+    }
+
+    // Temporary state for settings modal
+    let tempIndicatorState = {};
+
+    // Open Indicator Settings Modal
+    function openIndicatorSettings() {
+      const activeIndicators = getActiveIndicators();
+      tempIndicatorState = {};
+
+      // Build list HTML
+      let html = '';
+      Object.values(ALL_INDICATORS).forEach(ind => {
+        const isActive = activeIndicators.includes(ind.id);
+        tempIndicatorState[ind.id] = isActive;
+        html += '<div class="indicator-item ' + (isActive ? 'active' : '') + '" data-id="' + ind.id + '">' +
+          '<div class="indicator-item-info">' +
+            '<div class="indicator-item-color" style="background:' + ind.color + '"></div>' +
+            '<div class="indicator-item-details">' +
+              '<h5>' + ind.name + '</h5>' +
+              '<span>' + ind.desc + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="indicator-toggle ' + (isActive ? 'active' : '') + '" onclick="toggleIndicator(\\'' + ind.id + '\\', this)"></div>' +
+        '</div>';
+      });
+
+      document.getElementById('indicatorList').innerHTML = html;
+      document.getElementById('indicatorSettingsModal').classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeIndicatorSettings() {
+      document.getElementById('indicatorSettingsModal').classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    function toggleIndicator(id, toggleEl) {
+      tempIndicatorState[id] = !tempIndicatorState[id];
+      toggleEl.classList.toggle('active');
+      toggleEl.closest('.indicator-item').classList.toggle('active');
+    }
+
+    function applyIndicatorSettings() {
+      const selected = Object.keys(tempIndicatorState).filter(k => tempIndicatorState[k]);
+      saveIndicators(selected);
+      showToast('Indikator disimpan. Halaman akan di-refresh...', 'success');
+      setTimeout(() => location.reload(), 1000);
+    }
+
+    // Render dynamic guide content
+    function renderIndicatorGuide() {
+      const activeIndicators = getActiveIndicators();
+      const guideBody = document.getElementById('indicatorGuideBody');
+
+      if (activeIndicators.length === 0) {
+        guideBody.innerHTML = '<div class="no-indicator-msg">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
+          '<p>Tidak ada indikator aktif.<br>Klik tombol "Indikator" untuk menambahkan.</p>' +
+        '</div>';
+        return;
+      }
+
+      let html = '';
+      activeIndicators.forEach(id => {
+        const ind = ALL_INDICATORS[id];
+        if (!ind || !ind.guide) return;
+
+        const g = ind.guide;
+        html += '<div class="indicator-section">' +
+          '<h4>' + g.title + ' <span class="badge ' + ind.badgeClass + '">' + g.badge + '</span></h4>' +
+          '<p class="indicator-desc">' + g.description + '</p>' +
+          '<div class="indicator-signals">';
+
+        g.signals.forEach(s => {
+          html += '<div class="signal-item">' +
+            '<div class="signal-icon ' + s.icon + '">' + s.label + '</div>' +
+            '<div class="signal-text">' +
+              '<strong>' + s.title + '</strong>' +
+              '<p>' + s.desc + '</p>' +
+            '</div>' +
+          '</div>';
+        });
+
+        html += '</div></div>';
+      });
+
+      guideBody.innerHTML = html;
+    }
+
     // Indicator Guide Modal Functions
     function openIndicatorGuide() {
+      renderIndicatorGuide();
       document.getElementById('indicatorModal').classList.add('active');
       document.body.style.overflow = 'hidden';
     }
@@ -8455,16 +8925,27 @@ app.get('/monitoring', async (_req, res) => {
       document.getElementById('indicatorModal').classList.remove('active');
       document.body.style.overflow = '';
     }
-    // Close on overlay click
+
+    // Close modals on overlay click
     document.getElementById('indicatorModal').addEventListener('click', function(e) {
       if (e.target === this) closeIndicatorGuide();
     });
+    document.getElementById('indicatorSettingsModal').addEventListener('click', function(e) {
+      if (e.target === this) closeIndicatorSettings();
+    });
+
     // Close on Escape key
     document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape' && document.getElementById('indicatorModal').classList.contains('active')) {
-        closeIndicatorGuide();
+      if (e.key === 'Escape') {
+        if (document.getElementById('indicatorModal').classList.contains('active')) {
+          closeIndicatorGuide();
+        }
+        if (document.getElementById('indicatorSettingsModal').classList.contains('active')) {
+          closeIndicatorSettings();
+        }
       }
     });
+    // ========== END INDICATOR SYSTEM ==========
 
     const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
