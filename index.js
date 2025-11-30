@@ -4700,6 +4700,14 @@ app.get('/login', (_req, res) => {
       border: 1px solid rgba(255,255,255,0.1);
     }
     .btn-secondary:hover:not(:disabled) { background: rgba(255,255,255,0.12); color: #e7e9ea; }
+    .btn-register {
+      background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+      color: white;
+      border: none;
+      margin-top: 10px;
+      box-shadow: 0 4px 20px rgba(37,211,102,0.35);
+    }
+    .btn-register:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(37,211,102,0.45); }
     .message {
       padding: 14px 16px;
       border-radius: 12px;
@@ -4763,16 +4771,6 @@ app.get('/login', (_req, res) => {
       border-color: #f7931a;
       background: rgba(15, 20, 25, 1);
       box-shadow: 0 0 0 4px rgba(247,147,26,0.15);
-    }
-    .pin-note {
-      background: rgba(247,147,26,0.08);
-      border: 1px solid rgba(247,147,26,0.2);
-      border-radius: 12px;
-      padding: 14px 16px;
-      margin-bottom: 20px;
-      font-size: 0.85em;
-      color: #f7931a;
-      text-align: left;
     }
     .user-info {
       background: rgba(74,222,128,0.08);
@@ -4878,6 +4876,12 @@ app.get('/login', (_req, res) => {
         <button class="btn btn-primary" id="checkBtn" onclick="checkUser()">
           Masuk ke Akun
         </button>
+        <button class="btn btn-register" onclick="daftarWhatsApp()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:6px;">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+          </svg>
+          Daftar
+        </button>
       </div>
 
       <!-- Step 2: PIN Input -->
@@ -4897,10 +4901,6 @@ app.get('/login', (_req, res) => {
             <input type="password" class="pin-input" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
             <input type="password" class="pin-input" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
           </div>
-        </div>
-
-        <div class="pin-note">
-          PIN default: 000000
         </div>
 
         <button class="btn btn-primary" id="loginBtn" onclick="submitLogin()">
@@ -5048,6 +5048,25 @@ app.get('/login', (_req, res) => {
     function clearPinInputs(inputs) {
       inputs.forEach(i => i.value = '');
       if (inputs[0]) inputs[0].focus();
+    }
+
+    // Daftar via WhatsApp
+    function daftarWhatsApp() {
+      const phoneInput = document.getElementById('phoneInput');
+      let phone = phoneInput.value.replace(/\D/g, '');
+
+      if (phone.startsWith('62')) phone = phone.substring(2);
+      if (phone.startsWith('0')) phone = phone.substring(1);
+
+      if (!phone || phone.length < 9) {
+        showMessage('Masukkan nomor WhatsApp Anda terlebih dahulu', 'error');
+        phoneInput.focus();
+        return;
+      }
+
+      const message = encodeURIComponent('Halo, saya ingin daftar grup harga Treasury.\n\nNomor WA saya: +62' + phone);
+      const waUrl = 'https://wa.me/6289654454210?text=' + message;
+      window.open(waUrl, '_blank');
     }
 
     // Step 1: Check if user exists

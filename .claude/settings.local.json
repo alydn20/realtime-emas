@@ -21,7 +21,8 @@
       "Bash(done)",
       "Bash(git init:*)",
       "Bash(git remote add:*)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:www.tradingview.com)"
     ],
     "deny": [],
     "ask": []
