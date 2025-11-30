@@ -8059,7 +8059,6 @@ app.get('/monitoring', async (_req, res) => {
         <div class="chart-info-row">
           <div class="info-item clock-info">
             <span class="info-time" id="clock2">--:--:--</span>
-            <span class="info-date" id="dateInfo2">Loading...</span>
           </div>
         </div>
       </div>
