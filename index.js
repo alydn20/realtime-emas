@@ -7695,20 +7695,21 @@ app.get('/monitoring', async (_req, res) => {
 
     /* Chart Bottom Row - Clock & Buttons */
     .chart-bottom-row {
+      position: relative;
       display: flex;
-      justify-content: space-between;
+      justify-content: center;
       align-items: center;
       margin-top: 12px;
       width: 100%;
     }
     .chart-bottom-row .chart-info-row {
       margin-top: 0;
-      flex-shrink: 0;
     }
     .indicator-buttons-row {
+      position: absolute;
+      right: 0;
       display: flex;
       gap: 8px;
-      flex-shrink: 0;
     }
     .indicator-btn {
       background: rgba(30, 40, 50, 0.9);
