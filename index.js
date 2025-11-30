@@ -2699,7 +2699,7 @@ app.get('/sw.js', (_req, res) => {
   res.setHeader('Content-Type', 'application/javascript')
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
   res.send(`
-    const CACHE_VERSION = 'gold-monitor-v5';
+    const CACHE_VERSION = 'gold-monitor-v6';
 
     self.addEventListener('install', (e) => {
       self.skipWaiting();
@@ -2721,6 +2721,11 @@ app.get('/sw.js', (_req, res) => {
     });
 
     self.addEventListener('fetch', (e) => {
+      // Jangan intercept external requests (TradingView, fonts, etc)
+      const url = new URL(e.request.url);
+      if (url.origin !== self.location.origin) {
+        return;
+      }
       // Jangan cache HTML - selalu fetch fresh
       if (e.request.mode === 'navigate' || e.request.url.includes('/monitoring') || e.request.url.includes('/login') || e.request.url.includes('/install')) {
         e.respondWith(fetch(e.request));
