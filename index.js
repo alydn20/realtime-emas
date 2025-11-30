@@ -10591,8 +10591,13 @@ async function start() {
       try {
         if (!msg.message) continue
 
+        // Skip messages from self
+        if (msg.key.fromMe) continue
+
         // Get sender phone number
         const senderJid = msg.key.remoteJid
+        if (!senderJid) continue
+
         const isGroup = senderJid.endsWith('@g.us')
 
         // Get actual sender (for group messages)
@@ -10603,10 +10608,6 @@ async function start() {
           senderPhone = senderJid.replace('@s.whatsapp.net', '')
         }
 
-        // Check if sender is admin
-        const isAdmin = ADMIN_PHONES.includes(senderPhone)
-        if (!isAdmin) continue
-
         // Extract message text
         const text = msg.message.conversation ||
                      msg.message.extendedTextMessage?.text ||
@@ -10614,7 +10615,23 @@ async function start() {
 
         if (!text) continue
 
+        // Only process commands starting with /
+        if (!text.startsWith('/')) continue
+
         const lowerText = text.toLowerCase().trim()
+
+        // Debug log
+        pushLog(`WA CMD | Received: "${text}" from ${senderPhone}`)
+        pushLog(`WA CMD | Admin phones: ${ADMIN_PHONES.join(', ')}`)
+
+        // Check if sender is admin
+        const isAdmin = ADMIN_PHONES.includes(senderPhone)
+        if (!isAdmin) {
+          pushLog(`WA CMD | ${senderPhone} is NOT admin, ignoring`)
+          continue
+        }
+
+        pushLog(`WA CMD | Processing command from admin ${senderPhone}`)
 
         // ===== COMMAND: /help =====
         if (lowerText === '/help' || lowerText === '/menu') {
