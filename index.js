@@ -2462,11 +2462,14 @@ app.get('/sse', async (req, res) => {
     try {
       const phone = await redis.hget(REDIS_KEYS.SESSIONS, session)
       if (phone) {
+        userInfo.phone = phone
         const userData = await redis.hget(REDIS_KEYS.USERS, phone)
         if (userData) {
           const parsed = JSON.parse(userData)
-          userInfo.phone = phone
-          userInfo.name = parsed.name || phone
+          userInfo.name = parsed.name || ('Member ' + phone)
+        } else {
+          // Fallback untuk admin atau user tanpa data lengkap
+          userInfo.name = phone === 'admin' ? 'Administrator' : ('Member ' + phone)
         }
       }
     } catch (e) {}
@@ -6367,12 +6370,14 @@ ${authScript}
       users.forEach((user, index) => {
         const connectedAt = new Date(user.connectedAt);
         const timeStr = connectedAt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        const isAnonymous = user.phone === 'anonymous';
+        const isAnonymous = !user.phone || user.phone === 'anonymous';
+        const displayName = user.name && user.name !== 'Anonymous' ? user.name : (isAnonymous ? '-' : 'Member');
+        const displayPhone = isAnonymous ? '<span style="color:#6b7280;">Guest</span>' : '+' + user.phone;
 
         html += '<tr>' +
           '<td>' + (index + 1) + '</td>' +
-          '<td>' + (isAnonymous ? '<span style="color:#6b7280;">-</span>' : user.name) + '</td>' +
-          '<td>' + (isAnonymous ? '<span style="color:#6b7280;">Guest</span>' : formatPhone(user.phone)) + '</td>' +
+          '<td>' + displayName + '</td>' +
+          '<td class="phone">' + displayPhone + '</td>' +
           '<td>' + timeStr + '</td>' +
           '</tr>';
       });
@@ -7492,22 +7497,52 @@ app.get('/monitoring', async (_req, res) => {
       border: 1px solid rgba(247,147,26,0.2);
       border-radius: 12px;
     }
-    .stat-item.clock-item {
-      background: linear-gradient(135deg, rgba(247,147,26,0.1), rgba(247,147,26,0.05));
-      border: 1px solid rgba(247,147,26,0.2);
-      min-width: 140px;
+    /* Info Row - Clock & User Phone */
+    .chart-info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 12px;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, rgba(247,147,26,0.08), rgba(247,147,26,0.03));
+      border: 1px solid rgba(247,147,26,0.15);
+      border-radius: 10px;
     }
-    .stat-item.clock-item .clock-time {
-      font-size: 1.1em;
+    .info-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .clock-info {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+    }
+    .info-time {
+      font-size: 1.15em;
       font-weight: 700;
       color: #f7931a;
       font-family: 'JetBrains Mono', monospace;
       letter-spacing: 1px;
     }
-    .stat-item.clock-item .clock-date {
-      font-size: 0.7em;
+    .info-date {
+      font-size: 0.75em;
       color: #8b949e;
-      margin-top: 4px;
+    }
+    .user-info-display {
+      background: rgba(255,255,255,0.05);
+      padding: 8px 14px;
+      border-radius: 8px;
+    }
+    .info-label {
+      font-size: 0.8em;
+      color: #8b949e;
+    }
+    .info-value {
+      font-size: 0.95em;
+      font-weight: 600;
+      color: #4ade80;
+      font-family: 'JetBrains Mono', monospace;
     }
     .clock-time {
       font-size: 1.3em;
@@ -8020,9 +8055,15 @@ app.get('/monitoring', async (_req, res) => {
             <span class="stat-value" id="gram30">-</span>
             <span class="stat-change up" id="profit30">-</span>
           </div>
-          <div class="stat-item clock-item">
-            <span class="stat-value clock-time" id="clock2">--:--:--</span>
-            <span class="stat-label clock-date" id="dateInfo2">Loading...</span>
+        </div>
+        <div class="chart-info-row">
+          <div class="info-item clock-info">
+            <span class="info-time" id="clock2">--:--:--</span>
+            <span class="info-date" id="dateInfo2">Loading...</span>
+          </div>
+          <div class="info-item user-info-display">
+            <span class="info-label">No. HP:</span>
+            <span class="info-value" id="userPhoneDisplay">+62xxx</span>
           </div>
         </div>
       </div>
@@ -8635,6 +8676,13 @@ app.get('/monitoring', async (_req, res) => {
             localStorage.removeItem('goldmonitor_session');
             window.location.replace('/login');
             return;
+          }
+          // Display user phone number
+          if (data.phone) {
+            const phoneDisplay = document.getElementById('userPhoneDisplay');
+            if (phoneDisplay) {
+              phoneDisplay.textContent = '+' + data.phone;
+            }
           }
           // Check if PIN change is required
           return fetch('/api/check-pin-status?session=' + session);
