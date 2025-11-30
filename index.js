@@ -7644,9 +7644,177 @@ app.get('/monitoring', async (_req, res) => {
 
     .tradingview-widget-container {
       height: 500px;
+      position: relative;
     }
     .tradingview-widget-container__widget {
       height: 100% !important;
+    }
+
+    /* Indicator Guide Button */
+    .indicator-guide-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 100;
+      background: rgba(247, 147, 26, 0.9);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 0.75em;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(247, 147, 26, 0.3);
+    }
+    .indicator-guide-btn:hover {
+      background: rgba(247, 147, 26, 1);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(247, 147, 26, 0.4);
+    }
+
+    /* Indicator Guide Modal */
+    .indicator-modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 9999;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      overflow-y: auto;
+    }
+    .indicator-modal-overlay.active {
+      display: flex;
+    }
+    .indicator-modal {
+      background: linear-gradient(145deg, #1a1f26 0%, #0f1419 100%);
+      border-radius: 16px;
+      border: 1px solid rgba(247, 147, 26, 0.3);
+      max-width: 600px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+    .indicator-modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      background: #1a1f26;
+      border-radius: 16px 16px 0 0;
+    }
+    .indicator-modal-header h3 {
+      color: #f7931a;
+      font-size: 1.1em;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .indicator-modal-close {
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      color: #8b949e;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1.2em;
+      transition: all 0.2s;
+    }
+    .indicator-modal-close:hover {
+      background: rgba(255, 77, 77, 0.2);
+      color: #ff4d4d;
+    }
+    .indicator-modal-body {
+      padding: 20px 24px;
+    }
+    .indicator-section {
+      margin-bottom: 24px;
+    }
+    .indicator-section:last-child {
+      margin-bottom: 0;
+    }
+    .indicator-section h4 {
+      color: #ffffff;
+      font-size: 0.95em;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .indicator-section h4 .badge {
+      font-size: 0.7em;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+    .indicator-section h4 .badge.ma { background: rgba(33, 150, 243, 0.2); color: #2196F3; }
+    .indicator-section h4 .badge.bb { background: rgba(156, 39, 176, 0.2); color: #9C27B0; }
+    .indicator-section h4 .badge.vwap { background: rgba(255, 152, 0, 0.2); color: #FF9800; }
+    .indicator-desc {
+      color: #8b949e;
+      font-size: 0.85em;
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+    .indicator-signals {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .signal-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .signal-item:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    .signal-item:first-child {
+      padding-top: 0;
+    }
+    .signal-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75em;
+      flex-shrink: 0;
+    }
+    .signal-icon.buy { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+    .signal-icon.sell { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+    .signal-icon.info { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+    .signal-icon.warn { background: rgba(251, 191, 36, 0.2); color: #fbbf24; }
+    .signal-text {
+      flex: 1;
+    }
+    .signal-text strong {
+      color: #e7e9ea;
+      font-size: 0.85em;
+    }
+    .signal-text p {
+      color: #8b949e;
+      font-size: 0.8em;
+      margin-top: 2px;
     }
 
     /* History Table */
@@ -7975,6 +8143,110 @@ app.get('/monitoring', async (_req, res) => {
 </head>
 <body>
   <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Indicator Guide Modal -->
+  <div class="indicator-modal-overlay" id="indicatorModal">
+    <div class="indicator-modal">
+      <div class="indicator-modal-header">
+        <h3>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          Panduan Indikator Chart
+        </h3>
+        <button class="indicator-modal-close" onclick="closeIndicatorGuide()">&times;</button>
+      </div>
+      <div class="indicator-modal-body">
+
+        <!-- MA Section -->
+        <div class="indicator-section">
+          <h4>Moving Average (MA) <span class="badge ma">Garis Biru</span></h4>
+          <p class="indicator-desc">Garis rata-rata harga dalam periode tertentu. Membantu melihat arah trend secara keseluruhan.</p>
+          <div class="indicator-signals">
+            <div class="signal-item">
+              <div class="signal-icon buy">BUY</div>
+              <div class="signal-text">
+                <strong>Harga di ATAS garis MA</strong>
+                <p>Trend naik (bullish), pertimbangkan untuk buy/hold</p>
+              </div>
+            </div>
+            <div class="signal-item">
+              <div class="signal-icon sell">SELL</div>
+              <div class="signal-text">
+                <strong>Harga di BAWAH garis MA</strong>
+                <p>Trend turun (bearish), waspada atau pertimbangkan sell</p>
+              </div>
+            </div>
+            <div class="signal-item">
+              <div class="signal-icon info">TIP</div>
+              <div class="signal-text">
+                <strong>Harga memotong MA dari bawah ke atas</strong>
+                <p>Sinyal potensial pembalikan ke trend naik</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bollinger Bands Section -->
+        <div class="indicator-section">
+          <h4>Bollinger Bands (BB) <span class="badge bb">Garis Ungu</span></h4>
+          <p class="indicator-desc">3 garis (atas, tengah, bawah) yang menunjukkan volatilitas dan area overbought/oversold.</p>
+          <div class="indicator-signals">
+            <div class="signal-item">
+              <div class="signal-icon warn">OB</div>
+              <div class="signal-text">
+                <strong>Harga menyentuh/melewati garis ATAS</strong>
+                <p>Overbought - harga mungkin terlalu tinggi, potensi koreksi turun</p>
+              </div>
+            </div>
+            <div class="signal-item">
+              <div class="signal-icon buy">OS</div>
+              <div class="signal-text">
+                <strong>Harga menyentuh/melewati garis BAWAH</strong>
+                <p>Oversold - harga mungkin terlalu rendah, potensi rebound naik</p>
+              </div>
+            </div>
+            <div class="signal-item">
+              <div class="signal-icon info">TIP</div>
+              <div class="signal-text">
+                <strong>Band menyempit (squeeze)</strong>
+                <p>Volatilitas rendah, siap-siap ada pergerakan besar</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- VWAP Section -->
+        <div class="indicator-section">
+          <h4>VWAP <span class="badge vwap">Garis Oranye</span></h4>
+          <p class="indicator-desc">Volume Weighted Average Price - harga rata-rata tertimbang volume. Indikator favorit trader institusional.</p>
+          <div class="indicator-signals">
+            <div class="signal-item">
+              <div class="signal-icon buy">BUY</div>
+              <div class="signal-text">
+                <strong>Harga di ATAS VWAP</strong>
+                <p>Buyer lebih dominan, trend bullish intraday</p>
+              </div>
+            </div>
+            <div class="signal-item">
+              <div class="signal-icon sell">SELL</div>
+              <div class="signal-text">
+                <strong>Harga di BAWAH VWAP</strong>
+                <p>Seller lebih dominan, trend bearish intraday</p>
+              </div>
+            </div>
+            <div class="signal-item">
+              <div class="signal-icon info">S/R</div>
+              <div class="signal-text">
+                <strong>Harga mendekati VWAP</strong>
+                <p>VWAP sering jadi area support/resistance dinamis</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
   <div class="confirm-modal" id="confirmModal">
     <div class="confirm-box">
       <div class="confirm-icon">
@@ -8063,6 +8335,10 @@ app.get('/monitoring', async (_req, res) => {
         </div>
       </div>
       <div class="tradingview-widget-container">
+        <button class="indicator-guide-btn" onclick="openIndicatorGuide()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Panduan Indikator
+        </button>
         <!-- TradingView Widget BEGIN - FULL FEATURES -->
         <div class="tradingview-widget-container__widget"></div>
         <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
@@ -8169,6 +8445,26 @@ app.get('/monitoring', async (_req, res) => {
       document.getElementById('confirmModal').classList.remove('show');
       if (confirmResolver) { confirmResolver(result); confirmResolver = null; }
     }
+
+    // Indicator Guide Modal Functions
+    function openIndicatorGuide() {
+      document.getElementById('indicatorModal').classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+    function closeIndicatorGuide() {
+      document.getElementById('indicatorModal').classList.remove('active');
+      document.body.style.overflow = '';
+    }
+    // Close on overlay click
+    document.getElementById('indicatorModal').addEventListener('click', function(e) {
+      if (e.target === this) closeIndicatorGuide();
+    });
+    // Close on Escape key
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && document.getElementById('indicatorModal').classList.contains('active')) {
+        closeIndicatorGuide();
+      }
+    });
 
     const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
