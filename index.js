@@ -7959,6 +7959,186 @@ app.get('/monitoring', async (_req, res) => {
     .no-indicator-msg p {
       font-size: 0.9em;
     }
+
+    /* Gold Calculator Button */
+    .calc-gold-btn {
+      background: linear-gradient(135deg, #f7931a 0%, #e8850a 100%);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 0.75em;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-left: 12px;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(247, 147, 26, 0.3);
+      vertical-align: middle;
+    }
+    .calc-gold-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(247, 147, 26, 0.4);
+    }
+
+    /* Gold Calculator Modal */
+    .calc-modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 9999;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    .calc-modal-overlay.active {
+      display: flex;
+    }
+    .calc-modal {
+      background: linear-gradient(145deg, #1a1f26 0%, #0f1419 100%);
+      border-radius: 20px;
+      border: 1px solid rgba(247, 147, 26, 0.3);
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+    }
+    .calc-modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(247, 147, 26, 0.1);
+    }
+    .calc-modal-header h3 {
+      color: #f7931a;
+      font-size: 1.1em;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .calc-modal-body {
+      padding: 24px;
+    }
+    .calc-input-group {
+      margin-bottom: 20px;
+    }
+    .calc-input-group label {
+      display: block;
+      color: #8b949e;
+      font-size: 0.85em;
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
+    .calc-input-group input, .calc-input-group select {
+      width: 100%;
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.05);
+      color: #e7e9ea;
+      font-size: 1em;
+      transition: all 0.2s;
+    }
+    .calc-input-group input:focus, .calc-input-group select:focus {
+      outline: none;
+      border-color: #f7931a;
+      background: rgba(247, 147, 26, 0.1);
+    }
+    .calc-input-group input::placeholder {
+      color: #6e7681;
+    }
+    .calc-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .calc-tab {
+      flex: 1;
+      padding: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.03);
+      color: #8b949e;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.85em;
+      font-weight: 600;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .calc-tab:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .calc-tab.active {
+      background: rgba(247, 147, 26, 0.2);
+      border-color: #f7931a;
+      color: #f7931a;
+    }
+    .calc-result {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+    .calc-result-label {
+      color: #8b949e;
+      font-size: 0.8em;
+      margin-bottom: 6px;
+    }
+    .calc-result-value {
+      color: #22c55e;
+      font-size: 1.5em;
+      font-weight: 700;
+    }
+    .calc-result-sub {
+      color: #8b949e;
+      font-size: 0.8em;
+      margin-top: 8px;
+    }
+    .calc-btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #f7931a 0%, #e8850a 100%);
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 1em;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 16px;
+      transition: all 0.2s;
+    }
+    .calc-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(247, 147, 26, 0.4);
+    }
+    .calc-current-price {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .calc-current-price span:first-child {
+      color: #8b949e;
+      font-size: 0.85em;
+    }
+    .calc-current-price span:last-child {
+      color: #f7931a;
+      font-weight: 600;
+    }
+
     .indicator-desc {
       color: #8b949e;
       font-size: 0.85em;
@@ -8388,6 +8568,57 @@ app.get('/monitoring', async (_req, res) => {
       </div>
     </div>
   </div>
+
+  <!-- Gold Calculator Modal -->
+  <div class="calc-modal-overlay" id="goldCalcModal">
+    <div class="calc-modal">
+      <div class="calc-modal-header">
+        <h3>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10h8M8 14h8"/></svg>
+          Kalkulator Emas
+        </h3>
+        <button class="indicator-modal-close" onclick="closeGoldCalc()">&times;</button>
+      </div>
+      <div class="calc-modal-body">
+        <div class="calc-current-price">
+          <span>Harga Beli Saat Ini</span>
+          <span id="calcCurrentPrice">Rp -</span>
+        </div>
+
+        <div class="calc-tabs">
+          <div class="calc-tab active" onclick="switchCalcTab('uangToGram')">Uang → Gram</div>
+          <div class="calc-tab" onclick="switchCalcTab('gramToUang')">Gram → Uang</div>
+        </div>
+
+        <div id="calcUangToGram">
+          <div class="calc-input-group">
+            <label>Jumlah Uang (Rp)</label>
+            <input type="number" id="calcInputUang" placeholder="Contoh: 10000000" oninput="calculateGold()">
+          </div>
+          <div class="calc-result" id="calcResultGram" style="display:none;">
+            <div class="calc-result-label">Anda mendapatkan</div>
+            <div class="calc-result-value" id="calcGramResult">0 gram</div>
+            <div class="calc-result-sub" id="calcGramSub"></div>
+          </div>
+        </div>
+
+        <div id="calcGramToUang" style="display:none;">
+          <div class="calc-input-group">
+            <label>Jumlah Gram</label>
+            <input type="number" id="calcInputGram" placeholder="Contoh: 5" step="0.0001" oninput="calculateMoney()">
+          </div>
+          <div class="calc-result" id="calcResultUang" style="display:none;">
+            <div class="calc-result-label">Nilai emas Anda</div>
+            <div class="calc-result-value" id="calcUangResult">Rp 0</div>
+            <div class="calc-result-sub" id="calcUangSub"></div>
+          </div>
+        </div>
+
+        <button class="calc-btn" onclick="resetCalc()">Reset</button>
+      </div>
+    </div>
+  </div>
+
   <div class="container">
     <div class="header">
       <div class="header-left">
@@ -8418,7 +8649,12 @@ app.get('/monitoring', async (_req, res) => {
     <div class="chart-section">
       <div class="chart-header">
         <div class="chart-title">
-          <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-3 3"/></svg>XAU/USD Chart <span id="trendIcon" style="margin-left:8px;"></span></h2>
+          <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-3 3"/></svg>XAU/USD Chart <span id="trendIcon" style="margin-left:8px;"></span>
+            <button class="calc-gold-btn" onclick="openGoldCalc()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/><line x1="8" y1="18" x2="10" y2="18"/></svg>
+              Hitung Emas
+            </button>
+          </h2>
           <span class="live-badge">Live</span>
         </div>
         <div class="chart-stats">
@@ -8943,9 +9179,89 @@ app.get('/monitoring', async (_req, res) => {
         if (document.getElementById('indicatorSettingsModal').classList.contains('active')) {
           closeIndicatorSettings();
         }
+        if (document.getElementById('goldCalcModal').classList.contains('active')) {
+          closeGoldCalc();
+        }
       }
     });
     // ========== END INDICATOR SYSTEM ==========
+
+    // ========== GOLD CALCULATOR ==========
+    let calcCurrentBuyPrice = 0;
+
+    function openGoldCalc() {
+      // Update harga saat ini dari display
+      const buyPriceText = document.getElementById('buyPrice').textContent;
+      const priceMatch = buyPriceText.replace(/[^\d]/g, '');
+      calcCurrentBuyPrice = parseInt(priceMatch) || 0;
+
+      document.getElementById('calcCurrentPrice').textContent =
+        calcCurrentBuyPrice > 0 ? 'Rp ' + calcCurrentBuyPrice.toLocaleString('id-ID') : 'Rp -';
+
+      document.getElementById('goldCalcModal').classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeGoldCalc() {
+      document.getElementById('goldCalcModal').classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    function switchCalcTab(tab) {
+      document.querySelectorAll('.calc-tab').forEach(t => t.classList.remove('active'));
+      event.target.classList.add('active');
+
+      if (tab === 'uangToGram') {
+        document.getElementById('calcUangToGram').style.display = 'block';
+        document.getElementById('calcGramToUang').style.display = 'none';
+      } else {
+        document.getElementById('calcUangToGram').style.display = 'none';
+        document.getElementById('calcGramToUang').style.display = 'block';
+      }
+    }
+
+    function calculateGold() {
+      const uang = parseFloat(document.getElementById('calcInputUang').value) || 0;
+      const resultDiv = document.getElementById('calcResultGram');
+
+      if (uang > 0 && calcCurrentBuyPrice > 0) {
+        const gram = uang / calcCurrentBuyPrice;
+        document.getElementById('calcGramResult').textContent = gram.toFixed(4) + ' gram';
+        document.getElementById('calcGramSub').textContent =
+          'Dengan harga Rp ' + calcCurrentBuyPrice.toLocaleString('id-ID') + '/gram';
+        resultDiv.style.display = 'block';
+      } else {
+        resultDiv.style.display = 'none';
+      }
+    }
+
+    function calculateMoney() {
+      const gram = parseFloat(document.getElementById('calcInputGram').value) || 0;
+      const resultDiv = document.getElementById('calcResultUang');
+
+      if (gram > 0 && calcCurrentBuyPrice > 0) {
+        const uang = gram * calcCurrentBuyPrice;
+        document.getElementById('calcUangResult').textContent = 'Rp ' + Math.round(uang).toLocaleString('id-ID');
+        document.getElementById('calcUangSub').textContent =
+          gram.toFixed(4) + ' gram x Rp ' + calcCurrentBuyPrice.toLocaleString('id-ID');
+        resultDiv.style.display = 'block';
+      } else {
+        resultDiv.style.display = 'none';
+      }
+    }
+
+    function resetCalc() {
+      document.getElementById('calcInputUang').value = '';
+      document.getElementById('calcInputGram').value = '';
+      document.getElementById('calcResultGram').style.display = 'none';
+      document.getElementById('calcResultUang').style.display = 'none';
+    }
+
+    // Close calc modal on overlay click
+    document.getElementById('goldCalcModal').addEventListener('click', function(e) {
+      if (e.target === this) closeGoldCalc();
+    });
+    // ========== END GOLD CALCULATOR ==========
 
     const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
