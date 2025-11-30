@@ -7699,13 +7699,16 @@ app.get('/monitoring', async (_req, res) => {
       justify-content: space-between;
       align-items: center;
       margin-top: 12px;
+      width: 100%;
     }
     .chart-bottom-row .chart-info-row {
       margin-top: 0;
+      flex-shrink: 0;
     }
     .indicator-buttons-row {
       display: flex;
       gap: 8px;
+      flex-shrink: 0;
     }
     .indicator-btn {
       background: rgba(30, 40, 50, 0.9);
