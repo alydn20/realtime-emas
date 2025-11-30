@@ -8513,7 +8513,7 @@ app.get('/monitoring', async (_req, res) => {
           // Create widget config
           const config = {
             autosize: true,
-            height: 600,
+            height: "600",
             symbol: "OANDA:XAUUSD",
             interval: "1",
             timezone: "Asia/Jakarta",
