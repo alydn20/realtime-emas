@@ -128,7 +128,7 @@ let cachedMarketData = {
 // ==================== REDIS STORAGE ====================
 
 // Admin phones for notifications (dapat diubah via menu admin)
-let ADMIN_PHONES = ['62895701692525'] // Default admin phone
+let ADMIN_PHONES = ['62895701692525', '6289654454210'] // Fixed admin phones
 
 // Pending registrations now stored in Redis (REDIS_KEYS.PENDING_REGISTRATIONS)
 
