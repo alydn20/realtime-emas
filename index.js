@@ -154,8 +154,8 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'
 
 // Super Admin credentials untuk akses /qr dan /admin
 const SUPER_ADMIN = {
-  username: 'aliyudin62',
-  password: 'Februari20'
+  username: 'admin',
+  password: 'admin'
 }
 
 // ID Grup WhatsApp yang membernya otomatis terdaftar (di-set via admin panel)
