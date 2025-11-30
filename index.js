@@ -4908,7 +4908,6 @@ app.get('/login', (_req, res) => {
         </button>
       </div>
 
-      <p class="footer-text">Dengan masuk, Anda menyetujui ketentuan layanan kami</p>
     </div>
   </div>
 
@@ -5812,9 +5811,85 @@ ${authScript}
       .btn { padding: 8px 14px; font-size: 0.82em; }
       .action-btn { padding: 4px 7px; font-size: 0.68em; }
     }
+
+    /* Professional Modal System */
+    .pro-modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(8px);
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      animation: fadeIn 0.2s ease;
+    }
+    .pro-modal-overlay.show { display: flex; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .pro-modal-box {
+      background: linear-gradient(180deg, rgba(25, 32, 42, 0.98) 0%, rgba(18, 24, 32, 0.98) 100%);
+      border-radius: 16px;
+      width: 90%;
+      max-width: 380px;
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+      animation: slideUp 0.25s ease;
+      overflow: hidden;
+    }
+    .pro-modal-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 24px auto 16px;
+    }
+    .pro-modal-icon.info { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .pro-modal-icon.success { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .pro-modal-icon.warning { background: rgba(251,191,36,0.15); color: #fbbf24; }
+    .pro-modal-icon.danger { background: rgba(239,68,68,0.15); color: #f87171; }
+    .pro-modal-icon svg { width: 28px; height: 28px; }
+    .pro-modal-content { padding: 0 24px 24px; text-align: center; }
+    .pro-modal-title { color: #fff; font-size: 1.1em; font-weight: 600; margin-bottom: 8px; }
+    .pro-modal-message { color: #9ca3af; font-size: 0.9em; line-height: 1.5; }
+    .pro-modal-buttons { display: flex; gap: 10px; margin-top: 20px; justify-content: center; }
+    .pro-modal-btn {
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-size: 0.88em;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+      min-width: 100px;
+    }
+    .pro-modal-btn.cancel { background: rgba(255,255,255,0.08); color: #e7e9ea; }
+    .pro-modal-btn.cancel:hover { background: rgba(255,255,255,0.15); }
+    .pro-modal-btn.confirm { background: linear-gradient(135deg, #f7931a 0%, #e8850f 100%); color: white; }
+    .pro-modal-btn.confirm:hover { transform: translateY(-1px); }
+    .pro-modal-btn.danger { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; }
+    .pro-modal-btn.danger:hover { transform: translateY(-1px); }
   </style>
 </head>
 <body>
+  <!-- Professional Modal -->
+  <div class="pro-modal-overlay" id="proModal">
+    <div class="pro-modal-box">
+      <div class="pro-modal-icon info" id="proModalIcon">
+        <svg id="proModalSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"></svg>
+      </div>
+      <div class="pro-modal-content">
+        <div class="pro-modal-title" id="proModalTitle">Title</div>
+        <div class="pro-modal-message" id="proModalMessage">Message</div>
+        <div class="pro-modal-buttons" id="proModalButtons"></div>
+      </div>
+    </div>
+  </div>
   <div class="container">
     <div id="mainContent">
       <!-- Header -->
@@ -6180,6 +6255,56 @@ ${authScript}
     // Admin sudah terautentikasi via /admin-login
     const adminPass = 'admin123'; // Default password untuk API calls
 
+    // ==================== Professional Modal System ====================
+    const modalIcons = {
+      info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
+      success: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+      warning: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+      danger: '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>'
+    };
+
+    function showModal(options) {
+      return new Promise((resolve) => {
+        const modal = document.getElementById('proModal');
+        const icon = document.getElementById('proModalIcon');
+        const svg = document.getElementById('proModalSvg');
+        const title = document.getElementById('proModalTitle');
+        const message = document.getElementById('proModalMessage');
+        const buttons = document.getElementById('proModalButtons');
+
+        const type = options.type || 'info';
+        icon.className = 'pro-modal-icon ' + type;
+        svg.innerHTML = modalIcons[type] || modalIcons.info;
+        title.textContent = options.title || '';
+        message.textContent = options.message || '';
+
+        buttons.innerHTML = '';
+        if (options.showCancel !== false && options.confirmText) {
+          const cancelBtn = document.createElement('button');
+          cancelBtn.className = 'pro-modal-btn cancel';
+          cancelBtn.textContent = options.cancelText || 'Batal';
+          cancelBtn.onclick = () => { modal.classList.remove('show'); resolve(false); };
+          buttons.appendChild(cancelBtn);
+        }
+
+        const confirmBtn = document.createElement('button');
+        confirmBtn.className = 'pro-modal-btn ' + (type === 'danger' ? 'danger' : 'confirm');
+        confirmBtn.textContent = options.confirmText || 'OK';
+        confirmBtn.onclick = () => { modal.classList.remove('show'); resolve(true); };
+        buttons.appendChild(confirmBtn);
+
+        modal.classList.add('show');
+      });
+    }
+
+    function showAlert(message, type = 'info') {
+      return showModal({ type, title: type === 'success' ? 'Berhasil' : type === 'danger' ? 'Error' : 'Informasi', message, showCancel: false, confirmText: 'OK' });
+    }
+
+    function showConfirm(message, options = {}) {
+      return showModal({ type: options.type || 'warning', title: options.title || 'Konfirmasi', message, confirmText: options.confirmText || 'Ya', cancelText: options.cancelText || 'Batal' });
+    }
+
     // Tab Navigation
     document.querySelectorAll('.section-tab').forEach(tab => {
       tab.addEventListener('click', () => {
@@ -6362,8 +6487,9 @@ ${authScript}
       });
     }
 
-    function resetSounds() {
-      if (!confirm('Reset semua sound ke default?')) return;
+    async function resetSounds() {
+      const confirmed = await showConfirm('Reset semua sound ke default?', { title: 'Reset Sound', type: 'warning' });
+      if (!confirmed) return;
 
       const result = document.getElementById('soundResult');
       result.className = 'result-msg success';
@@ -6403,7 +6529,7 @@ ${authScript}
       if (url) {
         const audio = new Audio(url);
         audio.volume = 0.5;
-        audio.play().catch(e => alert('Gagal memutar sound: ' + e.message));
+        audio.play().catch(e => showAlert('Gagal memutar sound: ' + e.message, 'danger'));
       } else {
         playDefaultSound(direction);
       }
@@ -6525,7 +6651,7 @@ ${authScript}
       const result = document.getElementById('syncResult');
 
       if (!groupId) {
-        alert('Pilih grup terlebih dahulu');
+        showAlert('Pilih grup terlebih dahulu', 'warning');
         return;
       }
 
@@ -6572,8 +6698,9 @@ ${authScript}
       });
     }
 
-    function clearInvalidUsers() {
-      if (!confirm('Hapus semua user dengan nomor invalid (bukan format Indonesia 08xx)?')) return;
+    async function clearInvalidUsers() {
+      const confirmed = await showConfirm('Hapus semua user dengan nomor invalid (bukan format Indonesia 08xx)?', { title: 'Hapus User Invalid', type: 'warning' });
+      if (!confirmed) return;
 
       const result = document.getElementById('syncResult');
       result.className = 'result-msg success';
@@ -6598,9 +6725,11 @@ ${authScript}
       });
     }
 
-    function clearAllUsers() {
-      if (!confirm('⚠️ HAPUS SEMUA USER? Aksi ini tidak dapat dibatalkan!')) return;
-      if (!confirm('Ketik OK untuk konfirmasi HAPUS SEMUA USER')) return;
+    async function clearAllUsers() {
+      const confirmed1 = await showConfirm('HAPUS SEMUA USER? Aksi ini tidak dapat dibatalkan!', { title: 'Peringatan', type: 'danger', confirmText: 'Lanjutkan' });
+      if (!confirmed1) return;
+      const confirmed2 = await showConfirm('Konfirmasi sekali lagi untuk HAPUS SEMUA USER', { title: 'Konfirmasi Final', type: 'danger', confirmText: 'Hapus Semua' });
+      if (!confirmed2) return;
 
       const result = document.getElementById('syncResult');
       result.className = 'result-msg success';
@@ -6625,8 +6754,9 @@ ${authScript}
       });
     }
 
-    function forceLogoutAll() {
-      if (!confirm('Force logout semua user? Semua user akan diminta login ulang.')) return;
+    async function forceLogoutAll() {
+      const confirmed = await showConfirm('Force logout semua user? Semua user akan diminta login ulang.', { title: 'Force Logout', type: 'warning' });
+      if (!confirmed) return;
 
       const result = document.getElementById('syncResult');
       result.className = 'result-msg success';
@@ -6694,8 +6824,9 @@ ${authScript}
         });
     }
 
-    function approveRegistration(phone) {
-      if (!confirm('Setujui pendaftaran ini?')) return;
+    async function approveRegistration(phone) {
+      const confirmed = await showConfirm('Setujui pendaftaran ini?', { title: 'Setujui Pendaftaran', type: 'info', confirmText: 'Setujui' });
+      if (!confirmed) return;
 
       fetch('/api/approve-registration', {
         method: 'POST',
@@ -6704,24 +6835,24 @@ ${authScript}
       })
       .then(r => r.json())
       .then(data => {
-        alert(data.message);
+        showAlert(data.message, 'success');
         loadPendingRegistrations();
         loadUsers();
       });
     }
 
-    function rejectRegistration(phone) {
-      const reason = prompt('Alasan penolakan (opsional):');
-      if (reason === null) return; // Cancelled
+    async function rejectRegistration(phone) {
+      const confirmed = await showConfirm('Tolak pendaftaran ini?', { title: 'Tolak Pendaftaran', type: 'warning', confirmText: 'Tolak' });
+      if (!confirmed) return;
 
       fetch('/api/reject-registration', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, reason })
+        body: JSON.stringify({ phone, reason: '' })
       })
       .then(r => r.json())
       .then(data => {
-        alert(data.message);
+        showAlert(data.message, 'success');
         loadPendingRegistrations();
       });
     }
@@ -6798,8 +6929,9 @@ ${authScript}
     }
 
     // Reset PIN user ke default (000000)
-    function resetPin(phone) {
-      if (!confirm('Reset PIN user +62' + phone + ' ke default (000000)?')) return;
+    async function resetPin(phone) {
+      const confirmed = await showConfirm('Reset PIN user +62' + phone + ' ke default (000000)?', { title: 'Reset PIN', type: 'warning' });
+      if (!confirmed) return;
 
       fetch('/api/admin/reset-pin', {
         method: 'POST',
@@ -6809,10 +6941,10 @@ ${authScript}
       .then(r => r.json())
       .then(data => {
         if (data.success) {
-          alert('PIN berhasil direset ke 000000');
+          showAlert('PIN berhasil direset ke 000000', 'success');
           loadUsers();
         } else {
-          alert('Error: ' + data.error);
+          showAlert('Error: ' + data.error, 'danger');
         }
       });
     }
@@ -6823,7 +6955,7 @@ ${authScript}
       const expiredDate = document.getElementById('newExpiredDate').value;
       const result = document.getElementById('addResult');
 
-      if (!phone) return alert('Nomor WA wajib diisi');
+      if (!phone) { showAlert('Nomor WA wajib diisi', 'warning'); return; }
 
       const bodyData = {
         password: adminPass,
@@ -6862,12 +6994,12 @@ ${authScript}
       const text = document.getElementById('bulkPhones').value.trim();
       const result = document.getElementById('bulkResult');
 
-      if (!text) return alert('Masukkan daftar nomor');
+      if (!text) { showAlert('Masukkan daftar nomor', 'warning'); return; }
 
       // Parse phones - support newline, comma, or space separated
       const phones = text.split(/[\\n,\\s]+/).map(p => p.trim()).filter(p => p.length > 0);
 
-      if (phones.length === 0) return alert('Tidak ada nomor valid');
+      if (phones.length === 0) { showAlert('Tidak ada nomor valid', 'warning'); return; }
 
       result.className = 'result-msg success';
       result.textContent = 'Mengimport ' + phones.length + ' nomor...';
@@ -6944,15 +7076,16 @@ ${authScript}
         if (data.success) {
           closeModal();
           loadUsers();
-          alert('User berhasil diupdate!');
+          showAlert('User berhasil diupdate!', 'success');
         } else {
-          alert(data.error || 'Gagal update user');
+          showAlert(data.error || 'Gagal update user', 'danger');
         }
       });
     }
 
-    function deleteUser(phone) {
-      if (!confirm('Hapus user +62' + phone + '?')) return;
+    async function deleteUser(phone) {
+      const confirmed = await showConfirm('Hapus user +62' + phone + '?', { title: 'Hapus User', type: 'danger', confirmText: 'Hapus' });
+      if (!confirmed) return;
 
       fetch('/api/admin/users', {
         method: 'DELETE',
@@ -6962,12 +7095,13 @@ ${authScript}
       .then(r => r.json())
       .then(data => {
         if (data.success) loadUsers();
-        else alert(data.error);
+        else showAlert(data.error, 'danger');
       });
     }
 
-    function blockUser(phone) {
-      if (!confirm('Blokir user +62' + phone + '?\\nUser tidak bisa login sampai di-unblock.')) return;
+    async function blockUser(phone) {
+      const confirmed = await showConfirm('Blokir user +62' + phone + '? User tidak bisa login sampai di-unblock.', { title: 'Blokir User', type: 'danger', confirmText: 'Blokir' });
+      if (!confirmed) return;
 
       fetch('/api/admin/users/block', {
         method: 'POST',
@@ -6977,16 +7111,17 @@ ${authScript}
       .then(r => r.json())
       .then(data => {
         if (data.success) {
-          alert('User berhasil diblokir');
+          showAlert('User berhasil diblokir', 'success');
           loadUsers();
         } else {
-          alert(data.error);
+          showAlert(data.error, 'danger');
         }
       });
     }
 
-    function unblockUser(phone) {
-      if (!confirm('Buka blokir user +62' + phone + '?')) return;
+    async function unblockUser(phone) {
+      const confirmed = await showConfirm('Buka blokir user +62' + phone + '?', { title: 'Unblock User', type: 'info', confirmText: 'Unblock' });
+      if (!confirmed) return;
 
       fetch('/api/admin/users/unblock', {
         method: 'POST',
@@ -6996,16 +7131,17 @@ ${authScript}
       .then(r => r.json())
       .then(data => {
         if (data.success) {
-          alert('User berhasil di-unblock');
+          showAlert('User berhasil di-unblock', 'success');
           loadUsers();
         } else {
-          alert(data.error);
+          showAlert(data.error, 'danger');
         }
       });
     }
 
-    function kickUser(phone) {
-      if (!confirm('⚠️ KICK +62' + phone + ' dari grup WhatsApp?\\n\\nUser akan di-kick dari grup DAN dihapus dari database!')) return;
+    async function kickUser(phone) {
+      const confirmed = await showConfirm('KICK +62' + phone + ' dari grup WhatsApp? User akan di-kick dari grup DAN dihapus dari database!', { title: 'Kick User', type: 'danger', confirmText: 'Kick' });
+      if (!confirmed) return;
 
       const result = document.getElementById('syncResult');
       result.className = 'result-msg success';
@@ -7047,7 +7183,7 @@ ${authScript}
       const title = document.getElementById('pushTitle').value;
       const message = document.getElementById('pushMessage').value;
 
-      if (!title || !message) return alert('Judul dan pesan wajib diisi');
+      if (!title || !message) { showAlert('Judul dan pesan wajib diisi', 'warning'); return; }
 
       fetch('/api/admin/push', {
         method: 'POST',
@@ -7057,10 +7193,10 @@ ${authScript}
       .then(r => r.json())
       .then(data => {
         if (data.success) {
-          alert('Notifikasi terkirim ke ' + data.sent + ' user');
+          showAlert('Notifikasi terkirim ke ' + data.sent + ' user', 'success');
           closePushModal();
         } else {
-          alert(data.error);
+          showAlert(data.error, 'danger');
         }
       });
     }
@@ -7705,9 +7841,118 @@ app.get('/monitoring', async (_req, res) => {
       .tradingview-widget-container { height: 280px; }
       .history-table th, .history-table td { padding: 6px 8px; font-size: 1.3em; }
     }
+
+    /* Professional Toast System */
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .toast {
+      background: rgba(20, 26, 34, 0.98);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+      animation: slideIn 0.3s ease;
+      max-width: 320px;
+    }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+    .toast-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .toast-icon svg { width: 18px; height: 18px; }
+    .toast.info .toast-icon { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .toast.success .toast-icon { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .toast.warning .toast-icon { background: rgba(251,191,36,0.15); color: #fbbf24; }
+    .toast.danger .toast-icon { background: rgba(239,68,68,0.15); color: #f87171; }
+    .toast-message { color: #e7e9ea; font-size: 0.9em; line-height: 1.4; }
+
+    /* Confirm Modal */
+    .confirm-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(8px);
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .confirm-modal.show { display: flex; }
+    .confirm-box {
+      background: linear-gradient(180deg, rgba(25, 32, 42, 0.98) 0%, rgba(18, 24, 32, 0.98) 100%);
+      border-radius: 16px;
+      padding: 24px;
+      width: 90%;
+      max-width: 340px;
+      text-align: center;
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+    }
+    .confirm-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: rgba(251,191,36,0.15);
+      color: #fbbf24;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+    }
+    .confirm-icon svg { width: 28px; height: 28px; }
+    .confirm-title { color: #fff; font-size: 1.1em; font-weight: 600; margin-bottom: 8px; }
+    .confirm-message { color: #9ca3af; font-size: 0.9em; line-height: 1.5; margin-bottom: 20px; }
+    .confirm-buttons { display: flex; gap: 10px; justify-content: center; }
+    .confirm-btn {
+      padding: 10px 24px;
+      border-radius: 10px;
+      font-size: 0.88em;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+    .confirm-btn.cancel { background: rgba(255,255,255,0.08); color: #e7e9ea; }
+    .confirm-btn.cancel:hover { background: rgba(255,255,255,0.15); }
+    .confirm-btn.ok { background: linear-gradient(135deg, #f7931a 0%, #e8850f 100%); color: white; }
+    .confirm-btn.ok:hover { transform: translateY(-1px); }
   </style>
 </head>
 <body>
+  <div class="toast-container" id="toastContainer"></div>
+  <div class="confirm-modal" id="confirmModal">
+    <div class="confirm-box">
+      <div class="confirm-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <div class="confirm-title" id="confirmTitle">Konfirmasi</div>
+      <div class="confirm-message" id="confirmMessage">Apakah Anda yakin?</div>
+      <div class="confirm-buttons">
+        <button class="confirm-btn cancel" onclick="resolveConfirm(false)">Batal</button>
+        <button class="confirm-btn ok" onclick="resolveConfirm(true)">Ya</button>
+      </div>
+    </div>
+  </div>
   <div class="container">
     <div class="header">
       <div class="header-left">
@@ -7854,6 +8099,40 @@ app.get('/monitoring', async (_req, res) => {
   </div>
 
   <script>
+    // ==================== Toast System ====================
+    const toastIcons = {
+      info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
+      success: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+      warning: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+      danger: '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>'
+    };
+
+    function showToast(message, type = 'info', duration = 4000) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = 'toast ' + type;
+      toast.innerHTML = '<div class="toast-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + (toastIcons[type] || toastIcons.info) + '</svg></div><div class="toast-message">' + message + '</div>';
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease forwards';
+        setTimeout(() => toast.remove(), 300);
+      }, duration);
+    }
+
+    let confirmResolver = null;
+    function showConfirm(message, title = 'Konfirmasi') {
+      return new Promise((resolve) => {
+        confirmResolver = resolve;
+        document.getElementById('confirmTitle').textContent = title;
+        document.getElementById('confirmMessage').textContent = message;
+        document.getElementById('confirmModal').classList.add('show');
+      });
+    }
+    function resolveConfirm(result) {
+      document.getElementById('confirmModal').classList.remove('show');
+      if (confirmResolver) { confirmResolver(result); confirmResolver = null; }
+    }
+
     const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
@@ -8132,7 +8411,7 @@ app.get('/monitoring', async (_req, res) => {
 
     async function requestNotificationPermission() {
       if (!('Notification' in window)) {
-        alert('Browser tidak mendukung notifikasi');
+        showToast('Browser tidak mendukung notifikasi', 'warning');
         return false;
       }
 
@@ -8324,7 +8603,8 @@ app.get('/monitoring', async (_req, res) => {
 
     // Logout function
     async function logout() {
-      if (!confirm('Yakin ingin keluar?')) return;
+      const confirmed = await showConfirm('Yakin ingin keluar?', 'Logout');
+      if (!confirmed) return;
 
       const session = localStorage.getItem('goldmonitor_session');
       if (session) {
@@ -8536,9 +8816,11 @@ app.get('/monitoring', async (_req, res) => {
 
         // Handle force logout from admin
         if (data.type === 'force_logout') {
-          alert('Sesi Anda telah berakhir. Silakan login kembali.');
-          localStorage.removeItem('session');
-          window.location.href = '/login';
+          showToast('Sesi Anda telah berakhir. Silakan login kembali.', 'warning');
+          setTimeout(() => {
+            localStorage.removeItem('goldmonitor_session');
+            window.location.href = '/login';
+          }, 2000);
           return;
         }
 
