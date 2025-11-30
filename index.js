@@ -4771,6 +4771,18 @@ app.get('/login', (_req, res) => {
       background: rgba(15, 20, 25, 1);
       box-shadow: 0 0 0 4px rgba(247,147,26,0.15);
     }
+    .pin-hint {
+      margin-top: 12px;
+      font-size: 0.8em;
+      color: #71767b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .pin-hint strong {
+      color: #f7931a;
+      margin-left: 4px;
+    }
     .user-info {
       background: rgba(74,222,128,0.08);
       border: 1px solid rgba(74,222,128,0.2);
@@ -4901,6 +4913,10 @@ app.get('/login', (_req, res) => {
             <input type="password" class="pin-input" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
             <input type="password" class="pin-input" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
             <input type="password" class="pin-input" maxlength="1" inputmode="numeric" pattern="[0-9]" autocomplete="off">
+          </div>
+          <div class="pin-hint">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:4px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            PIN default: <strong>000000</strong>
           </div>
         </div>
 
