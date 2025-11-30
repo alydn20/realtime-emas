@@ -8825,7 +8825,7 @@ app.get('/monitoring', async (_req, res) => {
         evtSource.close();
       }
       // Include session for online user tracking
-      const session = localStorage.getItem('session') || '';
+      const session = localStorage.getItem('goldmonitor_session') || '';
       evtSource = new EventSource('/sse?session=' + encodeURIComponent(session));
       setupSSEHandlers();
     }
