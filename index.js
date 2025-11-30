@@ -9534,8 +9534,8 @@ app.get('/monitoring', async (_req, res) => {
         const gram30jt = 30000000 / item.buy;
 
         // Calculate profit: (gram * harga_jual) - (modal - potongan)
-        // Potongan: 10jt=3.5%, 20jt=3.425%, 30jt=3.4%
-        const profit10jt = Math.round((gram10jt * item.sell) - (10000000 - 10000000 * 0.035));
+        // Potongan: 10jt=3.45%, 20jt=3.425%, 30jt=3.4%
+        const profit10jt = Math.round((gram10jt * item.sell) - (10000000 - 10000000 * 0.0345));
         const profit20jt = Math.round((gram20jt * item.sell) - (20000000 - 20000000 * 0.03425));
         const profit30jt = Math.round((gram30jt * item.sell) - (30000000 - 30000000 * 0.034));
 
@@ -10271,7 +10271,7 @@ app.get('/monitoring', async (_req, res) => {
             const gram10 = 10000000 / data.buy;
             const gram20 = 20000000 / data.buy;
             const gram30 = 30000000 / data.buy;
-            const profit10 = (gram10 * data.sell) - (10000000 - 10000000 * 0.035);
+            const profit10 = (gram10 * data.sell) - (10000000 - 10000000 * 0.0345);
             const profit20 = (gram20 * data.sell) - (20000000 - 20000000 * 0.03425);
             const profit30 = (gram30 * data.sell) - (30000000 - 30000000 * 0.034);
 
