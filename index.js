@@ -7443,10 +7443,29 @@ app.get('/monitoring', async (_req, res) => {
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
       border-radius: 20px;
-      border: 1px solid rgba(255,255,255,0.06);
+      border: 2px solid rgba(255,255,255,0.06);
       overflow: hidden;
       margin-bottom: 24px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+    .chart-section.glow-up {
+      border-color: #00c853 !important;
+      box-shadow: 0 0 20px rgba(0, 200, 83, 0.5), 0 0 40px rgba(0, 200, 83, 0.3), inset 0 0 20px rgba(0, 200, 83, 0.1);
+      animation: glowPulseUp 0.5s ease-in-out 3;
+    }
+    .chart-section.glow-down {
+      border-color: #ff5252 !important;
+      box-shadow: 0 0 20px rgba(255, 82, 82, 0.5), 0 0 40px rgba(255, 82, 82, 0.3), inset 0 0 20px rgba(255, 82, 82, 0.1);
+      animation: glowPulseDown 0.5s ease-in-out 3;
+    }
+    @keyframes glowPulseUp {
+      0%, 100% { box-shadow: 0 0 20px rgba(0, 200, 83, 0.5), 0 0 40px rgba(0, 200, 83, 0.3); }
+      50% { box-shadow: 0 0 30px rgba(0, 200, 83, 0.7), 0 0 60px rgba(0, 200, 83, 0.5); }
+    }
+    @keyframes glowPulseDown {
+      0%, 100% { box-shadow: 0 0 20px rgba(255, 82, 82, 0.5), 0 0 40px rgba(255, 82, 82, 0.3); }
+      50% { box-shadow: 0 0 30px rgba(255, 82, 82, 0.7), 0 0 60px rgba(255, 82, 82, 0.5); }
     }
     .chart-header {
       padding: 16px 20px;
@@ -10147,6 +10166,17 @@ app.get('/monitoring', async (_req, res) => {
               buyCard.classList.remove('updated', 'updated-up', 'updated-down', 'price-up', 'price-down');
               void buyCard.offsetWidth;
               buyCard.classList.add(change > 0 ? 'updated-up' : 'updated-down', change > 0 ? 'price-up' : 'price-down');
+
+              // Glow effect on chart section border
+              const chartSection = document.querySelector('.chart-section');
+              if (chartSection) {
+                chartSection.classList.remove('glow-up', 'glow-down');
+                void chartSection.offsetWidth;
+                chartSection.classList.add(change > 0 ? 'glow-up' : 'glow-down');
+                setTimeout(() => {
+                  chartSection.classList.remove('glow-up', 'glow-down');
+                }, 3000);
+              }
 
               // Save ke localStorage
               addToLocalHistory({
