@@ -3811,6 +3811,25 @@ app.post('/api/admin/users/clear-all', express.json(), async (req, res) => {
   }
 })
 
+// Admin: Force logout all users (clear all sessions)
+app.post('/api/admin/force-logout-all', express.json(), async (req, res) => {
+  const { password } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  try {
+    await redis.del(REDIS_KEYS.SESSIONS)
+    await redis.del(REDIS_KEYS.LOGIN_TOKENS)
+
+    // Broadcast ke semua client untuk logout
+    broadcastSSE({ type: 'force_logout', message: 'Session expired, please login again' })
+
+    pushLog(`Admin | Force logout all users`)
+    res.json({ success: true, message: 'Semua user berhasil di-logout' })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
 // Admin: Send push notification
 app.post('/api/admin/push', express.json(), async (req, res) => {
   const { password, title, message, phone, type = 'info' } = req.body
@@ -5869,6 +5888,7 @@ ${authScript}
             <button class="btn btn-secondary" onclick="loadWaGroups()">Refresh Grup</button>
             <button class="btn btn-danger btn-sm" onclick="clearInvalidUsers()">Hapus Invalid</button>
             <button class="btn btn-sm" style="background:#7f1d1d;color:white;" onclick="clearAllUsers()">Hapus Semua</button>
+            <button class="btn btn-sm" style="background:#f59e0b;color:#000;" onclick="forceLogoutAll()">Force Logout Semua</button>
           </div>
           <div class="warning-box">
             <p><strong>Catatan:</strong> WhatsApp menggunakan format LID (privacy) sehingga nomor telepon member tidak bisa diakses otomatis. User harus mendaftar sendiri via OTP atau ditambahkan manual oleh admin.</p>
@@ -6388,6 +6408,31 @@ ${authScript}
           result.className = 'result-msg success';
           result.textContent = 'Semua user berhasil dihapus.';
           loadUsers();
+        } else {
+          result.className = 'result-msg error';
+          result.textContent = 'Error: ' + data.error;
+        }
+        setTimeout(() => result.className = 'result-msg', 5000);
+      });
+    }
+
+    function forceLogoutAll() {
+      if (!confirm('Force logout semua user? Semua user akan diminta login ulang.')) return;
+
+      const result = document.getElementById('syncResult');
+      result.className = 'result-msg success';
+      result.textContent = 'Memproses force logout...';
+
+      fetch('/api/admin/force-logout-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          result.className = 'result-msg success';
+          result.textContent = 'Semua user berhasil di-logout. Mereka harus login ulang.';
         } else {
           result.className = 'result-msg error';
           result.textContent = 'Error: ' + data.error;
@@ -8282,6 +8327,14 @@ app.get('/monitoring', async (_req, res) => {
           customSoundUp = data.settings.soundUp || '';
           customSoundDown = data.settings.soundDown || '';
           console.log('Sound settings updated');
+          return;
+        }
+
+        // Handle force logout from admin
+        if (data.type === 'force_logout') {
+          alert('Sesi Anda telah berakhir. Silakan login kembali.');
+          localStorage.removeItem('session');
+          window.location.href = '/login';
           return;
         }
 
