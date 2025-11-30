@@ -7692,6 +7692,17 @@ app.get('/monitoring', async (_req, res) => {
     .indicator-btn.settings:hover {
       background: rgba(59, 130, 246, 1);
     }
+    .indicator-btn.calc {
+      background: linear-gradient(135deg, #f7931a 0%, #e8850a 100%);
+      border-color: rgba(247, 147, 26, 0.5);
+    }
+    .indicator-btn.calc:hover {
+      background: linear-gradient(135deg, #ffaa33 0%, #f7931a 100%);
+    }
+    .indicator-buttons:first-child {
+      left: 10px;
+      right: auto;
+    }
 
     /* Indicator Settings Modal */
     .indicator-settings-overlay {
@@ -8138,6 +8149,46 @@ app.get('/monitoring', async (_req, res) => {
       color: #f7931a;
       font-weight: 600;
     }
+    .calc-price-toggle {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .calc-price-option {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.03);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .calc-price-option:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .calc-price-option.active {
+      border-color: #f7931a;
+      background: rgba(247, 147, 26, 0.1);
+    }
+    .calc-price-option .price-label {
+      display: block;
+      color: #8b949e;
+      font-size: 0.75em;
+      margin-bottom: 4px;
+    }
+    .calc-price-option.active .price-label {
+      color: #f7931a;
+    }
+    .calc-price-option .price-value {
+      display: block;
+      color: #e7e9ea;
+      font-size: 1em;
+      font-weight: 700;
+    }
+    .calc-price-option.active .price-value {
+      color: #f7931a;
+    }
 
     .indicator-desc {
       color: #8b949e;
@@ -8580,9 +8631,15 @@ app.get('/monitoring', async (_req, res) => {
         <button class="indicator-modal-close" onclick="closeGoldCalc()">&times;</button>
       </div>
       <div class="calc-modal-body">
-        <div class="calc-current-price">
-          <span>Harga Beli Saat Ini</span>
-          <span id="calcCurrentPrice">Rp -</span>
+        <div class="calc-price-toggle">
+          <div class="calc-price-option active" onclick="switchPriceType('buy')" id="calcPriceBuy">
+            <span class="price-label">Harga Beli</span>
+            <span class="price-value" id="calcBuyPrice">Rp -</span>
+          </div>
+          <div class="calc-price-option" onclick="switchPriceType('sell')" id="calcPriceSell">
+            <span class="price-label">Harga Jual</span>
+            <span class="price-value" id="calcSellPrice">Rp -</span>
+          </div>
         </div>
 
         <div class="calc-tabs">
@@ -8649,12 +8706,7 @@ app.get('/monitoring', async (_req, res) => {
     <div class="chart-section">
       <div class="chart-header">
         <div class="chart-title">
-          <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-3 3"/></svg>XAU/USD Chart <span id="trendIcon" style="margin-left:8px;"></span>
-            <button class="calc-gold-btn" onclick="openGoldCalc()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/><line x1="8" y1="18" x2="10" y2="18"/></svg>
-              Hitung Emas
-            </button>
-          </h2>
+          <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-3 3"/></svg>XAU/USD Chart <span id="trendIcon" style="margin-left:8px;"></span></h2>
           <span class="live-badge">Live</span>
         </div>
         <div class="chart-stats">
@@ -8700,6 +8752,12 @@ app.get('/monitoring', async (_req, res) => {
       </div>
       <div class="tradingview-widget-container">
         <div class="indicator-buttons">
+          <button class="indicator-btn calc" onclick="openGoldCalc()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10h8M8 14h8"/></svg>
+            Hitung Emas
+          </button>
+        </div>
+        <div class="indicator-buttons" style="right:10px;left:auto;">
           <button class="indicator-btn settings" onclick="openIndicatorSettings()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             Indikator
@@ -9187,21 +9245,18 @@ app.get('/monitoring', async (_req, res) => {
     // ========== END INDICATOR SYSTEM ==========
 
     // ========== GOLD CALCULATOR ==========
-    let calcCurrentBuyPrice = 0;
+    let calcCurrentPrice = 0;
+    let calcPriceType = 'buy'; // 'buy' or 'sell'
 
     function openGoldCalc() {
-      // Gunakan lastBuy yang sudah tersimpan dari SSE data
-      calcCurrentBuyPrice = lastBuy || 0;
+      // Update both prices
+      document.getElementById('calcBuyPrice').textContent =
+        lastBuy > 0 ? 'Rp ' + lastBuy.toLocaleString('id-ID') : 'Rp -';
+      document.getElementById('calcSellPrice').textContent =
+        lastSell > 0 ? 'Rp ' + lastSell.toLocaleString('id-ID') : 'Rp -';
 
-      // Jika lastBuy belum ada, coba parse dari display
-      if (!calcCurrentBuyPrice) {
-        const buyPriceText = document.getElementById('buyPrice').textContent || '';
-        const priceMatch = buyPriceText.replace(/[^\d]/g, '');
-        calcCurrentBuyPrice = parseInt(priceMatch) || 0;
-      }
-
-      document.getElementById('calcCurrentPrice').textContent =
-        calcCurrentBuyPrice > 0 ? 'Rp ' + calcCurrentBuyPrice.toLocaleString('id-ID') : 'Rp -';
+      // Set current price based on selected type
+      calcCurrentPrice = calcPriceType === 'buy' ? lastBuy : lastSell;
 
       document.getElementById('goldCalcModal').classList.add('active');
       document.body.style.overflow = 'hidden';
@@ -9210,6 +9265,19 @@ app.get('/monitoring', async (_req, res) => {
     function closeGoldCalc() {
       document.getElementById('goldCalcModal').classList.remove('active');
       document.body.style.overflow = '';
+    }
+
+    function switchPriceType(type) {
+      calcPriceType = type;
+      calcCurrentPrice = type === 'buy' ? lastBuy : lastSell;
+
+      // Update UI
+      document.getElementById('calcPriceBuy').classList.toggle('active', type === 'buy');
+      document.getElementById('calcPriceSell').classList.toggle('active', type === 'sell');
+
+      // Recalculate if there's input
+      calculateGold();
+      calculateMoney();
     }
 
     function switchCalcTab(tab) {
@@ -9229,11 +9297,11 @@ app.get('/monitoring', async (_req, res) => {
       const uang = parseFloat(document.getElementById('calcInputUang').value) || 0;
       const resultDiv = document.getElementById('calcResultGram');
 
-      if (uang > 0 && calcCurrentBuyPrice > 0) {
-        const gram = uang / calcCurrentBuyPrice;
+      if (uang > 0 && calcCurrentPrice > 0) {
+        const gram = uang / calcCurrentPrice;
         document.getElementById('calcGramResult').textContent = gram.toFixed(4) + ' gram';
         document.getElementById('calcGramSub').textContent =
-          'Dengan harga Rp ' + calcCurrentBuyPrice.toLocaleString('id-ID') + '/gram';
+          'Harga ' + (calcPriceType === 'buy' ? 'Beli' : 'Jual') + ': Rp ' + calcCurrentPrice.toLocaleString('id-ID') + '/gram';
         resultDiv.style.display = 'block';
       } else {
         resultDiv.style.display = 'none';
@@ -9244,11 +9312,11 @@ app.get('/monitoring', async (_req, res) => {
       const gram = parseFloat(document.getElementById('calcInputGram').value) || 0;
       const resultDiv = document.getElementById('calcResultUang');
 
-      if (gram > 0 && calcCurrentBuyPrice > 0) {
-        const uang = gram * calcCurrentBuyPrice;
+      if (gram > 0 && calcCurrentPrice > 0) {
+        const uang = gram * calcCurrentPrice;
         document.getElementById('calcUangResult').textContent = 'Rp ' + Math.round(uang).toLocaleString('id-ID');
         document.getElementById('calcUangSub').textContent =
-          gram.toFixed(4) + ' gram x Rp ' + calcCurrentBuyPrice.toLocaleString('id-ID');
+          gram.toFixed(4) + ' gram x Rp ' + calcCurrentPrice.toLocaleString('id-ID') + ' (' + (calcPriceType === 'buy' ? 'Beli' : 'Jual') + ')';
         resultDiv.style.display = 'block';
       } else {
         resultDiv.style.display = 'none';
