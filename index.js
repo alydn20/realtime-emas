@@ -8506,6 +8506,20 @@ app.get('/monitoring', async (_req, res) => {
       .stat-item .stat-change { font-size: 0.7em; padding: 2px 6px; border-radius: 4px; }
       .tradingview-widget-container { height: 350px; }
 
+      /* Responsive buttons */
+      .chart-bottom-row {
+        flex-direction: column;
+        gap: 10px;
+      }
+      .indicator-buttons-row {
+        position: static;
+        justify-content: center;
+      }
+      .indicator-btn {
+        padding: 4px 8px;
+        font-size: 0.65em;
+      }
+
       .history-section { border-radius: 14px; }
       .history-header { padding: 12px 16px; }
       .history-header h2 { font-size: 0.95em; }
