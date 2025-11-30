@@ -7643,7 +7643,7 @@ app.get('/monitoring', async (_req, res) => {
     }
 
     .tradingview-widget-container {
-      height: 500px;
+      height: 550px;
       position: relative;
     }
     .tradingview-widget-container__widget {
