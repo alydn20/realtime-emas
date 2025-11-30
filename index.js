@@ -10582,6 +10582,9 @@ async function start() {
   */
 
   // ==================== ADMIN WHATSAPP COMMANDS ====================
+  // Store LID to Phone mapping for admin verification
+  const lidToPhoneMap = new Map()
+
   // Commands hanya bisa digunakan oleh nomor admin yang terdaftar
   sock.ev.on('messages.upsert', async (ev) => {
     if (!isReady || ev.type !== 'notify') return
@@ -10593,18 +10596,38 @@ async function start() {
         // Skip messages from self
         if (msg.key.fromMe) continue
 
-        // Get sender phone number
+        // Get sender JID
         const senderJid = msg.key.remoteJid
         if (!senderJid) continue
 
         const isGroup = senderJid.endsWith('@g.us')
+        const isLid = senderJid.endsWith('@lid')
 
-        // Get actual sender (for group messages)
+        // Get actual sender
         let senderPhone = ''
+        let senderLid = ''
+
         if (isGroup) {
-          senderPhone = msg.key.participant?.replace('@s.whatsapp.net', '') || ''
+          const participant = msg.key.participant || ''
+          if (participant.endsWith('@lid')) {
+            senderLid = participant.replace('@lid', '')
+          } else {
+            senderPhone = participant.replace('@s.whatsapp.net', '')
+          }
+        } else if (isLid) {
+          senderLid = senderJid.replace('@lid', '')
         } else {
           senderPhone = senderJid.replace('@s.whatsapp.net', '')
+        }
+
+        // Try to get phone from stored mapping if we have LID
+        if (senderLid && !senderPhone) {
+          senderPhone = lidToPhoneMap.get(senderLid) || ''
+        }
+
+        // Store LID mapping if we have both
+        if (senderLid && senderPhone) {
+          lidToPhoneMap.set(senderLid, senderPhone)
         }
 
         // Extract message text
@@ -10620,13 +10643,59 @@ async function start() {
         const lowerText = text.toLowerCase().trim()
 
         // Debug log
-        pushLog(`WA CMD | Received: "${text}" from ${senderPhone}`)
+        const senderInfo = senderPhone || `LID:${senderLid}`
+        pushLog(`WA CMD | Received: "${text}" from ${senderInfo}`)
         pushLog(`WA CMD | Admin phones: ${ADMIN_PHONES.join(', ')}`)
 
-        // Check if sender is admin
-        const isAdmin = ADMIN_PHONES.includes(senderPhone)
+        // Check if sender is admin (by phone or by first admin LID mapping)
+        let isAdmin = false
+        if (senderPhone) {
+          isAdmin = ADMIN_PHONES.includes(senderPhone)
+        }
+
+        // If using LID and not verified yet, check if this is the first admin trying to register
+        // Allow first registered admin phone's LID to be auto-mapped
+        if (!isAdmin && senderLid && ADMIN_PHONES.length > 0) {
+          // Check if any admin phone has this LID mapped
+          for (const [lid, phone] of lidToPhoneMap.entries()) {
+            if (ADMIN_PHONES.includes(phone) && lid === senderLid) {
+              isAdmin = true
+              senderPhone = phone
+              break
+            }
+          }
+        }
+
+        // Special command to register LID for admin
+        if (lowerText.startsWith('/registeradmin ') && senderLid) {
+          const inputPhone = text.substring(15).trim().replace(/\D/g, '')
+          let normalizedPhone = inputPhone
+          if (normalizedPhone.startsWith('0')) normalizedPhone = '62' + normalizedPhone.substring(1)
+          if (!normalizedPhone.startsWith('62')) normalizedPhone = '62' + normalizedPhone
+
+          if (ADMIN_PHONES.includes(normalizedPhone)) {
+            lidToPhoneMap.set(senderLid, normalizedPhone)
+            await sock.sendMessage(senderJid, {
+              text: `✅ *LID Terdaftar*\n\nLID: ${senderLid}\nPhone: +${normalizedPhone}\n\nSekarang Anda bisa menggunakan command admin.`
+            }, { quoted: msg })
+            pushLog(`WA CMD | Admin LID registered: ${senderLid} -> ${normalizedPhone}`)
+            continue
+          } else {
+            await sock.sendMessage(senderJid, {
+              text: `❌ Nomor ${normalizedPhone} bukan admin. Pastikan nomor sudah terdaftar di Admin Phones.`
+            }, { quoted: msg })
+            continue
+          }
+        }
+
         if (!isAdmin) {
-          pushLog(`WA CMD | ${senderPhone} is NOT admin, ignoring`)
+          // Send help message for unregistered admin with LID
+          if (senderLid && lowerText === '/help') {
+            await sock.sendMessage(senderJid, {
+              text: `⚠️ *LID Belum Terdaftar*\n\nWhatsApp Anda menggunakan format LID baru.\nUntuk mendaftarkan LID, ketik:\n\n/registeradmin 08xxxxxxxxxx\n\n(Gunakan nomor yang terdaftar di Admin Phones)`
+            }, { quoted: msg })
+          }
+          pushLog(`WA CMD | ${senderInfo} is NOT admin, ignoring`)
           continue
         }
 
