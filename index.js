@@ -7141,28 +7141,6 @@ app.get('/monitoring', async (_req, res) => {
       gap: 12px;
     }
 
-    /* Header Clock */
-    .header-clock {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      padding: 8px 14px;
-      background: rgba(247,147,26,0.08);
-      border: 1px solid rgba(247,147,26,0.2);
-      border-radius: 10px;
-    }
-    .header-clock .clock-time {
-      font-size: 1.2em;
-      font-weight: 600;
-      color: #f7931a;
-      font-family: 'JetBrains Mono', monospace;
-      letter-spacing: 1px;
-    }
-    .header-clock .clock-date {
-      font-size: 0.72em;
-      color: #8b949e;
-    }
-
     /* Install Button */
     .install-btn {
       display: none;
@@ -7353,6 +7331,23 @@ app.get('/monitoring', async (_req, res) => {
       background: linear-gradient(135deg, rgba(247,147,26,0.1), rgba(247,147,26,0.05));
       border: 1px solid rgba(247,147,26,0.2);
       border-radius: 12px;
+    }
+    .stat-item.clock-item {
+      background: linear-gradient(135deg, rgba(247,147,26,0.1), rgba(247,147,26,0.05));
+      border: 1px solid rgba(247,147,26,0.2);
+      min-width: 140px;
+    }
+    .stat-item.clock-item .clock-time {
+      font-size: 1.1em;
+      font-weight: 700;
+      color: #f7931a;
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: 1px;
+    }
+    .stat-item.clock-item .clock-date {
+      font-size: 0.7em;
+      color: #8b949e;
+      margin-top: 4px;
     }
     .clock-time {
       font-size: 1.3em;
@@ -7608,8 +7603,6 @@ app.get('/monitoring', async (_req, res) => {
       }
       .header-left h1 { font-size: 1.15em; flex-wrap: wrap; justify-content: center; }
       .header-right { text-align: center; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 10px; }
-      .header-clock { flex-direction: row; gap: 10px; align-items: center; }
-      .header-clock .clock-time { font-size: 1.1em; }
       .sound-toggle-header { margin-left: 0; }
       .chart-section { margin-bottom: 16px; border-radius: 16px; }
       .chart-header { padding: 14px 16px; gap: 12px; }
@@ -7642,9 +7635,9 @@ app.get('/monitoring', async (_req, res) => {
       .header-left .subtitle { font-size: 0.8em; }
       .sound-toggle-header { padding: 6px 10px; }
       .sound-toggle-header svg { width: 16px; height: 16px; }
-      .header-clock { padding: 6px 10px; }
-      .header-clock .clock-time { font-size: 1em; }
-      .header-clock .clock-date { font-size: 0.68em; }
+      .stat-item.clock-item { min-width: 110px; }
+      .stat-item.clock-item .clock-time { font-size: 0.95em; }
+      .stat-item.clock-item .clock-date { font-size: 0.6em; }
 
       .chart-section {
         margin-bottom: 12px;
@@ -7705,10 +7698,6 @@ app.get('/monitoring', async (_req, res) => {
         <div class="subtitle">Real-time Treasury Gold Rates</div>
       </div>
       <div class="header-right">
-        <div class="header-clock">
-          <span class="clock-time" id="clock2">--:--:--</span>
-          <span class="clock-date" id="dateInfo2">Loading...</span>
-        </div>
         <button class="install-btn" id="installBtn" onclick="installApp()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Install
@@ -7761,6 +7750,10 @@ app.get('/monitoring', async (_req, res) => {
             <span class="stat-label">30jt</span>
             <span class="stat-value" id="gram30">-</span>
             <span class="stat-change up" id="profit30">-</span>
+          </div>
+          <div class="stat-item clock-item">
+            <span class="stat-value clock-time" id="clock2">--:--:--</span>
+            <span class="stat-label clock-date" id="dateInfo2">Loading...</span>
           </div>
         </div>
       </div>
