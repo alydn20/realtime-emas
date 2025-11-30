@@ -8061,10 +8061,6 @@ app.get('/monitoring', async (_req, res) => {
             <span class="info-time" id="clock2">--:--:--</span>
             <span class="info-date" id="dateInfo2">Loading...</span>
           </div>
-          <div class="info-item user-info-display">
-            <span class="info-label">No. HP:</span>
-            <span class="info-value" id="userPhoneDisplay">+62xxx</span>
-          </div>
         </div>
       </div>
       <div class="tradingview-widget-container">
@@ -8676,13 +8672,6 @@ app.get('/monitoring', async (_req, res) => {
             localStorage.removeItem('goldmonitor_session');
             window.location.replace('/login');
             return;
-          }
-          // Display user phone number
-          if (data.phone) {
-            const phoneDisplay = document.getElementById('userPhoneDisplay');
-            if (phoneDisplay) {
-              phoneDisplay.textContent = '+' + data.phone;
-            }
           }
           // Check if PIN change is required
           return fetch('/api/check-pin-status?session=' + session);
