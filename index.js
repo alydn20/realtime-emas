@@ -9190,10 +9190,15 @@ app.get('/monitoring', async (_req, res) => {
     let calcCurrentBuyPrice = 0;
 
     function openGoldCalc() {
-      // Update harga saat ini dari display
-      const buyPriceText = document.getElementById('buyPrice').textContent;
-      const priceMatch = buyPriceText.replace(/[^\d]/g, '');
-      calcCurrentBuyPrice = parseInt(priceMatch) || 0;
+      // Gunakan lastBuy yang sudah tersimpan dari SSE data
+      calcCurrentBuyPrice = lastBuy || 0;
+
+      // Jika lastBuy belum ada, coba parse dari display
+      if (!calcCurrentBuyPrice) {
+        const buyPriceText = document.getElementById('buyPrice').textContent || '';
+        const priceMatch = buyPriceText.replace(/[^\d]/g, '');
+        calcCurrentBuyPrice = parseInt(priceMatch) || 0;
+      }
 
       document.getElementById('calcCurrentPrice').textContent =
         calcCurrentBuyPrice > 0 ? 'Rp ' + calcCurrentBuyPrice.toLocaleString('id-ID') : 'Rp -';
