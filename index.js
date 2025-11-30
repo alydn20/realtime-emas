@@ -8092,7 +8092,10 @@ app.get('/monitoring', async (_req, res) => {
           "popup_height": "650",
           "studies": [
             "MASimple@tv-basicstudies",
-            "BB@tv-basicstudies"
+            "BB@tv-basicstudies",
+            "RSI@tv-basicstudies",
+            "MACD@tv-basicstudies",
+            "PivotPointsStandard@tv-basicstudies"
           ],
           "support_host": "https://www.tradingview.com"
         }
