@@ -2699,7 +2699,7 @@ app.get('/sw.js', (_req, res) => {
   res.setHeader('Content-Type', 'application/javascript')
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
   res.send(`
-    const CACHE_VERSION = 'gold-monitor-v7';
+    const CACHE_VERSION = 'gold-monitor-v5';
 
     self.addEventListener('install', (e) => {
       self.skipWaiting();
@@ -2721,19 +2721,17 @@ app.get('/sw.js', (_req, res) => {
     });
 
     self.addEventListener('fetch', (e) => {
-      // Skip cross-origin requests entirely - let browser handle them
-      if (!e.request.url.startsWith(self.location.origin)) {
+      // Jangan cache HTML - selalu fetch fresh
+      if (e.request.mode === 'navigate' || e.request.url.includes('/monitoring') || e.request.url.includes('/login') || e.request.url.includes('/install')) {
+        e.respondWith(fetch(e.request));
         return;
       }
-      // Only cache same-origin assets
-      if (e.request.url.includes('/icon.png') || e.request.url.includes('/manifest')) {
-        e.respondWith(
-          caches.match(e.request).then((response) => {
-            return response || fetch(e.request);
-          })
-        );
-      }
-      // Let all other requests pass through without interception
+      // Cache hanya untuk assets (icon, manifest)
+      e.respondWith(
+        caches.match(e.request).then((response) => {
+          return response || fetch(e.request);
+        })
+      );
     });
 
     // Handle Push Notifications
