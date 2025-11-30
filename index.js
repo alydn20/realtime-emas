@@ -4705,9 +4705,11 @@ app.get('/login', (_req, res) => {
       color: white;
       border: none;
       margin-top: 10px;
-      box-shadow: 0 4px 20px rgba(37,211,102,0.35);
+      padding: 10px 16px;
+      font-size: 0.85em;
+      box-shadow: 0 3px 12px rgba(37,211,102,0.25);
     }
-    .btn-register:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(37,211,102,0.45); }
+    .btn-register:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 5px 18px rgba(37,211,102,0.35); }
     .message {
       padding: 14px 16px;
       border-radius: 12px;
@@ -4877,7 +4879,7 @@ app.get('/login', (_req, res) => {
           Masuk ke Akun
         </button>
         <button class="btn btn-register" onclick="daftarWhatsApp()">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle;margin-right:4px;">
             <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
           </svg>
           Daftar
@@ -5053,7 +5055,7 @@ app.get('/login', (_req, res) => {
     // Daftar via WhatsApp
     function daftarWhatsApp() {
       const phoneInput = document.getElementById('phoneInput');
-      let phone = phoneInput.value.replace(/\D/g, '');
+      let phone = phoneInput.value.replace(/\\D/g, '');
 
       if (phone.startsWith('62')) phone = phone.substring(2);
       if (phone.startsWith('0')) phone = phone.substring(1);
@@ -5064,7 +5066,7 @@ app.get('/login', (_req, res) => {
         return;
       }
 
-      const message = encodeURIComponent('Halo, saya ingin daftar grup harga Treasury.\n\nNomor WA saya: +62' + phone);
+      const message = encodeURIComponent('Halo, saya ingin daftar grup harga Treasury.\\n\\nNomor WA saya: +62' + phone);
       const waUrl = 'https://wa.me/6289654454210?text=' + message;
       window.open(waUrl, '_blank');
     }
@@ -7465,6 +7467,29 @@ app.get('/monitoring', async (_req, res) => {
       box-shadow: 0 2px 10px rgba(34,197,94,0.3);
       animation: pulse 2s infinite;
     }
+    .calc-btn-header {
+      background: linear-gradient(135deg, #f7931a 0%, #e8850a 100%);
+      color: #fff;
+      font-size: 0.7em;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      box-shadow: 0 2px 10px rgba(247,147,26,0.3);
+      transition: all 0.2s ease;
+    }
+    .calc-btn-header:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 15px rgba(247,147,26,0.4);
+    }
+    .calc-btn-header svg {
+      width: 12px;
+      height: 12px;
+    }
     @keyframes pulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.7; }
@@ -8727,6 +8752,10 @@ app.get('/monitoring', async (_req, res) => {
         <div class="chart-title">
           <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-3 3"/></svg>XAU/USD Chart <span id="trendIcon" style="margin-left:8px;"></span></h2>
           <span class="live-badge">Live</span>
+          <button class="calc-btn-header" onclick="openGoldCalc()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10h8M8 14h8"/></svg>
+            Hitung Emas
+          </button>
         </div>
         <div class="chart-stats">
           <div class="stat-item" id="buyCard">
@@ -8771,12 +8800,6 @@ app.get('/monitoring', async (_req, res) => {
       </div>
       <div class="tradingview-widget-container">
         <div class="indicator-buttons">
-          <button class="indicator-btn calc" onclick="openGoldCalc()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10h8M8 14h8"/></svg>
-            Hitung Emas
-          </button>
-        </div>
-        <div class="indicator-buttons" style="right:10px;left:auto;">
           <button class="indicator-btn settings" onclick="openIndicatorSettings()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             Indikator
@@ -10558,6 +10581,337 @@ async function start() {
     }
   })
   */
+
+  // ==================== ADMIN WHATSAPP COMMANDS ====================
+  // Commands hanya bisa digunakan oleh nomor admin yang terdaftar
+  sock.ev.on('messages.upsert', async (ev) => {
+    if (!isReady || ev.type !== 'notify') return
+
+    for (const msg of ev.messages) {
+      try {
+        if (!msg.message) continue
+
+        // Get sender phone number
+        const senderJid = msg.key.remoteJid
+        const isGroup = senderJid.endsWith('@g.us')
+
+        // Get actual sender (for group messages)
+        let senderPhone = ''
+        if (isGroup) {
+          senderPhone = msg.key.participant?.replace('@s.whatsapp.net', '') || ''
+        } else {
+          senderPhone = senderJid.replace('@s.whatsapp.net', '')
+        }
+
+        // Check if sender is admin
+        const isAdmin = ADMIN_PHONES.includes(senderPhone)
+        if (!isAdmin) continue
+
+        // Extract message text
+        const text = msg.message.conversation ||
+                     msg.message.extendedTextMessage?.text ||
+                     msg.message.imageMessage?.caption || ''
+
+        if (!text) continue
+
+        const lowerText = text.toLowerCase().trim()
+
+        // ===== COMMAND: /help =====
+        if (lowerText === '/help' || lowerText === '/menu') {
+          const helpText = `🤖 *ADMIN COMMANDS*
+
+📋 *Manajemen User:*
+• /add 08xxx - Tambah user baru
+• /add 08xxx 30 - Tambah user + expired 30 hari
+• /del 08xxx - Hapus user dari database
+• /kick 08xxx - Kick dari grup + hapus database
+• /list - Lihat semua user
+
+📊 *Statistik:*
+• /stats - Statistik sistem
+• /online - User yang sedang online
+
+❓ *Bantuan:*
+• /help - Tampilkan menu ini
+
+_Ganti 08xxx dengan nomor WA target_`
+
+          await sock.sendMessage(senderJid, { text: helpText }, { quoted: msg })
+          continue
+        }
+
+        // ===== COMMAND: /add <phone> [days] =====
+        if (lowerText.startsWith('/add ')) {
+          const parts = text.substring(5).trim().split(/\s+/)
+          let phone = parts[0]
+          const days = parts[1] ? parseInt(parts[1]) : null
+
+          if (!phone) {
+            await sock.sendMessage(senderJid, { text: '❌ Format: /add 08xxx [hari]' }, { quoted: msg })
+            continue
+          }
+
+          // Normalize phone
+          phone = phone.replace(/\D/g, '')
+          if (phone.startsWith('0')) phone = '62' + phone.substring(1)
+          if (!phone.startsWith('62')) phone = '62' + phone
+
+          // Check if exists
+          const existing = await redis.hget(REDIS_KEYS.USERS, phone)
+          if (existing) {
+            await sock.sendMessage(senderJid, { text: `⚠️ User +${phone} sudah terdaftar` }, { quoted: msg })
+            continue
+          }
+
+          // Calculate expired
+          const now = Date.now()
+          let expired = null
+          if (days && days > 0) {
+            expired = now + (days * 24 * 60 * 60 * 1000)
+          }
+
+          // Add user
+          const userData = {
+            name: 'Member ' + phone.substring(2),
+            createdAt: now,
+            expired: expired,
+            source: 'wa_command'
+          }
+
+          await redis.hset(REDIS_KEYS.USERS, { [phone]: JSON.stringify(userData) })
+
+          const expiredText = expired
+            ? new Date(expired).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+            : 'Lifetime'
+
+          await sock.sendMessage(senderJid, {
+            text: `✅ *User Ditambahkan*\n\n📱 Nomor: +${phone}\n⏰ Expired: ${expiredText}\n📅 Dibuat: ${new Date().toLocaleDateString('id-ID')}`
+          }, { quoted: msg })
+
+          pushLog(`WA CMD | Admin ${senderPhone} added user +${phone}`)
+          continue
+        }
+
+        // ===== COMMAND: /del <phone> =====
+        if (lowerText.startsWith('/del ')) {
+          let phone = text.substring(5).trim()
+
+          if (!phone) {
+            await sock.sendMessage(senderJid, { text: '❌ Format: /del 08xxx' }, { quoted: msg })
+            continue
+          }
+
+          // Normalize phone
+          phone = phone.replace(/\D/g, '')
+          if (phone.startsWith('0')) phone = '62' + phone.substring(1)
+          if (!phone.startsWith('62')) phone = '62' + phone
+
+          // Check if exists
+          const existing = await redis.hget(REDIS_KEYS.USERS, phone)
+          if (!existing) {
+            await sock.sendMessage(senderJid, { text: `❌ User +${phone} tidak ditemukan` }, { quoted: msg })
+            continue
+          }
+
+          // Delete user
+          await Promise.all([
+            redis.hdel(REDIS_KEYS.USERS, phone),
+            redis.hdel(REDIS_KEYS.PUSH_SUBS, phone)
+          ])
+
+          // Remove sessions
+          const sessions = await redis.hgetall(REDIS_KEYS.SESSIONS)
+          for (const [sessId, sessPhone] of Object.entries(sessions || {})) {
+            if (sessPhone === phone) {
+              await redis.hdel(REDIS_KEYS.SESSIONS, sessId)
+            }
+          }
+
+          await sock.sendMessage(senderJid, {
+            text: `✅ *User Dihapus*\n\n📱 Nomor: +${phone}\n🗑️ Dihapus dari database`
+          }, { quoted: msg })
+
+          pushLog(`WA CMD | Admin ${senderPhone} deleted user +${phone}`)
+          continue
+        }
+
+        // ===== COMMAND: /kick <phone> =====
+        if (lowerText.startsWith('/kick ')) {
+          let phone = text.substring(6).trim()
+
+          if (!phone) {
+            await sock.sendMessage(senderJid, { text: '❌ Format: /kick 08xxx' }, { quoted: msg })
+            continue
+          }
+
+          // Normalize phone
+          phone = phone.replace(/\D/g, '')
+          if (phone.startsWith('0')) phone = '62' + phone.substring(1)
+          if (!phone.startsWith('62')) phone = '62' + phone
+
+          const jid = phone + '@s.whatsapp.net'
+          let kickedFromGroup = false
+          let deletedFromDb = false
+
+          // Try to kick from group
+          if (monitoredGroupId) {
+            try {
+              await sock.groupParticipantsUpdate(monitoredGroupId, [jid], 'remove')
+              kickedFromGroup = true
+
+              // Send notification to kicked user
+              try {
+                await sock.sendMessage(jid, {
+                  text: '❌ *ANDA TELAH DI-KICK*\\n\\nAnda telah dikeluarkan dari grup Gold Price Monitor.\\n\\nJika ada pertanyaan, hubungi admin:\\nhttps://wa.me/6289654454210'
+                })
+              } catch (_) {}
+            } catch (e) {
+              pushLog(`WA CMD | Failed to kick ${phone} from group: ${e.message}`)
+            }
+          }
+
+          // Delete from database
+          const existing = await redis.hget(REDIS_KEYS.USERS, phone)
+          if (existing) {
+            await Promise.all([
+              redis.hdel(REDIS_KEYS.USERS, phone),
+              redis.hdel(REDIS_KEYS.PUSH_SUBS, phone)
+            ])
+
+            const sessions = await redis.hgetall(REDIS_KEYS.SESSIONS)
+            for (const [sessId, sessPhone] of Object.entries(sessions || {})) {
+              if (sessPhone === phone) {
+                await redis.hdel(REDIS_KEYS.SESSIONS, sessId)
+              }
+            }
+            deletedFromDb = true
+          }
+
+          let resultText = `📱 Nomor: +${phone}\\n`
+          resultText += kickedFromGroup ? '✅ Kicked dari grup\\n' : '⚠️ Gagal kick dari grup\\n'
+          resultText += deletedFromDb ? '✅ Dihapus dari database' : '⚠️ Tidak ada di database'
+
+          await sock.sendMessage(senderJid, {
+            text: `🔨 *KICK USER*\\n\\n${resultText}`
+          }, { quoted: msg })
+
+          pushLog(`WA CMD | Admin ${senderPhone} kicked user +${phone} (group: ${kickedFromGroup}, db: ${deletedFromDb})`)
+          continue
+        }
+
+        // ===== COMMAND: /list =====
+        if (lowerText === '/list') {
+          const users = await redis.hgetall(REDIS_KEYS.USERS)
+          const userList = Object.entries(users || {})
+
+          if (userList.length === 0) {
+            await sock.sendMessage(senderJid, { text: '📋 Tidak ada user terdaftar' }, { quoted: msg })
+            continue
+          }
+
+          let listText = `📋 *DAFTAR USER* (${userList.length})\\n\\n`
+
+          const now = Date.now()
+          let activeCount = 0
+          let expiredCount = 0
+
+          // Sort by created date
+          const sortedUsers = userList
+            .map(([phone, data]) => ({ phone, ...JSON.parse(data) }))
+            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+            .slice(0, 20) // Limit to 20 users
+
+          for (const user of sortedUsers) {
+            const isExpired = user.expired && user.expired < now
+            if (isExpired) expiredCount++
+            else activeCount++
+
+            const status = isExpired ? '🔴' : '🟢'
+            const expText = user.expired
+              ? new Date(user.expired).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: '2-digit' })
+              : '∞'
+
+            listText += `${status} +${user.phone} (${expText})\\n`
+          }
+
+          if (userList.length > 20) {
+            listText += `\\n_... dan ${userList.length - 20} user lainnya_`
+          }
+
+          listText += `\\n\\n🟢 Aktif: ${activeCount} | 🔴 Expired: ${expiredCount}`
+
+          await sock.sendMessage(senderJid, { text: listText }, { quoted: msg })
+          continue
+        }
+
+        // ===== COMMAND: /stats =====
+        if (lowerText === '/stats') {
+          const users = await redis.hgetall(REDIS_KEYS.USERS)
+          const userCount = Object.keys(users || {}).length
+
+          const now = Date.now()
+          let activeCount = 0
+          let expiredCount = 0
+
+          for (const [_, data] of Object.entries(users || {})) {
+            const user = JSON.parse(data)
+            if (user.expired && user.expired < now) expiredCount++
+            else activeCount++
+          }
+
+          const statsText = `📊 *STATISTIK SISTEM*
+
+👥 *User:*
+• Total: ${userCount}
+• Aktif: ${activeCount}
+• Expired: ${expiredCount}
+
+🌐 *Online:*
+• SSE Clients: ${sseClients.size}
+
+📱 *WhatsApp:*
+• Status: ${isReady ? '✅ Connected' : '❌ Disconnected'}
+• Grup Monitor: ${monitoredGroupId ? '✅ Set' : '❌ Belum set'}
+
+⏰ *Server Time:*
+${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`
+
+          await sock.sendMessage(senderJid, { text: statsText }, { quoted: msg })
+          continue
+        }
+
+        // ===== COMMAND: /online =====
+        if (lowerText === '/online') {
+          if (sseClients.size === 0) {
+            await sock.sendMessage(senderJid, { text: '📱 Tidak ada user online saat ini' }, { quoted: msg })
+            continue
+          }
+
+          let onlineText = `📱 *USER ONLINE* (${sseClients.size})\\n\\n`
+
+          let count = 0
+          sseClients.forEach((userInfo, _) => {
+            if (count < 20) {
+              const phone = userInfo.phone || 'Unknown'
+              const name = userInfo.name || 'Unknown'
+              onlineText += `• ${name} (+${phone})\\n`
+              count++
+            }
+          })
+
+          if (sseClients.size > 20) {
+            onlineText += `\\n_... dan ${sseClients.size - 20} lainnya_`
+          }
+
+          await sock.sendMessage(senderJid, { text: onlineText }, { quoted: msg })
+          continue
+        }
+
+      } catch (e) {
+        pushLog(`WA CMD | Error: ${e.message}`)
+      }
+    }
+  })
 }
 
 start().catch(e => {
