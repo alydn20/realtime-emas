@@ -7699,11 +7699,9 @@ app.get('/monitoring', async (_req, res) => {
       justify-content: space-between;
       align-items: center;
       margin-top: 12px;
-      gap: 12px;
     }
     .chart-bottom-row .chart-info-row {
       margin-top: 0;
-      flex: 1;
     }
     .indicator-buttons-row {
       display: flex;
