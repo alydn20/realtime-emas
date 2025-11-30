@@ -7742,11 +7742,7 @@ app.get('/monitoring', async (_req, res) => {
     .indicator-btn.calc:hover {
       background: linear-gradient(135deg, #ffaa33 0%, #f7931a 100%);
     }
-    .indicator-buttons:first-child {
-      left: 10px;
-      right: auto;
-    }
-
+    
     /* Indicator Settings Modal */
     .indicator-settings-overlay {
       display: none;
