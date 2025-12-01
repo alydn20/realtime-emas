@@ -6037,7 +6037,7 @@ ${authScript}
             <span id="onlineCount" style="background:#22c55e;color:#fff;padding:2px 10px;border-radius:12px;font-size:0.75em;margin-left:8px;">0</span>
           </h2>
           <p style="color:#6b7280;font-size:0.82em;margin-bottom:14px;">Daftar user yang sedang membuka halaman monitoring secara realtime.</p>
-          <div class="user-table-wrapper">
+          <div class="user-table-wrapper" style="max-height:300px;overflow:hidden;transition:max-height 0.3s ease;" id="onlineTableWrapper">
             <table class="user-table">
               <thead>
                 <tr>
@@ -6051,6 +6051,12 @@ ${authScript}
                 <tr><td colspan="4" class="empty-state">Tidak ada user online</td></tr>
               </tbody>
             </table>
+          </div>
+          <div id="showMoreOnline" style="display:none;text-align:center;margin-top:10px;">
+            <button onclick="toggleOnlineUsers()" style="background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-size:0.85em;">
+              <span id="showMoreText">Lihat Semua</span>
+              <svg id="showMoreIcon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-left:5px;"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
           </div>
         </div>
       </div>
@@ -6402,6 +6408,9 @@ ${authScript}
       };
     }
 
+    let onlineUsersExpanded = false;
+    const ONLINE_USERS_LIMIT = 5;
+
     function updateOnlineUsers(users, count) {
       // Update badge
       document.getElementById('onlineBadge').textContent = count;
@@ -6409,11 +6418,18 @@ ${authScript}
 
       // Update table
       const tbody = document.getElementById('onlineUsersList');
+      const showMoreBtn = document.getElementById('showMoreOnline');
       if (!tbody) return;
 
       if (!users || users.length === 0) {
         tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Tidak ada user online</td></tr>';
+        if (showMoreBtn) showMoreBtn.style.display = 'none';
         return;
+      }
+
+      // Show/hide "Lihat Semua" button
+      if (showMoreBtn) {
+        showMoreBtn.style.display = users.length > ONLINE_USERS_LIMIT ? 'block' : 'none';
       }
 
       let html = '';
@@ -6432,6 +6448,37 @@ ${authScript}
           '</tr>';
       });
       tbody.innerHTML = html;
+
+      // Update wrapper height based on expanded state
+      updateOnlineTableHeight(users.length);
+    }
+
+    function updateOnlineTableHeight(totalUsers) {
+      const wrapper = document.getElementById('onlineTableWrapper');
+      if (!wrapper) return;
+
+      if (onlineUsersExpanded || totalUsers <= ONLINE_USERS_LIMIT) {
+        wrapper.style.maxHeight = 'none';
+      } else {
+        wrapper.style.maxHeight = '300px';
+      }
+    }
+
+    function toggleOnlineUsers() {
+      onlineUsersExpanded = !onlineUsersExpanded;
+      const wrapper = document.getElementById('onlineTableWrapper');
+      const text = document.getElementById('showMoreText');
+      const icon = document.getElementById('showMoreIcon');
+
+      if (onlineUsersExpanded) {
+        wrapper.style.maxHeight = 'none';
+        text.textContent = 'Sembunyikan';
+        icon.innerHTML = '<polyline points="18 15 12 9 6 15"/>';
+      } else {
+        wrapper.style.maxHeight = '300px';
+        text.textContent = 'Lihat Semua';
+        icon.innerHTML = '<polyline points="6 9 12 15 18 9"/>';
+      }
     }
 
     function formatPhone(phone) {
