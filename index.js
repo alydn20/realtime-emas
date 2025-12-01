@@ -9929,6 +9929,9 @@ app.get('/monitoring', async (_req, res) => {
       window.location.replace('/login');
     }
 
+    // Admin phones that can use right-click
+    const ADMIN_PHONES = ['62895701692525', '6289654454210'];
+
     // Check session validity and PIN status on page load
     (function checkSession() {
       const session = localStorage.getItem('goldmonitor_session');
@@ -9945,6 +9948,22 @@ app.get('/monitoring', async (_req, res) => {
             window.location.replace('/login');
             return;
           }
+
+          // Disable right-click for non-admin users
+          if (data.phone && !ADMIN_PHONES.includes(data.phone)) {
+            document.addEventListener('contextmenu', function(e) {
+              e.preventDefault();
+              return false;
+            });
+            // Also disable keyboard shortcuts for inspect element
+            document.addEventListener('keydown', function(e) {
+              if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) || (e.ctrlKey && (e.key === 'U' || e.key === 'u'))) {
+                e.preventDefault();
+                return false;
+              }
+            });
+          }
+
           // Check if PIN change is required
           return fetch('/api/check-pin-status?session=' + session);
         })
