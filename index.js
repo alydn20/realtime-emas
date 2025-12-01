@@ -131,7 +131,7 @@ let cachedMarketData = {
 let ADMIN_PHONES = ['62895701692525', '6289654454210'] // Fixed admin phones
 
 // App version for force reload - update this to force all clients to reload
-const APP_VERSION = '2024120101'
+const APP_VERSION = '2024120102'
 
 // Pending registrations now stored in Redis (REDIS_KEYS.PENDING_REGISTRATIONS)
 
@@ -7733,7 +7733,7 @@ app.get('/monitoring', async (_req, res) => {
     }
 
     .tradingview-widget-container {
-      height: 550px;
+      height: 600px;
       position: relative;
     }
     .tradingview-widget-container__widget {
