@@ -131,7 +131,7 @@ let cachedMarketData = {
 let ADMIN_PHONES = ['62895701692525', '6289654454210'] // Fixed admin phones
 
 // App version for force reload - update this to force all clients to reload
-const APP_VERSION = '2024120102'
+const APP_VERSION = '2024120103'
 
 // Pending registrations now stored in Redis (REDIS_KEYS.PENDING_REGISTRATIONS)
 
@@ -2451,32 +2451,43 @@ app.get('/cleanup-history', async (req, res) => {
 const sseClients = new Map()
 
 app.get('/sse', async (req, res) => {
+  // Get user info from session - REQUIRE valid session
+  const session = req.query.session || ''
+
+  // Reject if no session provided
+  if (!session) {
+    return res.status(403).json({ error: 'Unauthorized - No session' })
+  }
+
+  // Verify session is valid
+  let phone = null
+  try {
+    phone = await redis.hget(REDIS_KEYS.SESSIONS, session)
+  } catch (e) {}
+
+  // Reject if session is invalid
+  if (!phone) {
+    return res.status(403).json({ error: 'Unauthorized - Invalid session' })
+  }
+
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.flushHeaders()
 
-  // Get user info from session
-  const session = req.query.session || ''
-  let userInfo = { phone: 'anonymous', name: 'Anonymous', connectedAt: new Date().toISOString(), lastActivity: Date.now() }
+  // Build user info from validated session
+  let userInfo = { phone: phone, name: 'Member', connectedAt: new Date().toISOString(), lastActivity: Date.now() }
 
-  if (session) {
-    try {
-      const phone = await redis.hget(REDIS_KEYS.SESSIONS, session)
-      if (phone) {
-        userInfo.phone = phone
-        const userData = await redis.hget(REDIS_KEYS.USERS, phone)
-        if (userData) {
-          const parsed = JSON.parse(userData)
-          userInfo.name = parsed.name || ('Member ' + phone)
-        } else {
-          // Fallback untuk admin atau user tanpa data lengkap
-          userInfo.name = phone === 'admin' ? 'Administrator' : ('Member ' + phone)
-        }
-      }
-    } catch (e) {}
-  }
+  try {
+    const userData = await redis.hget(REDIS_KEYS.USERS, phone)
+    if (userData) {
+      const parsed = JSON.parse(userData)
+      userInfo.name = parsed.name || ('Member ' + phone)
+    } else {
+      userInfo.name = phone === 'admin' ? 'Administrator' : ('Member ' + phone)
+    }
+  } catch (e) {}
 
   // Kirim data awal
   if (lastKnownPrice) {
@@ -10034,7 +10045,16 @@ app.get('/monitoring', async (_req, res) => {
       const fetchStart = Date.now();
 
       try {
-        const res = await fetch('/monitoring/api', { cache: 'no-store' });
+        const session = localStorage.getItem('goldmonitor_session') || '';
+        const res = await fetch('/monitoring/api?session=' + encodeURIComponent(session), { cache: 'no-store' });
+
+        // If unauthorized, redirect to login
+        if (res.status === 403) {
+          localStorage.removeItem('goldmonitor_session');
+          window.location.replace('/login');
+          return;
+        }
+
         const data = await res.json();
         const fetchTime = Date.now() - fetchStart;
 
@@ -10351,7 +10371,23 @@ app.get('/monitoring', async (_req, res) => {
 })
 
 // API endpoint untuk mendapatkan data monitoring (JSON) - REAL-TIME
-app.get('/monitoring/api', async (_req, res) => {
+app.get('/monitoring/api', async (req, res) => {
+  // Verify session - REQUIRE valid session
+  const session = req.query.session || ''
+
+  if (!session) {
+    return res.status(403).json({ error: 'Unauthorized - No session' })
+  }
+
+  let phone = null
+  try {
+    phone = await redis.hget(REDIS_KEYS.SESSIONS, session)
+  } catch (e) {}
+
+  if (!phone) {
+    return res.status(403).json({ error: 'Unauthorized - Invalid session' })
+  }
+
   // Gunakan lastKnownPrice yang di-update oleh checkPriceUpdate setiap 1 detik
   // Ini lebih cepat daripada fetch Treasury setiap request
   let buy = lastKnownPrice?.buy || null
