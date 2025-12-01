@@ -2549,7 +2549,8 @@ const adminSseClients = new Set()
 
 function broadcastOnlineUsers() {
   const users = getOnlineUsers()
-  const message = `data: ${JSON.stringify({ type: 'online_users', users, count: sseClients.size })}\n\n`
+  // Use users.length for unique user count, not sseClients.size (which counts multiple tabs)
+  const message = `data: ${JSON.stringify({ type: 'online_users', users, count: users.length })}\n\n`
   adminSseClients.forEach(client => {
     try {
       client.write(message)
@@ -2567,9 +2568,9 @@ app.get('/admin-sse', (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.flushHeaders()
 
-  // Send initial online users data
+  // Send initial online users data (count = unique users, not total connections)
   const users = getOnlineUsers()
-  res.write(`data: ${JSON.stringify({ type: 'online_users', users, count: sseClients.size })}\n\n`)
+  res.write(`data: ${JSON.stringify({ type: 'online_users', users, count: users.length })}\n\n`)
 
   adminSseClients.add(res)
 
