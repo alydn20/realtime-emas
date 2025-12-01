@@ -130,6 +130,9 @@ let cachedMarketData = {
 // Admin phones for notifications (dapat diubah via menu admin)
 let ADMIN_PHONES = ['62895701692525', '6289654454210'] // Fixed admin phones
 
+// App version for force reload - update this to force all clients to reload
+const APP_VERSION = '2024120101'
+
 // Pending registrations now stored in Redis (REDIS_KEYS.PENDING_REGISTRATIONS)
 
 const REDIS_KEYS = {
@@ -10022,6 +10025,7 @@ app.get('/monitoring', async (_req, res) => {
     let isFetching = false;
     let lastFetchTime = 0;
     let fetchCount = 0;
+    let currentAppVersion = null; // For force reload detection
 
     async function fetchPrices() {
       if (isFetching) return;
@@ -10033,6 +10037,17 @@ app.get('/monitoring', async (_req, res) => {
         const res = await fetch('/monitoring/api', { cache: 'no-store' });
         const data = await res.json();
         const fetchTime = Date.now() - fetchStart;
+
+        // Check for version change - force reload if different
+        if (data.version) {
+          if (currentAppVersion === null) {
+            currentAppVersion = data.version;
+          } else if (currentAppVersion !== data.version) {
+            console.log('New version detected, reloading...');
+            window.location.reload(true);
+            return;
+          }
+        }
 
         // Anti flip-flop: cek timestamp
         const dataTimestamp = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
@@ -10368,7 +10383,8 @@ app.get('/monitoring/api', async (_req, res) => {
     sell,
     updatedAt,
     message: currentMessage,
-    logs: logs.slice(-10)
+    logs: logs.slice(-10),
+    version: APP_VERSION
   })
 })
 
