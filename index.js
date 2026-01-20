@@ -1873,7 +1873,7 @@ setInterval(() => {
 console.log(`[GOLD] Bot started | Price check: ${PRICE_CHECK_INTERVAL/1000}s | Stale alert: ${STALE_PRICE_THRESHOLD/60000}min`)
 
 const app = express()
-app.use(express.json())
+app.use(express.json({ limit: '10mb' }))
 
 // ==================== SUPER ADMIN LOGIN ====================
 // Login page untuk akses /qr dan /admin
