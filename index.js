@@ -4050,7 +4050,7 @@ app.get('/api/sound-settings', async (_req, res) => {
 })
 
 // Admin: Update sound settings
-app.post('/api/admin/sound-settings', express.json(), async (req, res) => {
+app.post('/api/admin/sound-settings', express.json({ limit: '10mb' }), async (req, res) => {
   const { password, soundUp, soundDown } = req.body
   if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
 
