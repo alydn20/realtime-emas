@@ -10858,6 +10858,33 @@ app.get('/monitoring', async (_req, res) => {
       }
     }, 10000);
 
+    // 📱 Handle visibility change (untuk HP yang minimize browser)
+    let wasHidden = false;
+    document.addEventListener('visibilitychange', function() {
+      if (document.hidden) {
+        // Tab/browser masuk background
+        wasHidden = true;
+        console.log('📱 App masuk background');
+      } else if (wasHidden) {
+        // Tab/browser kembali ke foreground
+        wasHidden = false;
+        console.log('📱 App kembali aktif - reconnecting...');
+
+        // Reconnect SSE
+        connectSSE();
+
+        // Fetch data terbaru
+        fetchPrices();
+
+        // Reset reconnect counter
+        sseReconnectCount = 0;
+        lastDataTime = Date.now();
+
+        // Show toast
+        showToast('🔄 Koneksi dipulihkan', 'info');
+      }
+    });
+
     // Fallback: Fetch sekali saat load untuk data awal
     fetchPrices();
 
