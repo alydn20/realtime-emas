@@ -1459,7 +1459,10 @@ async function refreshTreasuryToken() {
       throw new Error('API error')
     }
 
-    const token = json.data?.token?.access_token
+    // Handle both formats: json.data.token (string) or json.data.token.access_token
+    const token = typeof json.data?.token === 'string'
+      ? json.data.token
+      : json.data?.token?.access_token
     if (!token) {
       pushLog(`❌ No token! Response data: ${JSON.stringify(json.data).substring(0, 300)}`)
       throw new Error('No token in response')
