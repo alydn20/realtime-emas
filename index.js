@@ -10950,15 +10950,43 @@ app.get('/monitoring', async (_req, res) => {
 
     // 📱 Handle visibility change (untuk HP yang minimize browser)
     let wasHidden = false;
+    let wakeLock = null;
+
+    // Request Wake Lock untuk mencegah layar mati (optional)
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          console.log('🔒 Wake lock aktif - layar tidak akan mati');
+          wakeLock.addEventListener('release', () => {
+            console.log('🔓 Wake lock released');
+          });
+        } catch (err) {
+          console.log('⚠️ Wake lock tidak tersedia:', err.message);
+        }
+      }
+    }
+
+    // Request wake lock saat pertama load
+    requestWakeLock();
+
     document.addEventListener('visibilitychange', function() {
       if (document.hidden) {
         // Tab/browser masuk background
         wasHidden = true;
         console.log('📱 App masuk background');
+        // Release wake lock saat di background
+        if (wakeLock) {
+          wakeLock.release();
+          wakeLock = null;
+        }
       } else if (wasHidden) {
         // Tab/browser kembali ke foreground
         wasHidden = false;
         console.log('📱 App kembali aktif - reconnecting...');
+
+        // Re-request wake lock
+        requestWakeLock();
 
         // Reconnect SSE
         connectSSE();
