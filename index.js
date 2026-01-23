@@ -1658,18 +1658,28 @@ let lastPushTime = 0
 const PUSH_COOLDOWN = 60000 // Minimal 1 menit antar push
 
 async function sendPushToAll(title, body, type = 'price') {
+  pushLog(`📱 PUSH | Attempting: "${title}" (type: ${type})`)
+
   // Rate limit - jangan spam push
   const now = Date.now()
-  if (now - lastPushTime < PUSH_COOLDOWN) {
+  const timeSinceLastPush = now - lastPushTime
+  if (timeSinceLastPush < PUSH_COOLDOWN) {
+    const waitTime = Math.round((PUSH_COOLDOWN - timeSinceLastPush) / 1000)
+    pushLog(`📱 PUSH | Skipped - cooldown ${waitTime}s remaining`)
     return { skipped: true, reason: 'cooldown' }
   }
   lastPushTime = now
 
   try {
     const allSubs = await redis.hgetall(REDIS_KEYS.PUSH_SUBS)
-    if (!allSubs || Object.keys(allSubs).length === 0) {
+    const subsCount = allSubs ? Object.keys(allSubs).length : 0
+
+    if (subsCount === 0) {
+      pushLog(`📱 PUSH | No subscribers found`)
       return { sent: 0, failed: 0, total: 0 }
     }
+
+    pushLog(`📱 PUSH | Sending to ${subsCount} subscribers...`)
 
     const payload = JSON.stringify({
       title,
@@ -1688,17 +1698,19 @@ async function sendPushToAll(title, body, type = 'price') {
         sent++
       } catch (e) {
         failed++
+        pushLog(`📱 PUSH | Failed for ${phone}: ${e.message}`)
         // Hapus subscription yang expired
         if (e.statusCode === 410) {
           await redis.hdel(REDIS_KEYS.PUSH_SUBS, phone)
+          pushLog(`📱 PUSH | Removed expired subscription: ${phone}`)
         }
       }
     }
 
-    pushLog(`📱 Push sent: ${sent} success, ${failed} failed`)
+    pushLog(`📱 PUSH | ✅ Done: ${sent} sent, ${failed} failed`)
     return { sent, failed, total: sent + failed }
   } catch (e) {
-    pushLog(`❌ Push error: ${e.message}`)
+    pushLog(`📱 PUSH | ❌ Error: ${e.message}`)
     return { error: e.message }
   }
 }
