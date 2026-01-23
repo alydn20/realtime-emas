@@ -57,7 +57,7 @@ const TREASURY_CREDENTIALS = {
   "latitude": "0.0",
   "longitude": "0.0",
   "scope": "*",
-  "email": "089654454210",
+  "email": "083193868677",
   "password": "@Februari20",
   "app_name": null,
   "provider": null,
