@@ -1618,12 +1618,8 @@ async function doPromoBroadcast() {
     })
 
     // 📱 PUSH NOTIFICATION untuk promo ON/OFF
-    const promoIcon = currentStatus === 'ON' ? '🎁' : '❌'
-    const promoTitle = `${promoIcon} Promo 20jt ${currentStatus}`
-    const promoBody = currentStatus === 'ON'
-      ? 'Promo Treasury 20jt sedang AKTIF!'
-      : 'Promo Treasury 20jt sudah TIDAK AKTIF'
-    sendPushToAll(promoTitle, promoBody, 'promo').catch(() => {})
+    const promoTitle = currentStatus === 'ON' ? '🎁 PROMO ON' : '❌ PROMO OFF'
+    sendPushToAll(promoTitle, '', 'promo').catch(() => {})
 
   } catch (e) {
     pushLog(`❌ Promo broadcast error: ${e.message}`)
