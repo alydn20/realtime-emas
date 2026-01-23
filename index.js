@@ -1572,27 +1572,33 @@ async function doPromoBroadcast() {
     let shouldBroadcast = false
 
     if (currentStatus === 'ON') {
-      // ON: Reset counter OFF
-      if (offBroadcastCount > 0) {
-        pushLog(`🎁 Status ON - Reset OFF counter (was ${offBroadcastCount})`)
+      // ON: Reset counter OFF dan kirim sound
+      if (offBroadcastCount > 0 || lastPromoStatus === 'OFF') {
+        pushLog(`🎁 Status ON kembali! Reset OFF counter (was ${offBroadcastCount})`)
         offBroadcastCount = 0
       }
       // ON: Kirim 1x per menit
-      if (currentMinute !== lastPromoBroadcastMinute || isFirstCheck) {
+      if (currentMinute !== lastPromoBroadcastMinute || isFirstCheck || statusChanged) {
         shouldBroadcast = true
         lastPromoBroadcastMinute = currentMinute
       }
     } else {
-      // OFF: Max 5x total, lalu stop sampai ON
-      if (offBroadcastCount >= 5) {
-        // Sudah 5x OFF, tidak kirim lagi sampai ON
-        return
-      }
-      // OFF: Kirim 1x per menit
+      // OFF: Max 5x broadcast, tapi tetap cek terus
       if (currentMinute !== lastPromoBroadcastMinute || isFirstCheck) {
-        shouldBroadcast = true
-        lastPromoBroadcastMinute = currentMinute
-        offBroadcastCount++
+        if (offBroadcastCount < 5) {
+          // Masih boleh broadcast OFF
+          shouldBroadcast = true
+          lastPromoBroadcastMinute = currentMinute
+          offBroadcastCount++
+          pushLog(`🎁 OFF count: ${offBroadcastCount}/5`)
+        } else {
+          // Sudah 5x, tidak broadcast tapi tetap update lastPromoBroadcastMinute
+          lastPromoBroadcastMinute = currentMinute
+          // Log sesekali saja (setiap 5 menit)
+          if (currentMinute % 5 === 0) {
+            pushLog(`🎁 OFF sudah 5x, menunggu ON... (tetap cek)`)
+          }
+        }
       }
     }
 
@@ -1618,49 +1624,29 @@ async function doPromoBroadcast() {
   }
 }
 
+// 🎁 CONTINUOUS PROMO CHECK - Berjalan terus seperti price check
+const PROMO_CHECK_INTERVAL = 10000 // Cek setiap 10 detik
+let promoContinuousInterval = null
+
+function startContinuousPromoCheck() {
+  if (promoContinuousInterval) return // Sudah jalan
+
+  pushLog(`🎁 Memulai continuous promo check setiap ${PROMO_CHECK_INTERVAL/1000} detik...`)
+
+  // Cek pertama setelah 5 detik
+  setTimeout(() => {
+    doPromoBroadcast().catch(e => pushLog(`❌ Promo error: ${e.message}`))
+  }, 5000)
+
+  // Lanjut cek terus menerus
+  promoContinuousInterval = setInterval(() => {
+    doPromoBroadcast().catch(e => pushLog(`❌ Promo error: ${e.message}`))
+  }, PROMO_CHECK_INTERVAL)
+}
+
+// Legacy function - sekarang tidak melakukan apa-apa karena sudah continuous
 function triggerPromoCheck() {
-  // Cancel timeout/interval sebelumnya jika ada
-  if (promoTriggerTimeout) {
-    clearTimeout(promoTriggerTimeout)
-    promoTriggerTimeout = null
-  }
-  if (promoCheckInterval) {
-    clearInterval(promoCheckInterval)
-    promoCheckInterval = null
-    isPromoIntervalRunning = false
-  }
-
-  pushLog(`🎁 Harga berubah → Promo check mulai dalam 5 detik...`)
-
-  promoTriggerTimeout = setTimeout(() => {
-    promoTriggerTimeout = null
-
-    if (!isPromoIntervalRunning) {
-      isPromoIntervalRunning = true
-      pushLog(`🎁 Memulai pengecekan promo setiap 1 detik (sampai detik 57)...`)
-
-      // Cek pertama langsung
-      doPromoBroadcast().catch(e => pushLog(`❌ Promo error: ${e.message}`))
-
-      // Lanjut cek setiap 1 detik sampai detik 57
-      promoCheckInterval = setInterval(() => {
-        const currentSecond = new Date().getSeconds()
-
-        // Stop di detik 57
-        if (currentSecond >= 57) {
-          if (promoCheckInterval) {
-            clearInterval(promoCheckInterval)
-            promoCheckInterval = null
-            isPromoIntervalRunning = false
-            pushLog(`🎁 Promo check STOP di detik ${currentSecond}`)
-          }
-          return
-        }
-
-        doPromoBroadcast().catch(e => pushLog(`❌ Promo error: ${e.message}`))
-      }, 1000)
-    }
-  }, 5000) // 5 detik delay
+  // Continuous check sudah berjalan, tidak perlu trigger manual
 }
 
 // ⚡ ULTRA-INSTANT BROADCAST - Message sudah di-build sebelumnya
@@ -10996,6 +10982,9 @@ setTimeout(checkAndKickExpiredUsers, 30000)
 
 app.listen(PORT, () => {
   console.log(`[SERVER] Ready on port ${PORT} | /monitoring | /stats | /health`)
+
+  // 🎁 Start continuous promo check
+  startContinuousPromoCheck()
 })
 
 // KEEP-ALIVE SYSTEM
