@@ -48,6 +48,25 @@ const PORT = process.env.PORT || 8000
 const TREASURY_URL = process.env.TREASURY_URL ||
   'https://api.treasury.id/api/v1/antigrvty/gold/rate'
 
+// Treasury Promo API Config
+const TREASURY_NOMINAL_URL = 'https://connect.treasury.id/nominal/suggestion'
+const TREASURY_LOGIN_URL = 'https://connect.treasury.id/user/signin'
+const TREASURY_CREDENTIALS = {
+  "client_id": "3",
+  "client_secret": "rDiXUGRe49xucEIkRbUW7l4AqQcezXlplFvLjKnO2",
+  "latitude": "0.0",
+  "longitude": "0.0",
+  "scope": "*",
+  "email": "089654454210",
+  "password": "@Februari20",
+  "app_name": null,
+  "provider": null,
+  "token": null,
+  "device_id": "android-V417IR-Asus/AI2401/AI2401:12/V417IR/118:user/release-keys",
+  "shield_id": "440c8624bf64bb19cf837ba523cce794",
+  "shield_session_id": "6aea0479c8ce4f2f829577ca82c9de07"
+}
+
 // Anti-spam settings
 const COOLDOWN_PER_CHAT = 60000
 const GLOBAL_THROTTLE = 3000
@@ -115,6 +134,17 @@ let isReady = false
 let sock = null
 
 const subscriptions = new Set()
+
+// 🎁 PROMO ON/OFF STATE
+let treasuryToken = null // Token untuk API promo
+let lastPromoStatus = null // 'ON' atau 'OFF'
+let promoTriggerTimeout = null // Timeout 5 detik setelah harga berubah
+let promoCheckInterval = null // Interval cek promo setiap 1 detik
+let isPromoIntervalRunning = false
+let isPromoChecking = false // Guard untuk mencegah concurrent fetch
+let promoCheckCount = 0 // Counter untuk logging
+let offBroadcastCount = 0 // Counter OFF broadcast (max 5)
+let lastPromoBroadcastMinute = -1 // Track menit terakhir broadcast
 
 // CACHE GLOBAL untuk market data (pre-fetched)
 let cachedMarketData = {
@@ -1395,6 +1425,226 @@ async function fetchTreasury() {
   return json
 }
 
+// 🎁 PROMO ON/OFF FUNCTIONS
+async function refreshTreasuryToken() {
+  try {
+    pushLog('🔄 Refreshing Treasury token...')
+    const res = await fetch(TREASURY_LOGIN_URL, {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'content-type': 'application/json',
+        'x-app-version': '8.0.82',
+        'x-language': 'id',
+        'x-platform': 'android',
+        'x-version': '1.0'
+      },
+      body: JSON.stringify(TREASURY_CREDENTIALS),
+      signal: AbortSignal.timeout(10000)
+    })
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const json = await res.json()
+    if (json.meta?.status !== 'success') throw new Error('API error')
+
+    const token = json.data?.token?.access_token
+    if (!token) throw new Error('No token in response')
+
+    treasuryToken = token
+    pushLog('✅ Treasury token refreshed')
+    return token
+  } catch (e) {
+    pushLog(`❌ Token refresh failed: ${e.message}`)
+    throw e
+  }
+}
+
+async function fetchNominalPromo(retryCount = 0) {
+  try {
+    if (!treasuryToken) {
+      await refreshTreasuryToken()
+    }
+
+    const headers = {
+      'accept': 'application/json',
+      'authorization': `Bearer ${treasuryToken}`,
+      'content-type': 'application/json',
+      'x-app-version': '8.0.82',
+      'x-language': 'id',
+      'x-platform': 'android',
+      'x-version': '1.0'
+    }
+
+    // Try POST first
+    try {
+      const res = await fetch(TREASURY_NOMINAL_URL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+        signal: AbortSignal.timeout(15000)
+      })
+
+      if (res.status === 401 && retryCount === 0) {
+        await refreshTreasuryToken()
+        return fetchNominalPromo(1)
+      }
+
+      if (res.ok) {
+        const json = await res.json()
+        if (json.meta.status === 'success') return json
+      }
+    } catch (e) {
+      // Silent fail, try GET
+    }
+
+    // Fallback to GET
+    const res = await fetch(TREASURY_NOMINAL_URL, {
+      method: 'GET',
+      headers,
+      signal: AbortSignal.timeout(15000)
+    })
+
+    if (!res.ok) {
+      if (res.status === 401 && retryCount === 0) {
+        await refreshTreasuryToken()
+        return fetchNominalPromo(1)
+      }
+      throw new Error(`HTTP ${res.status}`)
+    }
+
+    const json = await res.json()
+    if (json.meta.status !== 'success') throw new Error('API error')
+    return json
+  } catch (e) {
+    throw new Error(`Nominal fetch failed: ${e.message}`)
+  }
+}
+
+async function doPromoBroadcast() {
+  if (isPromoChecking) return
+  isPromoChecking = true
+
+  const now = Date.now()
+  const currentMinute = Math.floor(now / 60000)
+  promoCheckCount++
+
+  try {
+    const nominalData = await fetchNominalPromo().catch(() => null)
+
+    if (!nominalData) {
+      pushLog(`⚠️ Promo check #${promoCheckCount}: Gagal fetch data`)
+      return
+    }
+
+    // Cek apakah ada promo 20jt aktif
+    const has20jt = nominalData.data.some(n =>
+      n.status === true &&
+      (n.promotion_amount === 19315000 || n.default_amount === 20000000)
+    )
+    const currentStatus = has20jt ? 'ON' : 'OFF'
+
+    // Detect status change
+    const isFirstCheck = lastPromoStatus === null
+    const statusChanged = lastPromoStatus !== null && lastPromoStatus !== currentStatus
+
+    if (statusChanged) {
+      pushLog(`🎁 Status berubah: ${lastPromoStatus} → ${currentStatus}`)
+    }
+
+    let shouldBroadcast = false
+
+    if (currentStatus === 'ON') {
+      // ON: Reset counter OFF
+      if (offBroadcastCount > 0) {
+        pushLog(`🎁 Status ON - Reset OFF counter (was ${offBroadcastCount})`)
+        offBroadcastCount = 0
+      }
+      // ON: Kirim 1x per menit
+      if (currentMinute !== lastPromoBroadcastMinute || isFirstCheck) {
+        shouldBroadcast = true
+        lastPromoBroadcastMinute = currentMinute
+      }
+    } else {
+      // OFF: Max 5x total, lalu stop sampai ON
+      if (offBroadcastCount >= 5) {
+        // Sudah 5x OFF, tidak kirim lagi sampai ON
+        return
+      }
+      // OFF: Kirim 1x per menit
+      if (currentMinute !== lastPromoBroadcastMinute || isFirstCheck) {
+        shouldBroadcast = true
+        lastPromoBroadcastMinute = currentMinute
+        offBroadcastCount++
+      }
+    }
+
+    lastPromoStatus = currentStatus
+
+    if (!shouldBroadcast) return
+
+    // Broadcast via SSE ke semua clients
+    const message = currentStatus === 'ON' ? '✅ ON' : '❌ OFF'
+    pushLog(`🎁 Broadcasting: ${currentStatus} (OFF count: ${offBroadcastCount}/5)`)
+
+    broadcastSSE({
+      type: 'promo_status',
+      status: currentStatus,
+      message: message,
+      time: new Date().toISOString()
+    })
+
+  } catch (e) {
+    pushLog(`❌ Promo broadcast error: ${e.message}`)
+  } finally {
+    isPromoChecking = false
+  }
+}
+
+function triggerPromoCheck() {
+  // Cancel timeout/interval sebelumnya jika ada
+  if (promoTriggerTimeout) {
+    clearTimeout(promoTriggerTimeout)
+    promoTriggerTimeout = null
+  }
+  if (promoCheckInterval) {
+    clearInterval(promoCheckInterval)
+    promoCheckInterval = null
+    isPromoIntervalRunning = false
+  }
+
+  pushLog(`🎁 Harga berubah → Promo check mulai dalam 5 detik...`)
+
+  promoTriggerTimeout = setTimeout(() => {
+    promoTriggerTimeout = null
+
+    if (!isPromoIntervalRunning) {
+      isPromoIntervalRunning = true
+      pushLog(`🎁 Memulai pengecekan promo setiap 1 detik (sampai detik 57)...`)
+
+      // Cek pertama langsung
+      doPromoBroadcast().catch(e => pushLog(`❌ Promo error: ${e.message}`))
+
+      // Lanjut cek setiap 1 detik sampai detik 57
+      promoCheckInterval = setInterval(() => {
+        const currentSecond = new Date().getSeconds()
+
+        // Stop di detik 57
+        if (currentSecond >= 57) {
+          if (promoCheckInterval) {
+            clearInterval(promoCheckInterval)
+            promoCheckInterval = null
+            isPromoIntervalRunning = false
+            pushLog(`🎁 Promo check STOP di detik ${currentSecond}`)
+          }
+          return
+        }
+
+        doPromoBroadcast().catch(e => pushLog(`❌ Promo error: ${e.message}`))
+      }, 1000)
+    }
+  }, 5000) // 5 detik delay
+}
+
 // ⚡ ULTRA-INSTANT BROADCAST - Message sudah di-build sebelumnya
 function doBroadcastInstant(message) {
   // Simpan pesan untuk monitoring (selalu update meski tidak ada subscriber)
@@ -1785,6 +2035,9 @@ async function fastPoll() {
         xauUsd: cachedMarketData.xauUsd,
         serverTime: new Date().toISOString()
       })
+
+      // 🎁 Trigger promo check 5 detik setelah harga berubah
+      triggerPromoCheck()
     } else {
       lastKnownPrice = currentPrice
     }
@@ -9696,6 +9949,11 @@ app.get('/monitoring', async (_req, res) => {
     let customSoundUp = '';
     let customSoundDown = '';
 
+    // 🎁 Promo ON/OFF sounds (embedded base64)
+    const promoSoundOn = 'data:audio/ogg;base64,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';
+    const promoSoundOff = 'data:audio/ogg;base64,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';
+    let lastPromoStatusClient = null; // Track status terakhir untuk hindari duplikat
+
     // Initialize sound icon state on load
     (function initSoundIcon() {
       const toggle = document.getElementById('soundToggle');
@@ -10242,6 +10500,32 @@ app.get('/monitoring', async (_req, res) => {
           customSoundUp = data.settings.soundUp || '';
           customSoundDown = data.settings.soundDown || '';
           console.log('Sound settings updated');
+          return;
+        }
+
+        // 🎁 Handle promo ON/OFF status
+        if (data.type === 'promo_status') {
+          if (!soundEnabled) return;
+
+          // Hindari duplikat sound untuk status yang sama
+          if (data.status === lastPromoStatusClient) return;
+          lastPromoStatusClient = data.status;
+
+          console.log('Promo status:', data.status, data.message);
+
+          // Play sound berdasarkan status
+          try {
+            const soundUrl = data.status === 'ON' ? promoSoundOn : promoSoundOff;
+            const audio = new Audio(soundUrl);
+            audio.volume = 0.7;
+            audio.play().catch(e => console.log('Promo sound error:', e));
+          } catch (e) {
+            console.log('Promo sound error:', e);
+          }
+
+          // Optional: tampilkan toast notification
+          const toastMsg = data.status === 'ON' ? '🎁 Promo 20jt ON!' : '❌ Promo 20jt OFF';
+          showToast(toastMsg, data.status === 'ON' ? 'success' : 'warning');
           return;
         }
 
