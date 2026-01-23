@@ -3763,7 +3763,10 @@ app.get('/api/verify-session', async (req, res) => {
   const check = await isUserValid(phone)
   if (!check.valid) return res.json({ valid: false, reason: check.reason })
 
-  res.json({ valid: true, user: check.user, phone })
+  // Check if user is admin
+  const isAdmin = ADMIN_PHONES.includes(phone)
+
+  res.json({ valid: true, user: check.user, phone, isAdmin })
 })
 
 // API: Logout
@@ -10385,9 +10388,6 @@ app.get('/monitoring', async (_req, res) => {
       window.location.replace('/login');
     }
 
-    // Admin phones that can use right-click
-    const ADMIN_PHONES = ['62895701692525', '6289654454210'];
-
     // Check session validity and PIN status on page load
     (function checkSession() {
       const session = localStorage.getItem('goldmonitor_session');
@@ -10405,8 +10405,8 @@ app.get('/monitoring', async (_req, res) => {
             return;
           }
 
-          // Disable right-click for non-admin users
-          if (data.phone && !ADMIN_PHONES.includes(data.phone)) {
+          // Disable right-click for non-admin users (admin can use dev tools)
+          if (!data.isAdmin) {
             document.addEventListener('contextmenu', function(e) {
               e.preventDefault();
               return false;
@@ -10418,6 +10418,8 @@ app.get('/monitoring', async (_req, res) => {
                 return false;
               }
             });
+          } else {
+            console.log('🔧 Admin mode: Dev tools enabled');
           }
 
           // Check if PIN change is required
