@@ -4295,7 +4295,7 @@ app.get('/api/sound-settings', async (_req, res) => {
       const parsed = typeof settings === 'string' ? JSON.parse(settings) : settings
       res.json({ success: true, settings: parsed })
     } else {
-      res.json({ success: true, settings: { soundUp: '', soundDown: '' } })
+      res.json({ success: true, settings: { soundUp: '', soundDown: '', soundOn: '', soundOff: '' } })
     }
   } catch (e) {
     res.json({ success: false, error: e.message })
@@ -4304,11 +4304,16 @@ app.get('/api/sound-settings', async (_req, res) => {
 
 // Admin: Update sound settings
 app.post('/api/admin/sound-settings', express.json({ limit: '10mb' }), async (req, res) => {
-  const { password, soundUp, soundDown } = req.body
+  const { password, soundUp, soundDown, soundOn, soundOff } = req.body
   if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
 
   try {
-    const settings = { soundUp: soundUp || '', soundDown: soundDown || '' }
+    const settings = {
+      soundUp: soundUp || '',
+      soundDown: soundDown || '',
+      soundOn: soundOn || '',
+      soundOff: soundOff || ''
+    }
     await redis.set(REDIS_KEYS.SOUND_SETTINGS, JSON.stringify(settings))
 
     // Broadcast to all clients to update their sounds
@@ -6485,6 +6490,40 @@ ${authScript}
             <button class="btn btn-sm" style="margin-top:10px;background:rgba(248,113,113,0.15);color:#f87171;border:1px solid rgba(248,113,113,0.25);" onclick="testSound('down')">Test Sound Turun</button>
           </div>
 
+          <!-- Sound Promo ON -->
+          <div style="background:rgba(59,130,246,0.05);padding:16px;border-radius:12px;border:1px solid rgba(59,130,246,0.15);margin-bottom:14px;">
+            <label style="color:#3b82f6;font-weight:600;display:block;margin-bottom:12px;font-size:0.9em;">Sound Promo ON (20jt aktif)</label>
+            <div class="form-group" style="margin-bottom:10px;">
+              <label>Upload File Audio</label>
+              <input type="file" id="soundOnFile" accept="audio/*" onchange="handleSoundUpload('on')">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+              <label>Atau Masukkan URL</label>
+              <input type="text" id="soundOnUrl" placeholder="https://example.com/on.mp3">
+            </div>
+            <div id="soundOnPreview" style="margin-top:10px;display:none;">
+              <audio id="soundOnAudio" controls style="width:100%;height:36px;"></audio>
+            </div>
+            <button class="btn btn-sm" style="margin-top:10px;background:rgba(59,130,246,0.15);color:#3b82f6;border:1px solid rgba(59,130,246,0.25);" onclick="testSound('on')">Test Sound ON</button>
+          </div>
+
+          <!-- Sound Promo OFF -->
+          <div style="background:rgba(156,163,175,0.05);padding:16px;border-radius:12px;border:1px solid rgba(156,163,175,0.15);margin-bottom:16px;">
+            <label style="color:#9ca3af;font-weight:600;display:block;margin-bottom:12px;font-size:0.9em;">Sound Promo OFF (20jt nonaktif)</label>
+            <div class="form-group" style="margin-bottom:10px;">
+              <label>Upload File Audio</label>
+              <input type="file" id="soundOffFile" accept="audio/*" onchange="handleSoundUpload('off')">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+              <label>Atau Masukkan URL</label>
+              <input type="text" id="soundOffUrl" placeholder="https://example.com/off.mp3">
+            </div>
+            <div id="soundOffPreview" style="margin-top:10px;display:none;">
+              <audio id="soundOffAudio" controls style="width:100%;height:36px;"></audio>
+            </div>
+            <button class="btn btn-sm" style="margin-top:10px;background:rgba(156,163,175,0.15);color:#9ca3af;border:1px solid rgba(156,163,175,0.25);" onclick="testSound('off')">Test Sound OFF</button>
+          </div>
+
           <div style="display:flex;gap:10px;flex-wrap:wrap;">
             <button class="btn btn-primary" onclick="saveSoundSettings()">Simpan Sound</button>
             <button class="btn btn-danger btn-sm" onclick="resetSounds()">Reset Default</button>
@@ -6755,6 +6794,8 @@ ${authScript}
     // ==================== Sound Settings Functions ====================
     let currentSoundUp = '';
     let currentSoundDown = '';
+    let currentSoundOn = '';
+    let currentSoundOff = '';
 
     function loadSoundSettings() {
       fetch('/api/sound-settings')
@@ -6763,8 +6804,13 @@ ${authScript}
           if (data.success) {
             currentSoundUp = data.settings.soundUp || '';
             currentSoundDown = data.settings.soundDown || '';
+            currentSoundOn = data.settings.soundOn || '';
+            currentSoundOff = data.settings.soundOff || '';
+
             document.getElementById('soundUpUrl').value = currentSoundUp;
             document.getElementById('soundDownUrl').value = currentSoundDown;
+            document.getElementById('soundOnUrl').value = currentSoundOn;
+            document.getElementById('soundOffUrl').value = currentSoundOff;
 
             if (currentSoundUp) {
               document.getElementById('soundUpPreview').style.display = 'block';
@@ -6774,15 +6820,25 @@ ${authScript}
               document.getElementById('soundDownPreview').style.display = 'block';
               document.getElementById('soundDownAudio').src = currentSoundDown;
             }
+            if (currentSoundOn) {
+              document.getElementById('soundOnPreview').style.display = 'block';
+              document.getElementById('soundOnAudio').src = currentSoundOn;
+            }
+            if (currentSoundOff) {
+              document.getElementById('soundOffPreview').style.display = 'block';
+              document.getElementById('soundOffAudio').src = currentSoundOff;
+            }
           }
         });
     }
 
     function handleSoundUpload(direction) {
-      const fileInput = document.getElementById(direction === 'up' ? 'soundUpFile' : 'soundDownFile');
-      const urlInput = document.getElementById(direction === 'up' ? 'soundUpUrl' : 'soundDownUrl');
-      const preview = document.getElementById(direction === 'up' ? 'soundUpPreview' : 'soundDownPreview');
-      const audio = document.getElementById(direction === 'up' ? 'soundUpAudio' : 'soundDownAudio');
+      const idMap = { up: 'Up', down: 'Down', on: 'On', off: 'Off' };
+      const suffix = idMap[direction] || 'Up';
+      const fileInput = document.getElementById('sound' + suffix + 'File');
+      const urlInput = document.getElementById('sound' + suffix + 'Url');
+      const preview = document.getElementById('sound' + suffix + 'Preview');
+      const audio = document.getElementById('sound' + suffix + 'Audio');
       const result = document.getElementById('soundResult');
 
       const file = fileInput.files[0];
@@ -6822,6 +6878,8 @@ ${authScript}
     function saveSoundSettings() {
       const soundUp = document.getElementById('soundUpUrl').value.trim();
       const soundDown = document.getElementById('soundDownUrl').value.trim();
+      const soundOn = document.getElementById('soundOnUrl').value.trim();
+      const soundOff = document.getElementById('soundOffUrl').value.trim();
       const result = document.getElementById('soundResult');
 
       result.className = 'result-msg success';
@@ -6830,13 +6888,15 @@ ${authScript}
       fetch('/api/admin/sound-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, soundUp, soundDown })
+        body: JSON.stringify({ password: adminPass, soundUp, soundDown, soundOn, soundOff })
       })
       .then(r => r.json())
       .then(data => {
         if (data.success) {
           currentSoundUp = soundUp;
           currentSoundDown = soundDown;
+          currentSoundOn = soundOn;
+          currentSoundOff = soundOff;
           result.className = 'result-msg success';
           result.textContent = 'Sound berhasil disimpan!';
         } else {
@@ -6862,19 +6922,20 @@ ${authScript}
       fetch('/api/admin/sound-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, soundUp: '', soundDown: '' })
+        body: JSON.stringify({ password: adminPass, soundUp: '', soundDown: '', soundOn: '', soundOff: '' })
       })
       .then(r => r.json())
       .then(data => {
         if (data.success) {
           currentSoundUp = '';
           currentSoundDown = '';
-          document.getElementById('soundUpUrl').value = '';
-          document.getElementById('soundDownUrl').value = '';
-          document.getElementById('soundUpFile').value = '';
-          document.getElementById('soundDownFile').value = '';
-          document.getElementById('soundUpPreview').style.display = 'none';
-          document.getElementById('soundDownPreview').style.display = 'none';
+          currentSoundOn = '';
+          currentSoundOff = '';
+          ['Up', 'Down', 'On', 'Off'].forEach(s => {
+            document.getElementById('sound' + s + 'Url').value = '';
+            document.getElementById('sound' + s + 'File').value = '';
+            document.getElementById('sound' + s + 'Preview').style.display = 'none';
+          });
           result.className = 'result-msg success';
           result.textContent = 'Sound berhasil direset ke default!';
         } else {
@@ -6886,9 +6947,9 @@ ${authScript}
     }
 
     function testSound(direction) {
-      const url = direction === 'up'
-        ? document.getElementById('soundUpUrl').value.trim()
-        : document.getElementById('soundDownUrl').value.trim();
+      const idMap = { up: 'Up', down: 'Down', on: 'On', off: 'Off' };
+      const suffix = idMap[direction] || 'Up';
+      const url = document.getElementById('sound' + suffix + 'Url').value.trim();
 
       if (url) {
         const audio = new Audio(url);
@@ -9949,9 +10010,11 @@ app.get('/monitoring', async (_req, res) => {
     let customSoundUp = '';
     let customSoundDown = '';
 
-    // 🎁 Promo ON/OFF sounds (embedded base64)
-    const promoSoundOn = 'data:audio/ogg;base64,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';
-    const promoSoundOff = 'data:audio/ogg;base64,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';
+    // 🎁 Promo ON/OFF sounds (embedded base64 as default)
+    const defaultPromoSoundOn = 'data:audio/ogg;base64,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';
+    const defaultPromoSoundOff = 'data:audio/ogg;base64,T2dnUwACAAAAAAAAAAAAAAAAAAAAACqCBoIBE09wdXNIZWFkAQFoAIA+AAAAAABPZ2dTAAAAAAAAAAAAAAAAAAABAAAAjzLsvAEYT3B1c1RhZ3MIAAAAV2hhdHNBcHAAAAAAT2dnUwAAqJEBAAAAAAAAAAAAAgAAAAZx6GgZz/fi/yz/Av8Y/xLp/xLy8v8B/xj69QICAkuGByQlKioL5ME27MWAgAvYyPwjBuzmj2T8HmsV83eHqYVjYmzhXnDj0Dik1TQebvWQimSlxeWeihzSqbJjnOURWY8uDUzDqqNsyhg7U1cHccpjS7pgIIpk+q2XH5SptsoHwiDz/FBn+zUV9EDn+DFBtaPhcfmVNekgpPBQtpXKhIpkzk4eC6PRbU101Sb1z2QwMvwbi9Xke1Svl1yzl7pJdGeozq7DdcMFgIpkpctNXFs0pi39XFvogugsBwNqy51rdJN1kJcFG7cXabA/YEuGJyklKCeKRkqJKszuX83bnuEHgKFfC58+db25Qh6Xm6fEpWopCzluVv+zus+BTeh19oKfCKDllEBD6dO9NKc8TZiTK1CdNGYS1Uv2jOjd10W0lbvpH4n8vktufZaB7bxbJyY1CRJ/zgSMrQ+81ahmiW0YXV+E3nkUSiCJ/KzfHwNCH7PX1tNzygYn1YYxvrwZBAtWavCVaJRejMB0HDAeHwigid5HkUsxMlocgzmPvWC7t6GfG3rnIFIml/YG+31s9s9f6C/hFL2VgUsbGFGkmMgMAQlLe2pEtgfLwkqMkIqZV6B/xbMTqZsPIaD2WqQzOwh+59RLhiklJCUhifys46alIPc8jsrT4taYZ0F1hMfzW3p9m9ndZ/EYmVYI6QRmLT2lL/SKDiCRcHTH804PAfclUgQRcFmqJktlJbWTAcTDCsc6YpU07s+gimS9B3RJf6DHqteyKO0r9a41gHRdAK5M9HfwKAMXZyf9mXKaNL1Amlz3r6lhmzP/anWw3/LF7R2zpm0KUJn493inqkw8qptNWDMd4q65Q+5I1vEWoVWnAtiVawkxZhuymQA0B30FZAF5pDMeDcB8THn7yJC05yolHOhPe35+/AfVB27CA1nde5J0r4VAS4YrMTIyNYod9qe5al0sGT2JXISnlCFMNzGX4mIwRT5rOInlW12khfSznWRvLzF0r4CLDTmg7Pq9d3xSQ5/XhIJUl/kJiRvYuF6iMbnZSiBU79pInqEPHXmztcmQxAC1zfzEjK1vYJqB/aYz/mTQTaqViCdofa/3IK2XoPs/+wmCwrw98N1Yo6j6IwI7qC0XZSibb9CO2EtNEYeMo/WIl9JmehpPZiFa/KQdSRn2v8TQValqLfyWkAIgx9HbfPNlrSF1Q1KVwJCAd+uIlFy1/KVUjZzj4OjccXm4VubBZc4sP/RnjUCBQWcuaZDFtQb/ATzw2IOM9qDtAStFg4w/E0IyMJ7Dy3GtbUUNiRUpVTrTAL4510woQfav+g0qHctQ+HijplYBQXzWHMBLhicsJCstsORfeXK0RFxPhzsvlxOtVZDHA8kJAWwAJQp11Z2/MA6ojIEQ1PKar7C8KL35Tb/q4Ly0QhGFPfwzYPGP0NeOrrqvDIZ7pQv5M6nvkPOCKFm/K8CrTB0ZFhQ6lAVV8MOkQCJSXUM6IOOU3hvxA6S7I9JL7+IRNoCrYh3xZSDrYMufhHit7cFSY/ikCsFMhF4Aem+Q488l/pnsSK3ZrJS0dp9grP1+y/pIsQ+W9Pd88yffWsWAZCzp77zmTc6KaV+P/4PWM3uHbaIJGc9ilVggrGoPy+fXszEJNTIFUxKSX4UI0jbx8OBdSzDcpv00bBWwwg0s2T4FN+9TcEuGLjExKSeqvigDN1tTz9gyN2cZJ9TV9Hsa0W4/AvAdVk9wmKqPZdFv0kiIIYGhcUMAm7UIq1mOcQ+O+tjeKLSwSeM0+QKK3YZOjFqKcNQX3H2UlzWYwwteCTgAUxqEv453Fm46eKtKx2YxK53TBSa7S07onIwQMVzRCxfA202MbrmJWFoSxmKV/Do99vYfUObHJ68tx2CrFYwNDZnWf5Q7iMT7BPzuKJtLyhpNZXgdBTHr1cziBJcG4c/wMJx7gKj+ECiXIbLOfEqtO/KfPq5OHynyFjjdn4vsZ6kJ3MdS8jM8v1aZML5YHcge3fmmilf/EHOjxzeBO9MYEIhVUNCVu3uW6n0+SZ4kFE9Ef0Qa/EPqGhR/FEuGNCkuKyy+YYFiKWySF+wg+ryonuQgDXUQrpqfGvJkq64897wPNl/9nU5mtGQCfkUzGDRV42ts8B5AjxrWlgm+AdNFpHaF7Ox9YHbtzxMCBcLYAJlnzTMFbf/di3AohT8ILSCNveywaykIW1uPOZqfEW7liC9QSdiOakj0Vi8TYehauV0azIS1vaGifynMOENgjhfRgMowgMfKJLA7TdxidbIhruyPvKD19YqUMXT3Rti8v8pxpCdGWktiozsbWp+HbmkeWal6m+vg6XmGlhgfo3bB58N6I8S63GkzHAdb2OYb+bez7qGYgma8t0KRJZlsFxVbahxjixmRgHF5/hmVKytObWzLy0vrz1370HE9gEuGJCUhJCYFw8ZZ8eX9lUJjKKWSQNDfZ8e0IxkjzoLMhRGXSIL7+5Idm4AFluV8cW98GCj9msSnWLNCD4+/h9haB0Z2gsLgVtxv6mrpe5KAMllFr5hUo90AHHH8s+/jBA7wbNnvXbvU0Vus1saRZT2AK3pR1JuIqEkG0u1aWAvM11H5Xm/t2UaYmT8MIoMzLn3xxmzAgPUwNuxmnpOhMm4wKBqf1ByMUEbBlty0uJCZ9nZoIW2vRDTN0n2fKG0Z4DflSrnq5yYOcXb4VtSIHJloWvg/jrgh0qI95+2XDbqN0eQP2+107jc8S4YyMCkpKaN7RXzN+8SEqJzYTI47g72LHPa2asr9QK7cvAfmhZTbbkE8XEoKYEbpzpBkVhJ6XucMplfKKcd1/MaBKb8sviTw4/iufN96BkKKQ4R0cA6vilIL7naeRvnZYq/v1BmKGhSApqBcl70FaFE3WgAXMzb4bdg6EDsgpFGgmnX5on7prUmf6vfumXJyu6qp2wJBJYPcLH/vh+oilVJFD8Sm3/2oMf+wGp/pbJPXtrjTNR11ebXNxKsxihJzelsZnYd7DjsXUANSCbjPg9SbO6M6FF+aX3D2uUbF5iWYj4KAqUM+eGOWFSlkJx7MmrQ4iBw9fVhV/EMrY1rDC9dhDpDo6rSvUE+b5KANg/ZAS4YqIyooJ6fa62C3vAoU5yvOCluiKwIWy6YPVrObq6k3lnDwW0THmgRMY4pGLheeuKfRXUhmc3Ukt69beiWfwsMhl/mE/fJiBkJSOL+3mBrFpouAp7fTmP3y7q2WnaGjFeRQD6EzDZlH9RYue6mF3lhJCtYHJVUDCaZUdc3/pnEF0fNuhFbMM3+iXucvsgF37GK0qT5x2+N0taFoOPdbwVPIqXRAwKZYnNSR0SZXs95x9nSOnd/zGdkl8iv3lMtQ4lEBGF6i35vbwzkT/KZX4VpAji46UxsYhMKV0FwdLl3/SrDjqJhQnE3xfLaIq1/AWUBLhiomJx8opgsT5gV5FU6RK0s/BOU0UZCmHvikRaaFPBvL6KJ/2pEUfNcInkjasqHQpfzQiz7z5ANFtaJ6ktiiQxb60i/+PEwifkFTUsvdxmVegvtCLs6lECoZb6P0LrMbl7X8M4iJv63GpfaIAyklXruUeH1uUVW5NbZQt36j6EEcw2U8A3tHjnIXHMc2peERV9n2qdJ6gaeXEl8RpPbwqLZivG/z0CoFCZ3dScYClrTfM//b741bDGdE9VOCF0v+t9H7IKNVkRh+TAunEIOj8eR50eo7Q4OMroHB7p5aFKoGtqKGf7bea5msnZcQ6fq6gEuGLS0nJCeg21CsotC9yimHXbEC9V9FtlL0c9jaNmri1Llo0ENwaabaLvGzfcn+WU4HsBSfxTJrzXkvVLCuLEle6UiBSozhG2tw7aJzCuUX0Lxz6Px4n4vfKm66heTFLFCdTNWCqYvwy+qaNlwcA+nHb0XN+/Bp60SHZr9nV/2emHM1MBKoyCCKapeYWnsUWsvwrON0Ho0fH0TDw52xDY3bpuACC6FLjsiPdYAzAr0HowwVjNwMSqmXEqiH7wuQ78AvUpr9Ik77VaN+iDT9MqBkufWKjlZpDZGY3RmhWdsetpM1PrYROR1fIishpymaIJ4sS5XwHsfi6/pMuv3esRFLhjUvKyoqjLN5EE7MFd5c9LlrIR7Hv6ExMMNiO5cFUr4FIOCbmhzxXFMaa7wW1JrLQcr2VKVKWDewF1KPM9snZxiB7IkZDnfAv/1DMY4quC7FyO+PA5dVrjYGbygAJiVOJqgs1MmalUj8+o8fA8kDGujnVceOz3MyfBOAkb4i0PIptPEj0OBN5+m0LGr2moN1priRmPCOBzUMOqYCI5ldMi5qDvos0I8C+CbQrEfA8HGub+WgMceCVABBVChrUnSNXX+C70R7PyK9JAuy3YdnhJbx+d/BRY+VkEp+KKi2BhzcYUauFIeSUKCL9uGbnEQcoQp4zYov6qlKdHJIiQAh0umT1m+W7OIYytRM+zPq98T8bw8dykRLhiovJycli/FTQfRaD4e4a0x+UVmXNOXzF+wQuRd+0rlfI6B5nG0qRhq/XTQaf63Qi/VyMs9jmd6+lSvXXHdnJy+oio8dLQ7MGeAxU65zXfmgiRh76rYxlWLkJLkAMJg5qPfjq2Fe8R57NG1lHLIS/bvICWF5hVM2Uvv16ufXj9i/8PEE9Cg46S9hXsRrvylFvJyqxCsxMMPna4suVgXQGf4k8dwQiMb2O64PHsA46YLyirNiU9un+22aDog8bB96geqh6T95IzmZJzKPeSbha4/ABZw7VGtUC2+8W8XugA6BkLGuQUJ09m2UJw/XaaOG6Nl5AK3wUeMkS4YpJyMrJzgYv2FsTmEijNloWxpAD3xLt5t/qxWveC0yJUKPuDeO9CVpw3gUuMxoN97FVWPEYiscoCIcdr+eEbPW57kGPjeanrI4yDpawXzVfCEuO0ogN0hNSY53TGzAd9Bo0wgudQF1k22jgl943PS7UuHr60oSXoQ3C1IivdjbOB7ryOckAmCAdRSz7DGNf/FQY/VA8B7Jo3wlaYzn44BTdOV0NoS8uaGN9y2R7jETN5ax7zG7tFBoqa8XESWfZ8jDtoGa4z1j9Sh4NnfiKqX5KupcJQ/CBSeLQrKWocR26IgvvZGYnoah3J6dUF9+h+bBrTBLBksGSwU=';
+    let customSoundOn = ''; // Custom sound dari admin
+    let customSoundOff = ''; // Custom sound dari admin
     let lastPromoStatusClient = null; // Track status terakhir untuk hindari duplikat
 
     // Initialize sound icon state on load
@@ -9976,6 +10039,8 @@ app.get('/monitoring', async (_req, res) => {
         if (data.success) {
           customSoundUp = data.settings.soundUp || '';
           customSoundDown = data.settings.soundDown || '';
+          customSoundOn = data.settings.soundOn || '';
+          customSoundOff = data.settings.soundOff || '';
         }
       } catch (e) {}
     }
@@ -10499,6 +10564,8 @@ app.get('/monitoring', async (_req, res) => {
         if (data.type === 'sound_update') {
           customSoundUp = data.settings.soundUp || '';
           customSoundDown = data.settings.soundDown || '';
+          customSoundOn = data.settings.soundOn || '';
+          customSoundOff = data.settings.soundOff || '';
           console.log('Sound settings updated');
           return;
         }
@@ -10513,9 +10580,11 @@ app.get('/monitoring', async (_req, res) => {
 
           console.log('Promo status:', data.status, data.message);
 
-          // Play sound berdasarkan status
+          // Play sound berdasarkan status (gunakan custom sound jika ada)
           try {
-            const soundUrl = data.status === 'ON' ? promoSoundOn : promoSoundOff;
+            const soundUrl = data.status === 'ON'
+              ? (customSoundOn || defaultPromoSoundOn)
+              : (customSoundOff || defaultPromoSoundOff);
             const audio = new Audio(soundUrl);
             audio.volume = 0.7;
             audio.play().catch(e => console.log('Promo sound error:', e));
