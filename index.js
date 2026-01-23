@@ -10649,13 +10649,12 @@ app.get('/monitoring', async (_req, res) => {
           // Sound hanya jika enabled
           if (!soundEnabled) return;
 
-          // Hindari duplikat sound untuk status yang sama
-          if (data.status === lastPromoStatusClient) return;
+          // Update status tracker (untuk referensi saja)
           lastPromoStatusClient = data.status;
 
           console.log('Promo status:', data.status, data.message);
 
-          // Play sound berdasarkan status (gunakan custom sound jika ada)
+          // Play sound setiap kali ada broadcast (sudah di-rate limit di backend 1x/menit)
           try {
             const soundUrl = data.status === 'ON'
               ? (customSoundOn || defaultPromoSoundOn)
