@@ -1443,12 +1443,26 @@ async function refreshTreasuryToken() {
       signal: AbortSignal.timeout(10000)
     })
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    if (!res.ok) {
+      const errText = await res.text()
+      pushLog(`❌ Treasury login HTTP ${res.status}: ${errText.substring(0, 200)}`)
+      throw new Error(`HTTP ${res.status}`)
+    }
     const json = await res.json()
-    if (json.meta?.status !== 'success') throw new Error('API error')
+
+    // Debug: log response structure
+    pushLog(`📦 Treasury response: meta.status=${json.meta?.status}, message=${json.meta?.message || 'none'}`)
+
+    if (json.meta?.status !== 'success') {
+      pushLog(`❌ Treasury API error: ${JSON.stringify(json.meta || json).substring(0, 200)}`)
+      throw new Error('API error')
+    }
 
     const token = json.data?.token?.access_token
-    if (!token) throw new Error('No token in response')
+    if (!token) {
+      pushLog(`❌ No token! Response data: ${JSON.stringify(json.data).substring(0, 300)}`)
+      throw new Error('No token in response')
+    }
 
     treasuryToken = token
     pushLog('✅ Treasury token refreshed')
