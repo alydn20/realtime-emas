@@ -1617,9 +1617,12 @@ async function doPromoBroadcast() {
       time: new Date().toISOString()
     })
 
-    // 📱 PUSH NOTIFICATION untuk promo ON/OFF
-    const promoTitle = currentStatus === 'ON' ? '🎁 PROMO ON' : '❌ PROMO OFF'
-    sendPushToAll(promoTitle, '', 'promo').catch(() => {})
+    // 📱 PUSH NOTIFICATION untuk promo - HANYA saat status BERUBAH
+    if (statusChanged) {
+      const promoTitle = currentStatus === 'ON' ? '🎁 PROMO ON' : '❌ PROMO OFF'
+      pushLog(`🎁 Status changed! Sending push: ${promoTitle}`)
+      sendPushToAll(promoTitle, '', 'promo').catch(() => {})
+    }
 
   } catch (e) {
     pushLog(`❌ Promo broadcast error: ${e.message}`)
@@ -1654,21 +1657,35 @@ function triggerPromoCheck() {
 }
 
 // 📱 PUSH NOTIFICATION HELPER - Kirim notif ke semua subscriber
-let lastPushTime = 0
-const PUSH_COOLDOWN = 60000 // Minimal 1 menit antar push
+// Cooldown TERPISAH untuk price dan promo agar tidak saling blocking
+let lastPricePushTime = 0
+let lastPromoPushTime = 0
+const PRICE_PUSH_COOLDOWN = 60000 // 1 menit untuk price
+const PROMO_PUSH_COOLDOWN = 300000 // 5 menit untuk promo (karena hanya saat status berubah)
 
 async function sendPushToAll(title, body, type = 'price') {
   pushLog(`📱 PUSH | Attempting: "${title}" (type: ${type})`)
 
-  // Rate limit - jangan spam push
+  // Rate limit TERPISAH untuk price dan promo
   const now = Date.now()
-  const timeSinceLastPush = now - lastPushTime
-  if (timeSinceLastPush < PUSH_COOLDOWN) {
-    const waitTime = Math.round((PUSH_COOLDOWN - timeSinceLastPush) / 1000)
-    pushLog(`📱 PUSH | Skipped - cooldown ${waitTime}s remaining`)
-    return { skipped: true, reason: 'cooldown' }
+
+  if (type === 'price') {
+    const timeSinceLastPush = now - lastPricePushTime
+    if (timeSinceLastPush < PRICE_PUSH_COOLDOWN) {
+      const waitTime = Math.round((PRICE_PUSH_COOLDOWN - timeSinceLastPush) / 1000)
+      pushLog(`📱 PUSH | Skipped price - cooldown ${waitTime}s remaining`)
+      return { skipped: true, reason: 'cooldown' }
+    }
+    lastPricePushTime = now
+  } else if (type === 'promo') {
+    const timeSinceLastPush = now - lastPromoPushTime
+    if (timeSinceLastPush < PROMO_PUSH_COOLDOWN) {
+      const waitTime = Math.round((PROMO_PUSH_COOLDOWN - timeSinceLastPush) / 1000)
+      pushLog(`📱 PUSH | Skipped promo - cooldown ${waitTime}s remaining`)
+      return { skipped: true, reason: 'cooldown' }
+    }
+    lastPromoPushTime = now
   }
-  lastPushTime = now
 
   try {
     const allSubs = await redis.hgetall(REDIS_KEYS.PUSH_SUBS)
