@@ -10623,6 +10623,8 @@ app.get('/monitoring', async (_req, res) => {
 
         // 🎁 Handle promo ON/OFF status
         if (data.type === 'promo_status') {
+          console.log('📦 Promo status received:', data.status);
+
           // Update badge UI (selalu update, tidak perlu soundEnabled)
           const badge = document.getElementById('promoStatusBadge');
           const statusText = document.getElementById('promoStatusText');
@@ -10633,24 +10635,34 @@ app.get('/monitoring', async (_req, res) => {
           }
 
           // Sound hanya jika enabled
-          if (!soundEnabled) return;
+          if (!soundEnabled) {
+            console.log('🔇 Sound disabled, skipping promo sound');
+            return;
+          }
 
-          // Update status tracker (untuk referensi saja)
+          // Update status tracker
           lastPromoStatusClient = data.status;
 
-          console.log('Promo status:', data.status, data.message);
+          // Capture status untuk setTimeout
+          const statusForSound = data.status;
+
+          console.log('🔊 Promo sound akan diputar dalam 5 detik...');
 
           // Play sound dengan delay 5 detik agar tidak nyatu dengan sound NAIK/TURUN
           setTimeout(() => {
+            console.log('🔊 Playing promo sound:', statusForSound);
             try {
-              const soundUrl = data.status === 'ON'
+              const soundUrl = statusForSound === 'ON'
                 ? (customSoundOn || defaultPromoSoundOn)
                 : (customSoundOff || defaultPromoSoundOff);
+              console.log('🔊 Sound URL length:', soundUrl ? soundUrl.length : 0);
               const audio = new Audio(soundUrl);
               audio.volume = 0.7;
-              audio.play().catch(e => console.log('Promo sound error:', e));
+              audio.play()
+                .then(() => console.log('✅ Promo sound played successfully'))
+                .catch(e => console.log('❌ Promo sound error:', e.message));
             } catch (e) {
-              console.log('Promo sound error:', e);
+              console.log('❌ Promo sound exception:', e.message);
             }
           }, 5000); // 5 detik delay
 
