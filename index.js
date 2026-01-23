@@ -1617,6 +1617,14 @@ async function doPromoBroadcast() {
       time: new Date().toISOString()
     })
 
+    // 📱 PUSH NOTIFICATION untuk promo ON/OFF
+    const promoIcon = currentStatus === 'ON' ? '🎁' : '❌'
+    const promoTitle = `${promoIcon} Promo 20jt ${currentStatus}`
+    const promoBody = currentStatus === 'ON'
+      ? 'Promo Treasury 20jt sedang AKTIF!'
+      : 'Promo Treasury 20jt sudah TIDAK AKTIF'
+    sendPushToAll(promoTitle, promoBody, 'promo').catch(() => {})
+
   } catch (e) {
     pushLog(`❌ Promo broadcast error: ${e.message}`)
   } finally {
@@ -1647,6 +1655,56 @@ function startContinuousPromoCheck() {
 // Legacy function - sekarang tidak melakukan apa-apa karena sudah continuous
 function triggerPromoCheck() {
   // Continuous check sudah berjalan, tidak perlu trigger manual
+}
+
+// 📱 PUSH NOTIFICATION HELPER - Kirim notif ke semua subscriber
+let lastPushTime = 0
+const PUSH_COOLDOWN = 60000 // Minimal 1 menit antar push
+
+async function sendPushToAll(title, body, type = 'price') {
+  // Rate limit - jangan spam push
+  const now = Date.now()
+  if (now - lastPushTime < PUSH_COOLDOWN) {
+    return { skipped: true, reason: 'cooldown' }
+  }
+  lastPushTime = now
+
+  try {
+    const allSubs = await redis.hgetall(REDIS_KEYS.PUSH_SUBS)
+    if (!allSubs || Object.keys(allSubs).length === 0) {
+      return { sent: 0, failed: 0, total: 0 }
+    }
+
+    const payload = JSON.stringify({
+      title,
+      body,
+      icon: '/icon.png',
+      badge: '/icon.png',
+      type,
+      url: '/monitoring'
+    })
+
+    let sent = 0, failed = 0
+    for (const [phone, subData] of Object.entries(allSubs)) {
+      try {
+        const subscription = typeof subData === 'string' ? JSON.parse(subData) : subData
+        await webpush.sendNotification(subscription, payload)
+        sent++
+      } catch (e) {
+        failed++
+        // Hapus subscription yang expired
+        if (e.statusCode === 410) {
+          await redis.hdel(REDIS_KEYS.PUSH_SUBS, phone)
+        }
+      }
+    }
+
+    pushLog(`📱 Push sent: ${sent} success, ${failed} failed`)
+    return { sent, failed, total: sent + failed }
+  } catch (e) {
+    pushLog(`❌ Push error: ${e.message}`)
+    return { error: e.message }
+  }
 }
 
 // ⚡ ULTRA-INSTANT BROADCAST - Message sudah di-build sebelumnya
@@ -1950,6 +2008,13 @@ async function checkPriceUpdate() {
 
     // 🚀 INSTANT BROADCAST - Langsung kirim tanpa delay
     doBroadcastInstant(message)
+
+    // 📱 PUSH NOTIFICATION - Kirim ke HP walaupun browser tertutup
+    const buyDir = finalPriceChange.buyChange > 0 ? '📈' : '📉'
+    const sellDir = finalPriceChange.sellChange > 0 ? '📈' : '📉'
+    const pushTitle = `${buyDir} Harga Emas Update`
+    const pushBody = `Beli: Rp ${currentPrice.buy.toLocaleString('id-ID')} (${finalPriceChange.buyChange > 0 ? '+' : ''}${formatRupiah(finalPriceChange.buyChange)})\nJual: Rp ${currentPrice.sell.toLocaleString('id-ID')} (${finalPriceChange.sellChange > 0 ? '+' : ''}${formatRupiah(finalPriceChange.sellChange)})`
+    sendPushToAll(pushTitle, pushBody, 'price').catch(() => {})
 
   } catch (e) {
     // Track error per interval
