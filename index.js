@@ -10592,9 +10592,6 @@ app.get('/monitoring', async (_req, res) => {
             console.log('Promo sound error:', e);
           }
 
-          // Optional: tampilkan toast notification
-          const toastMsg = data.status === 'ON' ? '🎁 Promo 20jt ON!' : '❌ Promo 20jt OFF';
-          showToast(toastMsg, data.status === 'ON' ? 'success' : 'warning');
           return;
         }
 
