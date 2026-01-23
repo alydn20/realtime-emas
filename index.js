@@ -10640,17 +10640,19 @@ app.get('/monitoring', async (_req, res) => {
 
           console.log('Promo status:', data.status, data.message);
 
-          // Play sound setiap kali ada broadcast (sudah di-rate limit di backend 1x/menit)
-          try {
-            const soundUrl = data.status === 'ON'
-              ? (customSoundOn || defaultPromoSoundOn)
-              : (customSoundOff || defaultPromoSoundOff);
-            const audio = new Audio(soundUrl);
-            audio.volume = 0.7;
-            audio.play().catch(e => console.log('Promo sound error:', e));
-          } catch (e) {
-            console.log('Promo sound error:', e);
-          }
+          // Play sound dengan delay 5 detik agar tidak nyatu dengan sound NAIK/TURUN
+          setTimeout(() => {
+            try {
+              const soundUrl = data.status === 'ON'
+                ? (customSoundOn || defaultPromoSoundOn)
+                : (customSoundOff || defaultPromoSoundOff);
+              const audio = new Audio(soundUrl);
+              audio.volume = 0.7;
+              audio.play().catch(e => console.log('Promo sound error:', e));
+            } catch (e) {
+              console.log('Promo sound error:', e);
+            }
+          }, 5000); // 5 detik delay
 
           return;
         }
