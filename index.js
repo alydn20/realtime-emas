@@ -7934,6 +7934,49 @@ app.get('/monitoring', async (_req, res) => {
       width: 12px;
       height: 12px;
     }
+    /* Promo Status Badge */
+    .promo-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(100,100,100,0.3);
+      color: #888;
+      margin-left: 8px;
+    }
+    .promo-status-badge.on {
+      background: rgba(0,200,83,0.2);
+      color: #00c853;
+      animation: promoGlow 1.5s ease-in-out infinite;
+    }
+    .promo-status-badge.off {
+      background: rgba(255,82,82,0.2);
+      color: #ff5252;
+    }
+    .promo-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #888;
+    }
+    .promo-status-badge.on .promo-dot {
+      background: #00c853;
+      animation: promoPulse 1s ease-in-out infinite;
+    }
+    .promo-status-badge.off .promo-dot {
+      background: #ff5252;
+    }
+    @keyframes promoPulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.3); opacity: 0.7; }
+    }
+    @keyframes promoGlow {
+      0%, 100% { box-shadow: 0 0 5px rgba(0,200,83,0.3); }
+      50% { box-shadow: 0 0 15px rgba(0,200,83,0.5); }
+    }
     @keyframes pulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.7; }
@@ -9220,6 +9263,10 @@ app.get('/monitoring', async (_req, res) => {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10h8M8 14h8"/></svg>
             Hitung Emas
           </button>
+          <div class="promo-status-badge" id="promoStatusBadge">
+            <span class="promo-dot" id="promoDot"></span>
+            <span id="promoStatusText">-</span>
+          </div>
         </div>
         <div class="chart-stats">
           <div class="stat-item" id="buyCard">
@@ -10590,6 +10637,16 @@ app.get('/monitoring', async (_req, res) => {
 
         // 🎁 Handle promo ON/OFF status
         if (data.type === 'promo_status') {
+          // Update badge UI (selalu update, tidak perlu soundEnabled)
+          const badge = document.getElementById('promoStatusBadge');
+          const statusText = document.getElementById('promoStatusText');
+          if (badge && statusText) {
+            badge.classList.remove('on', 'off');
+            badge.classList.add(data.status === 'ON' ? 'on' : 'off');
+            statusText.textContent = data.status;
+          }
+
+          // Sound hanya jika enabled
           if (!soundEnabled) return;
 
           // Hindari duplikat sound untuk status yang sama
