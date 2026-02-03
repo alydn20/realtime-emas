@@ -7914,6 +7914,32 @@ app.get('/monitoring', async (_req, res) => {
     .stat-item.price-down .stat-value { color: #f87171; }
     .stat-item.invest .stat-label { color: #f7931a; }
 
+    /* Invest Stats Row - Baris kedua untuk nominal investasi */
+    .invest-stats {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 6px;
+      padding: 0 16px 12px 16px;
+      justify-content: center;
+      overflow-x: auto;
+    }
+    .invest-stats .stat-item {
+      padding: 6px 10px;
+      min-width: auto;
+      flex: 1;
+      max-width: 120px;
+    }
+    .invest-stats .stat-item .stat-label {
+      font-size: 0.65em;
+    }
+    .invest-stats .stat-item .stat-value {
+      font-size: 0.8em;
+    }
+    .invest-stats .stat-item .stat-change {
+      font-size: 0.6em;
+      padding: 2px 6px;
+    }
+
     /* Mobile Invest Selector */
     .mobile-invest-selector {
       display: none;
@@ -9083,8 +9109,9 @@ app.get('/monitoring', async (_req, res) => {
 
       /* Mobile: Show selector, hide all invest except selected */
       .mobile-invest-selector { display: block; }
-      .stat-item.invest { display: none; }
-      .stat-item.invest.mobile-visible { display: flex; }
+      .invest-stats { padding: 0 12px 10px 12px; }
+      .invest-stats .stat-item.invest { display: none; }
+      .invest-stats .stat-item.invest.mobile-visible { display: flex; flex: none; width: auto; max-width: none; }
 
       /* Responsive buttons */
       .chart-bottom-row {
@@ -9393,6 +9420,8 @@ app.get('/monitoring', async (_req, res) => {
             <span class="stat-label">USD/IDR</span>
             <span class="stat-value blue" id="usdIdr">-</span>
           </div>
+        </div>
+        <div class="invest-stats">
           <div class="mobile-invest-selector">
             <select id="mobileInvestSelect" onchange="showSelectedInvest(this.value)">
               <option value="10rb">10rb</option>
