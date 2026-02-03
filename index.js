@@ -9462,26 +9462,22 @@ app.get('/monitoring', async (_req, res) => {
       .chart-header h2 { font-size: 0.95em; }
       .chart-header h2 svg { width: 14px; height: 14px; }
       .live-badge { font-size: 0.6em; padding: 4px 10px; }
-      /* Mobile: Beli/Jual/Spread/USD sebaris, lebih compact */
+      /* Mobile: 3 baris - Beli/Jual, Spread/USD, Nominal */
       .chart-stats {
-        display: flex;
-        flex-wrap: nowrap;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
         gap: 4px;
         padding: 0 8px;
-        justify-content: space-between;
       }
       .chart-stats > .stat-item:not(.invest) {
-        padding: 4px 6px;
+        padding: 5px 8px;
         gap: 2px;
         border-radius: 6px;
         min-width: 0;
-        flex: 1;
-        flex-direction: row;
-        align-items: center;
       }
-      .chart-stats > .stat-item:not(.invest) .stat-label { font-size: 0.45em; }
-      .chart-stats > .stat-item:not(.invest) .stat-value { font-size: 0.55em; }
-      .chart-stats > .stat-item:not(.invest) .stat-change { font-size: 0.4em; padding: 1px 2px; border-radius: 2px; }
+      .chart-stats > .stat-item:not(.invest) .stat-label { font-size: 0.5em; }
+      .chart-stats > .stat-item:not(.invest) .stat-value { font-size: 0.65em; }
+      .chart-stats > .stat-item:not(.invest) .stat-change { font-size: 0.45em; padding: 1px 4px; border-radius: 3px; }
       .tradingview-widget-container { height: 350px; }
 
       /* Mobile: Show all enabled invest items */
