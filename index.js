@@ -1543,19 +1543,57 @@ async function doPromoBroadcast() {
   promoCheckCount++
 
   try {
-    const nominalData = await fetchNominalPromo().catch(() => null)
-
-    if (!nominalData) {
-      pushLog(`⚠️ Promo check #${promoCheckCount}: Gagal fetch data`)
+    // Get current prices
+    const treasuryData = cachedTreasuryData
+    if (!treasuryData || !treasuryData.data) {
+      pushLog(`⚠️ Promo check #${promoCheckCount}: No price data`)
       return
     }
 
-    // Cek apakah ada promo 20jt aktif
-    const has20jt = nominalData.data.some(n =>
-      n.status === true &&
-      (n.promotion_amount === 19315000 || n.default_amount === 20000000)
-    )
-    const currentStatus = has20jt ? 'ON' : 'OFF'
+    const buyRate = treasuryData.data.buying_rate
+    const sellRate = treasuryData.data.selling_rate
+
+    if (!buyRate || !sellRate) {
+      pushLog(`⚠️ Promo check #${promoCheckCount}: Invalid prices`)
+      return
+    }
+
+    // Load nominal settings from Redis
+    let nominalConfig = null
+    try {
+      const settings = await redis.get(REDIS_KEYS.NOMINAL_SETTINGS)
+      nominalConfig = settings ? (typeof settings === 'string' ? JSON.parse(settings) : settings) : DEFAULT_NOMINAL_CONFIG
+      if (Array.isArray(nominalConfig)) {
+        nominalConfig = { nominals: nominalConfig }
+      }
+    } catch (e) {
+      nominalConfig = DEFAULT_NOMINAL_CONFIG
+    }
+
+    // Get promoRef nominals (yang dicentang admin)
+    const promoRefNominals = (nominalConfig.nominals || []).filter(n => n.promoRef && n.active)
+
+    // Default: jika tidak ada yang dicentang, gunakan nominal > 9jt
+    let nominalsToCheck = promoRefNominals
+    if (nominalsToCheck.length === 0) {
+      nominalsToCheck = (nominalConfig.nominals || []).filter(n => n.active && n.amount > 9000000)
+    }
+
+    // Calculate profit for each nominal
+    let hasPositiveProfit = false
+    for (const nom of nominalsToCheck) {
+      const gram = nom.amount / buyRate
+      const netPrice = nom.amount - (nom.amount * nom.discountRate)
+      const sellValue = gram * sellRate
+      const profit = sellValue - netPrice
+
+      if (profit > 0) {
+        hasPositiveProfit = true
+        break
+      }
+    }
+
+    const currentStatus = hasPositiveProfit ? 'ON' : 'OFF'
 
     // Detect status change
     const isFirstCheck = lastPromoStatus === null
@@ -4422,14 +4460,13 @@ app.post('/api/admin/sound-settings', express.json({ limit: '10mb' }), async (re
 
 // Default nominal settings
 const DEFAULT_NOMINAL_CONFIG = {
-  defaultVisible: true, // Default ON jika ada nominal > 9jt
   nominals: [
-    { id: '10rb', label: '10rb', amount: 10000, discountRate: 0.4999, active: true },
-    { id: '10jt', label: '10jt', amount: 10000000, discountRate: 0.0331, active: true },
-    { id: '20jt', label: '20jt', amount: 20000000, discountRate: 0.0335, active: true },
-    { id: '30jt', label: '30jt', amount: 30000000, discountRate: 0.0335, active: true },
-    { id: '40jt', label: '40jt', amount: 40000000, discountRate: 0.0335, active: true },
-    { id: '50jt', label: '50jt', amount: 50000000, discountRate: 0.0335, active: true }
+    { id: '10rb', label: '10rb', amount: 10000, discountRate: 0.4999, active: true, promoRef: false },
+    { id: '10jt', label: '10jt', amount: 10000000, discountRate: 0.0331, active: true, promoRef: false },
+    { id: '20jt', label: '20jt', amount: 20000000, discountRate: 0.0335, active: true, promoRef: true },
+    { id: '30jt', label: '30jt', amount: 30000000, discountRate: 0.0335, active: true, promoRef: false },
+    { id: '40jt', label: '40jt', amount: 40000000, discountRate: 0.0335, active: true, promoRef: false },
+    { id: '50jt', label: '50jt', amount: 50000000, discountRate: 0.0335, active: true, promoRef: false }
   ]
 }
 
