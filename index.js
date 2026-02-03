@@ -639,22 +639,17 @@ function formatRupiah(n) {
 }
 
 function calculateDiscount(investmentAmount) {
-  const MIN_DISCOUNT = 5000
-
   let discount
 
   if (investmentAmount <= 10000) {
-    // Special: minimum 5000 untuk nominal kecil
-    discount = Math.max(investmentAmount * 0.5, MIN_DISCOUNT)
-  } else if (investmentAmount <= 250000) {
-    discount = investmentAmount * 0.0299 // 2.99%
-  } else if (investmentAmount <= 20000000) {
-    discount = investmentAmount * 0.0343 // 3.43%
-  } else if (investmentAmount <= 30000000) {
-    discount = investmentAmount * 0.034 // 3.4%
+    // 49.99% untuk nominal kecil
+    discount = investmentAmount * 0.4999
+  } else if (investmentAmount <= 10000000) {
+    // 3.31% untuk s/d 10jt
+    discount = investmentAmount * 0.0331
   } else {
-    // Untuk > 30jt: (amount × 3.275%) + 37.500
-    discount = (investmentAmount * 0.03275) + 37500
+    // 3.35% untuk > 10jt
+    discount = investmentAmount * 0.0335
   }
 
   return Math.round(discount)
@@ -10062,13 +10057,12 @@ app.get('/monitoring', async (_req, res) => {
         const gram40jt = 40000000 / item.buy;
         const gram50jt = 50000000 / item.buy;
 
-        // Calculate profit: (gram * harga_jual) - (modal - potongan)
-        // Potongan sesuai data Treasury:
-        // ≤20jt: 3.43%, ≤30jt: 3.4%, >30jt: (amount × 3.275%) + 37.500
-        const profit20jt = Math.round((gram20jt * item.sell) - (20000000 - 20000000 * 0.0343));
-        const profit30jt = Math.round((gram30jt * item.sell) - (30000000 - 30000000 * 0.034));
-        const profit40jt = Math.round((gram40jt * item.sell) - (40000000 - (40000000 * 0.03275 + 37500)));
-        const profit50jt = Math.round((gram50jt * item.sell) - (50000000 - (50000000 * 0.03275 + 37500)));
+        // Calculate profit: (gram * harga_jual) - (modal - diskon)
+        // Diskon 3.35% untuk semua nominal >10jt
+        const profit20jt = Math.round((gram20jt * item.sell) - (20000000 - 20000000 * 0.0335));
+        const profit30jt = Math.round((gram30jt * item.sell) - (30000000 - 30000000 * 0.0335));
+        const profit40jt = Math.round((gram40jt * item.sell) - (40000000 - 40000000 * 0.0335));
+        const profit50jt = Math.round((gram50jt * item.sell) - (50000000 - 50000000 * 0.0335));
 
         const profitClass20 = profit20jt >= 0 ? 'price-up' : 'price-down';
         const profitClass30 = profit30jt >= 0 ? 'price-up' : 'price-down';
@@ -10883,16 +10877,16 @@ app.get('/monitoring', async (_req, res) => {
           if (data.buy && data.sell) {
             document.getElementById('spreadPercent').textContent = ((data.sell - data.buy) / data.buy * 100).toFixed(2) + '%';
 
+            // Diskon 3.35% untuk >10jt
             const gram20 = 20000000 / data.buy;
             const gram30 = 30000000 / data.buy;
             const gram40 = 40000000 / data.buy;
             const gram50 = 50000000 / data.buy;
-            // Potongan sesuai data Treasury:
-            // ≤20jt: 3.43%, ≤30jt: 3.4%, >30jt: (amount × 3.275%) + 37.500
-            const profit20 = (gram20 * data.sell) - (20000000 - 20000000 * 0.0343);
-            const profit30 = (gram30 * data.sell) - (30000000 - 30000000 * 0.034);
-            const profit40 = (gram40 * data.sell) - (40000000 - (40000000 * 0.03275 + 37500));
-            const profit50 = (gram50 * data.sell) - (50000000 - (50000000 * 0.03275 + 37500));
+
+            const profit20 = (gram20 * data.sell) - (20000000 - 20000000 * 0.0335);
+            const profit30 = (gram30 * data.sell) - (30000000 - 30000000 * 0.0335);
+            const profit40 = (gram40 * data.sell) - (40000000 - 40000000 * 0.0335);
+            const profit50 = (gram50 * data.sell) - (50000000 - 50000000 * 0.0335);
 
             document.getElementById('gram20').textContent = gram20.toFixed(4) + ' gr';
             document.getElementById('gram30').textContent = gram30.toFixed(4) + ' gr';
