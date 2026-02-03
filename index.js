@@ -8251,9 +8251,9 @@ app.get('/monitoring', async (_req, res) => {
       padding: 2px 5px;
     }
 
-    /* Nominal Settings Button */
+    /* Nominal Settings Button - hanya muncul di mobile */
     .nominal-settings-btn {
-      display: flex;
+      display: none; /* Hidden on desktop */
       align-items: center;
       justify-content: center;
       width: 32px;
@@ -8360,33 +8360,6 @@ app.get('/monitoring', async (_req, res) => {
     /* User hidden nominal */
     .stat-item.invest.user-hidden {
       display: none !important;
-    }
-
-    /* Mobile Invest Selector */
-    .mobile-invest-selector {
-      display: none;
-      width: 100%;
-      padding: 8px 12px;
-    }
-    .mobile-invest-selector select {
-      width: 100%;
-      padding: 10px 14px;
-      background: rgba(247, 147, 26, 0.1);
-      border: 1px solid rgba(247, 147, 26, 0.3);
-      border-radius: 8px;
-      color: #f7931a;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.9em;
-      font-weight: 600;
-      cursor: pointer;
-      outline: none;
-    }
-    .mobile-invest-selector select:focus {
-      border-color: #f7931a;
-    }
-    .mobile-invest-selector select option {
-      background: #141a22;
-      color: #e7e9ea;
     }
 
     /* Chart Section */
@@ -9467,6 +9440,7 @@ app.get('/monitoring', async (_req, res) => {
     @media (max-width: 768px) {
       body { padding: 12px; }
       .container { max-width: 100%; }
+      .nominal-settings-btn { display: flex; } /* Show on mobile */
       .header {
         flex-direction: column;
         text-align: center;
@@ -9541,25 +9515,22 @@ app.get('/monitoring', async (_req, res) => {
       .chart-stats > .stat-item:not(.invest) .stat-change { font-size: 0.55em; padding: 1px 4px; border-radius: 3px; }
       .tradingview-widget-container { height: 350px; }
 
-      /* Mobile: Show selector, hide all invest except selected */
-      .mobile-invest-selector { display: block; }
+      /* Mobile: Show all enabled invest items */
       .invest-stats {
         padding: 8px 10px;
         gap: 4px;
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
         justify-content: center;
       }
-      .invest-stats .stat-item.invest { display: none; }
-      .invest-stats .stat-item.invest.mobile-visible {
-        display: flex;
+      .invest-stats .stat-item.invest {
         flex: none;
         width: auto;
         max-width: none;
         padding: 6px 10px;
       }
-      .invest-stats .stat-item.invest.mobile-visible .stat-label { font-size: 0.6em; }
-      .invest-stats .stat-item.invest.mobile-visible .stat-value { font-size: 0.75em; }
-      .invest-stats .stat-item.invest.mobile-visible .stat-change { font-size: 0.6em; }
+      .invest-stats .stat-item.invest .stat-label { font-size: 0.6em; }
+      .invest-stats .stat-item.invest .stat-value { font-size: 0.75em; }
+      .invest-stats .stat-item.invest .stat-change { font-size: 0.6em; }
 
       /* Responsive buttons */
       .chart-bottom-row {
@@ -9886,16 +9857,6 @@ app.get('/monitoring', async (_req, res) => {
           <button class="nominal-settings-btn" onclick="openNominalSettings()" title="Pilih Nominal">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           </button>
-          <div class="mobile-invest-selector">
-            <select id="mobileInvestSelect" onchange="showSelectedInvest(this.value)">
-              <option value="10rb">10rb</option>
-              <option value="10jt">10jt</option>
-              <option value="20jt" selected>20jt</option>
-              <option value="30jt">30jt</option>
-              <option value="40jt">40jt</option>
-              <option value="50jt">50jt</option>
-            </select>
-          </div>
           <div class="stat-item invest" data-invest="10rb">
             <span class="stat-label">10rb</span>
             <span class="stat-value" id="gram10rb">-</span>
@@ -11320,23 +11281,8 @@ app.get('/monitoring', async (_req, res) => {
     }
 
     function updateMobileSelector() {
-      const select = document.getElementById('mobileInvestSelect');
-      if (!select || !loadedNominals.length) return;
-
-      // Only show enabled nominals in selector
-      const enabledNominals = loadedNominals.filter(n => userNominalPrefs[n.id] !== false);
-      select.innerHTML = enabledNominals.map(n =>
-        '<option value="' + n.id + '">' + n.label + '</option>'
-      ).join('');
-
-      const saved = localStorage.getItem('selectedInvest');
-      if (saved && enabledNominals.find(n => n.id === saved)) {
-        select.value = saved;
-        showSelectedInvest(saved);
-      } else if (enabledNominals.length > 0) {
-        select.value = enabledNominals[0].id;
-        showSelectedInvest(enabledNominals[0].id);
-      }
+      // Dropdown selector sudah dihapus - fungsi ini tidak diperlukan lagi
+      return;
     }
 
     // Load nominal settings on page load
