@@ -9462,23 +9462,22 @@ app.get('/monitoring', async (_req, res) => {
       .chart-header h2 { font-size: 0.95em; }
       .chart-header h2 svg { width: 14px; height: 14px; }
       .live-badge { font-size: 0.6em; padding: 4px 10px; }
-      /* Mobile: Beli, Jual, Spread, USD/IDR sebaris */
+      /* Mobile: 2 baris - Beli/Jual di baris 1, Spread/USD di baris 2 */
       .chart-stats {
-        gap: 4px;
-        flex-wrap: nowrap;
-        justify-content: space-between;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
         padding: 0 10px;
       }
       .chart-stats > .stat-item:not(.invest) {
-        padding: 6px 8px;
+        padding: 8px 10px;
         gap: 3px;
-        border-radius: 6px;
-        flex: 1;
+        border-radius: 8px;
         min-width: 0;
       }
-      .chart-stats > .stat-item:not(.invest) .stat-label { font-size: 0.55em; }
-      .chart-stats > .stat-item:not(.invest) .stat-value { font-size: 0.7em; }
-      .chart-stats > .stat-item:not(.invest) .stat-change { font-size: 0.55em; padding: 1px 4px; border-radius: 3px; }
+      .chart-stats > .stat-item:not(.invest) .stat-label { font-size: 0.65em; }
+      .chart-stats > .stat-item:not(.invest) .stat-value { font-size: 0.85em; }
+      .chart-stats > .stat-item:not(.invest) .stat-change { font-size: 0.6em; padding: 2px 6px; border-radius: 4px; }
       .tradingview-widget-container { height: 350px; }
 
       /* Mobile: Show all enabled invest items */
