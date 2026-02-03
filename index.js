@@ -9362,6 +9362,16 @@ app.get('/monitoring', async (_req, res) => {
             <span class="stat-value blue" id="usdIdr">-</span>
           </div>
           <div class="stat-item invest">
+            <span class="stat-label">10rb</span>
+            <span class="stat-value" id="gram10rb">-</span>
+            <span class="stat-change up" id="profit10rb">-</span>
+          </div>
+          <div class="stat-item invest">
+            <span class="stat-label">10jt</span>
+            <span class="stat-value" id="gram10jt">-</span>
+            <span class="stat-change up" id="profit10jt">-</span>
+          </div>
+          <div class="stat-item invest">
             <span class="stat-label">20jt</span>
             <span class="stat-value" id="gram20">-</span>
             <span class="stat-change up" id="profit20">-</span>
@@ -9494,6 +9504,8 @@ app.get('/monitoring', async (_req, res) => {
             <th>Jual</th>
             <th>Spread</th>
             <th>USD/IDR</th>
+            <th>10rb</th>
+            <th>10jt</th>
             <th>20jt</th>
             <th>30jt</th>
             <th>40jt</th>
@@ -10051,23 +10063,31 @@ app.get('/monitoring', async (_req, res) => {
         const usdIdrVal = item.usdIdr || currentUsdIdr;
         const usdIdr = usdIdrVal ? Math.round(usdIdrVal).toLocaleString('id-ID') : '-';
 
-        // Calculate gram for 20jt, 30jt, 40jt, 50jt based on buy price
+        // Calculate gram for 10rb, 10jt, 20jt, 30jt, 40jt, 50jt based on buy price
+        const gram10rb = 10000 / item.buy;
+        const gram10jt = 10000000 / item.buy;
         const gram20jt = 20000000 / item.buy;
         const gram30jt = 30000000 / item.buy;
         const gram40jt = 40000000 / item.buy;
         const gram50jt = 50000000 / item.buy;
 
         // Calculate profit: (gram * harga_jual) - (modal - diskon)
-        // Diskon 3.35% untuk semua nominal >10jt
+        // Diskon: ≤10rb: 49.99%, ≤10jt: 3.31%, >10jt: 3.35%
+        const profit10rb = Math.round((gram10rb * item.sell) - (10000 - 10000 * 0.4999));
+        const profit10jt = Math.round((gram10jt * item.sell) - (10000000 - 10000000 * 0.0331));
         const profit20jt = Math.round((gram20jt * item.sell) - (20000000 - 20000000 * 0.0335));
         const profit30jt = Math.round((gram30jt * item.sell) - (30000000 - 30000000 * 0.0335));
         const profit40jt = Math.round((gram40jt * item.sell) - (40000000 - 40000000 * 0.0335));
         const profit50jt = Math.round((gram50jt * item.sell) - (50000000 - 50000000 * 0.0335));
 
+        const profitClass10rb = profit10rb >= 0 ? 'price-up' : 'price-down';
+        const profitClass10jt = profit10jt >= 0 ? 'price-up' : 'price-down';
         const profitClass20 = profit20jt >= 0 ? 'price-up' : 'price-down';
         const profitClass30 = profit30jt >= 0 ? 'price-up' : 'price-down';
         const profitClass40 = profit40jt >= 0 ? 'price-up' : 'price-down';
         const profitClass50 = profit50jt >= 0 ? 'price-up' : 'price-down';
+        const profitSign10rb = profit10rb >= 0 ? '+' : '';
+        const profitSign10jt = profit10jt >= 0 ? '+' : '';
         const profitSign20 = profit20jt >= 0 ? '+' : '';
         const profitSign30 = profit30jt >= 0 ? '+' : '';
         const profitSign40 = profit40jt >= 0 ? '+' : '';
@@ -10079,6 +10099,8 @@ app.get('/monitoring', async (_req, res) => {
           '<td>' + formatRupiahShort(item.sell) + '</td>' +
           '<td class="' + spreadClass + '">' + spread + '%</td>' +
           '<td>' + usdIdr + '</td>' +
+          '<td><span style="color:#e7e9ea;">' + gram10rb.toFixed(4) + 'g</span><br><small class="' + profitClass10rb + '">' + profitSign10rb + 'Rp ' + Math.abs(profit10rb).toLocaleString('id-ID') + '</small></td>' +
+          '<td><span style="color:#e7e9ea;">' + gram10jt.toFixed(4) + 'g</span><br><small class="' + profitClass10jt + '">' + profitSign10jt + 'Rp ' + Math.abs(profit10jt).toLocaleString('id-ID') + '</small></td>' +
           '<td><span style="color:#e7e9ea;">' + gram20jt.toFixed(4) + 'g</span><br><small class="' + profitClass20 + '">' + profitSign20 + 'Rp ' + Math.abs(profit20jt).toLocaleString('id-ID') + '</small></td>' +
           '<td><span style="color:#e7e9ea;">' + gram30jt.toFixed(4) + 'g</span><br><small class="' + profitClass30 + '">' + profitSign30 + 'Rp ' + Math.abs(profit30jt).toLocaleString('id-ID') + '</small></td>' +
           '<td><span style="color:#e7e9ea;">' + gram40jt.toFixed(4) + 'g</span><br><small class="' + profitClass40 + '">' + profitSign40 + 'Rp ' + Math.abs(profit40jt).toLocaleString('id-ID') + '</small></td>' +
@@ -10877,21 +10899,29 @@ app.get('/monitoring', async (_req, res) => {
           if (data.buy && data.sell) {
             document.getElementById('spreadPercent').textContent = ((data.sell - data.buy) / data.buy * 100).toFixed(2) + '%';
 
-            // Diskon 3.35% untuk >10jt
+            // Diskon: ≤10rb: 49.99%, ≤10jt: 3.31%, >10jt: 3.35%
+            const gram10rb = 10000 / data.buy;
+            const gram10jt = 10000000 / data.buy;
             const gram20 = 20000000 / data.buy;
             const gram30 = 30000000 / data.buy;
             const gram40 = 40000000 / data.buy;
             const gram50 = 50000000 / data.buy;
 
+            const profit10rb = (gram10rb * data.sell) - (10000 - 10000 * 0.4999);
+            const profit10jt = (gram10jt * data.sell) - (10000000 - 10000000 * 0.0331);
             const profit20 = (gram20 * data.sell) - (20000000 - 20000000 * 0.0335);
             const profit30 = (gram30 * data.sell) - (30000000 - 30000000 * 0.0335);
             const profit40 = (gram40 * data.sell) - (40000000 - 40000000 * 0.0335);
             const profit50 = (gram50 * data.sell) - (50000000 - 50000000 * 0.0335);
 
+            document.getElementById('gram10rb').textContent = gram10rb.toFixed(4) + ' gr';
+            document.getElementById('gram10jt').textContent = gram10jt.toFixed(4) + ' gr';
             document.getElementById('gram20').textContent = gram20.toFixed(4) + ' gr';
             document.getElementById('gram30').textContent = gram30.toFixed(4) + ' gr';
             document.getElementById('gram40').textContent = gram40.toFixed(4) + ' gr';
             document.getElementById('gram50').textContent = gram50.toFixed(4) + ' gr';
+            document.getElementById('profit10rb').textContent = '+Rp ' + Math.round(profit10rb).toLocaleString('id-ID');
+            document.getElementById('profit10jt').textContent = '+Rp ' + Math.round(profit10jt).toLocaleString('id-ID');
             document.getElementById('profit20').textContent = '+Rp ' + Math.round(profit20).toLocaleString('id-ID');
             document.getElementById('profit30').textContent = '+Rp ' + Math.round(profit30).toLocaleString('id-ID');
             document.getElementById('profit40').textContent = '+Rp ' + Math.round(profit40).toLocaleString('id-ID');
