@@ -4421,28 +4421,36 @@ app.post('/api/admin/sound-settings', express.json({ limit: '10mb' }), async (re
 // ==================== NOMINAL SETTINGS MANAGEMENT ====================
 
 // Default nominal settings
-const DEFAULT_NOMINALS = [
-  { id: '10rb', label: '10rb', amount: 10000, discountRate: 0.4999, active: true },
-  { id: '10jt', label: '10jt', amount: 10000000, discountRate: 0.0331, active: true },
-  { id: '20jt', label: '20jt', amount: 20000000, discountRate: 0.0335, active: true },
-  { id: '30jt', label: '30jt', amount: 30000000, discountRate: 0.0335, active: true },
-  { id: '40jt', label: '40jt', amount: 40000000, discountRate: 0.0335, active: true },
-  { id: '50jt', label: '50jt', amount: 50000000, discountRate: 0.0335, active: true }
-]
+const DEFAULT_NOMINAL_CONFIG = {
+  defaultVisible: true, // Default ON jika ada nominal > 9jt
+  nominals: [
+    { id: '10rb', label: '10rb', amount: 10000, discountRate: 0.4999, active: true },
+    { id: '10jt', label: '10jt', amount: 10000000, discountRate: 0.0331, active: true },
+    { id: '20jt', label: '20jt', amount: 20000000, discountRate: 0.0335, active: true },
+    { id: '30jt', label: '30jt', amount: 30000000, discountRate: 0.0335, active: true },
+    { id: '40jt', label: '40jt', amount: 40000000, discountRate: 0.0335, active: true },
+    { id: '50jt', label: '50jt', amount: 50000000, discountRate: 0.0335, active: true }
+  ]
+}
 
 // Get nominal settings (public - for client)
 app.get('/api/nominal-settings', async (_req, res) => {
   try {
     const settings = await redis.get(REDIS_KEYS.NOMINAL_SETTINGS)
-    if (settings) {
-      const parsed = typeof settings === 'string' ? JSON.parse(settings) : settings
-      // Only return active nominals for public
-      const activeNominals = parsed.filter(n => n.active)
-      res.json({ success: true, nominals: activeNominals })
-    } else {
-      const activeNominals = DEFAULT_NOMINALS.filter(n => n.active)
-      res.json({ success: true, nominals: activeNominals })
+    let config = settings ? (typeof settings === 'string' ? JSON.parse(settings) : settings) : DEFAULT_NOMINAL_CONFIG
+
+    // Handle old format (array instead of object)
+    if (Array.isArray(config)) {
+      config = { defaultVisible: true, nominals: config }
     }
+
+    // Only return active nominals for public
+    const activeNominals = config.nominals.filter(n => n.active)
+    // Default visible = true if any nominal > 9jt exists
+    const hasLargeNominal = activeNominals.some(n => n.amount > 9000000)
+    const defaultVisible = config.defaultVisible !== undefined ? config.defaultVisible : hasLargeNominal
+
+    res.json({ success: true, defaultVisible, nominals: activeNominals })
   } catch (e) {
     res.json({ success: false, error: e.message })
   }
@@ -4455,12 +4463,14 @@ app.get('/api/admin/nominal-settings', async (req, res) => {
 
   try {
     const settings = await redis.get(REDIS_KEYS.NOMINAL_SETTINGS)
-    if (settings) {
-      const parsed = typeof settings === 'string' ? JSON.parse(settings) : settings
-      res.json({ success: true, nominals: parsed })
-    } else {
-      res.json({ success: true, nominals: DEFAULT_NOMINALS })
+    let config = settings ? (typeof settings === 'string' ? JSON.parse(settings) : settings) : DEFAULT_NOMINAL_CONFIG
+
+    // Handle old format
+    if (Array.isArray(config)) {
+      config = { defaultVisible: true, nominals: config }
     }
+
+    res.json({ success: true, config })
   } catch (e) {
     res.json({ success: false, error: e.message })
   }
@@ -4468,60 +4478,15 @@ app.get('/api/admin/nominal-settings', async (req, res) => {
 
 // Admin: Update nominal settings
 app.post('/api/admin/nominal-settings', express.json(), async (req, res) => {
-  const { password, nominals } = req.body
+  const { password, config } = req.body
   if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
 
   try {
-    await redis.set(REDIS_KEYS.NOMINAL_SETTINGS, JSON.stringify(nominals))
+    await redis.set(REDIS_KEYS.NOMINAL_SETTINGS, JSON.stringify(config))
     // Broadcast to all clients to update their nominals
-    const activeNominals = nominals.filter(n => n.active)
-    broadcastSSE({ type: 'nominal_update', nominals: activeNominals })
-    res.json({ success: true, nominals })
-  } catch (e) {
-    res.json({ success: false, error: e.message })
-  }
-})
-
-// Admin: Add new nominal
-app.post('/api/admin/nominal-add', express.json(), async (req, res) => {
-  const { password, nominal } = req.body
-  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
-
-  try {
-    let settings = await redis.get(REDIS_KEYS.NOMINAL_SETTINGS)
-    let nominals = settings ? (typeof settings === 'string' ? JSON.parse(settings) : settings) : [...DEFAULT_NOMINALS]
-
-    // Check if id already exists
-    if (nominals.find(n => n.id === nominal.id)) {
-      return res.json({ success: false, error: 'Nominal dengan ID tersebut sudah ada' })
-    }
-
-    nominals.push(nominal)
-    await redis.set(REDIS_KEYS.NOMINAL_SETTINGS, JSON.stringify(nominals))
-
-    const activeNominals = nominals.filter(n => n.active)
-    broadcastSSE({ type: 'nominal_update', nominals: activeNominals })
-    res.json({ success: true, nominals })
-  } catch (e) {
-    res.json({ success: false, error: e.message })
-  }
-})
-
-// Admin: Delete nominal
-app.post('/api/admin/nominal-delete', express.json(), async (req, res) => {
-  const { password, id } = req.body
-  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
-
-  try {
-    let settings = await redis.get(REDIS_KEYS.NOMINAL_SETTINGS)
-    let nominals = settings ? (typeof settings === 'string' ? JSON.parse(settings) : settings) : [...DEFAULT_NOMINALS]
-
-    nominals = nominals.filter(n => n.id !== id)
-    await redis.set(REDIS_KEYS.NOMINAL_SETTINGS, JSON.stringify(nominals))
-
-    const activeNominals = nominals.filter(n => n.active)
-    broadcastSSE({ type: 'nominal_update', nominals: activeNominals })
-    res.json({ success: true, nominals })
+    const activeNominals = config.nominals.filter(n => n.active)
+    broadcastSSE({ type: 'nominal_update', defaultVisible: config.defaultVisible, nominals: activeNominals })
+    res.json({ success: true, config })
   } catch (e) {
     res.json({ success: false, error: e.message })
   }
@@ -6657,6 +6622,15 @@ ${authScript}
           <p style="color:#6b7280;font-size:0.82em;margin-bottom:16px;">Atur nominal yang ditampilkan ke user, termasuk persentase diskon.</p>
           <div class="result-msg" id="nominalResult"></div>
 
+          <!-- Default Visibility Setting -->
+          <div style="background:rgba(96,165,250,0.05);padding:16px;border-radius:12px;border:1px solid rgba(96,165,250,0.15);margin-bottom:20px;">
+            <label style="color:#60a5fa;font-weight:600;display:flex;align-items:center;gap:10px;font-size:0.9em;cursor:pointer;">
+              <input type="checkbox" id="defaultVisibleToggle" onchange="updateDefaultVisible()" style="width:18px;height:18px;cursor:pointer;">
+              Default Tampilkan Nominal (ON) - User bisa toggle sendiri
+            </label>
+            <p style="color:#6b7280;font-size:0.75em;margin-top:8px;">Jika dicentang, nominal akan tampil secara default saat user buka halaman.</p>
+          </div>
+
           <!-- Add New Nominal -->
           <div style="background:rgba(247,147,26,0.05);padding:16px;border-radius:12px;border:1px solid rgba(247,147,26,0.15);margin-bottom:20px;">
             <label style="color:#f7931a;font-weight:600;display:block;margin-bottom:12px;font-size:0.9em;">Tambah Nominal Baru</label>
@@ -7300,17 +7274,24 @@ ${authScript}
 
     // ==================== Nominal Management Functions ====================
     let currentNominals = [];
+    let currentDefaultVisible = true;
 
     function loadNominals() {
       fetch('/api/admin/nominal-settings?password=' + encodeURIComponent(adminPass))
         .then(r => r.json())
         .then(data => {
           if (data.success) {
-            currentNominals = data.nominals;
+            currentNominals = data.config.nominals || [];
+            currentDefaultVisible = data.config.defaultVisible !== false;
+            document.getElementById('defaultVisibleToggle').checked = currentDefaultVisible;
             renderNominalTable();
           }
         })
         .catch(e => console.error('Error loading nominals:', e));
+    }
+
+    function updateDefaultVisible() {
+      currentDefaultVisible = document.getElementById('defaultVisibleToggle').checked;
     }
 
     function renderNominalTable() {
@@ -7401,10 +7382,15 @@ ${authScript}
       result.className = 'result-msg success';
       result.textContent = 'Menyimpan...';
 
+      const config = {
+        defaultVisible: currentDefaultVisible,
+        nominals: currentNominals
+      };
+
       fetch('/api/admin/nominal-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, nominals: currentNominals })
+        body: JSON.stringify({ password: adminPass, config: config })
       })
       .then(r => r.json())
       .then(data => {
@@ -8238,6 +8224,33 @@ app.get('/monitoring', async (_req, res) => {
     .invest-stats .stat-item .stat-change {
       font-size: 0.6em;
       padding: 2px 6px;
+    }
+
+    /* Nominal Toggle Button */
+    .nominal-toggle-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: rgba(247, 147, 26, 0.15);
+      border: 1px solid rgba(247, 147, 26, 0.3);
+      border-radius: 8px;
+      color: #f7931a;
+      font-size: 0.75em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .nominal-toggle-btn:hover {
+      background: rgba(247, 147, 26, 0.25);
+    }
+    .nominal-toggle-btn.off {
+      background: rgba(107, 114, 128, 0.15);
+      border-color: rgba(107, 114, 128, 0.3);
+      color: #6b7280;
+    }
+    .invest-stats.hidden {
+      display: none !important;
     }
 
     /* Mobile Invest Selector */
@@ -9768,6 +9781,10 @@ app.get('/monitoring', async (_req, res) => {
             <div class="info-item clock-info">
               <span class="info-time" id="clock2">--:--:--</span>
             </div>
+            <button class="nominal-toggle-btn" id="nominalToggleBtn" onclick="toggleNominalVisibility()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              <span id="nominalToggleText">Nominal ON</span>
+            </button>
           </div>
           <div class="indicator-buttons-row">
             <button class="indicator-btn settings" onclick="openIndicatorSettings()">
@@ -11073,6 +11090,85 @@ app.get('/monitoring', async (_req, res) => {
       }
     })();
 
+    // 💰 Nominal Visibility Toggle
+    let nominalVisible = true;
+    let loadedNominals = [];
+
+    function toggleNominalVisibility() {
+      nominalVisible = !nominalVisible;
+      const investStats = document.querySelector('.invest-stats');
+      const toggleBtn = document.getElementById('nominalToggleBtn');
+      const toggleText = document.getElementById('nominalToggleText');
+
+      if (nominalVisible) {
+        investStats.classList.remove('hidden');
+        toggleBtn.classList.remove('off');
+        toggleText.textContent = 'Nominal ON';
+      } else {
+        investStats.classList.add('hidden');
+        toggleBtn.classList.add('off');
+        toggleText.textContent = 'Nominal OFF';
+      }
+      localStorage.setItem('nominalVisible', nominalVisible ? 'true' : 'false');
+    }
+
+    // Load nominal settings from API
+    function loadNominalSettings() {
+      fetch('/api/nominal-settings')
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            loadedNominals = data.nominals;
+            // Check localStorage for user preference, fallback to admin default
+            const savedPref = localStorage.getItem('nominalVisible');
+            if (savedPref !== null) {
+              nominalVisible = savedPref === 'true';
+            } else {
+              nominalVisible = data.defaultVisible;
+            }
+            // Apply visibility
+            const investStats = document.querySelector('.invest-stats');
+            const toggleBtn = document.getElementById('nominalToggleBtn');
+            const toggleText = document.getElementById('nominalToggleText');
+            if (investStats && toggleBtn && toggleText) {
+              if (nominalVisible) {
+                investStats.classList.remove('hidden');
+                toggleBtn.classList.remove('off');
+                toggleText.textContent = 'Nominal ON';
+              } else {
+                investStats.classList.add('hidden');
+                toggleBtn.classList.add('off');
+                toggleText.textContent = 'Nominal OFF';
+              }
+            }
+            // Update mobile selector options
+            updateMobileSelector();
+          }
+        })
+        .catch(e => console.error('Error loading nominal settings:', e));
+    }
+
+    function updateMobileSelector() {
+      const select = document.getElementById('mobileInvestSelect');
+      if (!select || !loadedNominals.length) return;
+
+      select.innerHTML = loadedNominals.map(n =>
+        '<option value="' + n.id + '">' + n.label + '</option>'
+      ).join('');
+
+      const saved = localStorage.getItem('selectedInvest');
+      if (saved && loadedNominals.find(n => n.id === saved)) {
+        select.value = saved;
+        showSelectedInvest(saved);
+      } else if (loadedNominals.length > 0) {
+        select.value = loadedNominals[0].id;
+        showSelectedInvest(loadedNominals[0].id);
+      }
+    }
+
+    // Load nominal settings on page load
+    loadNominalSettings();
+
     // 🚀 SSE (Server-Sent Events) untuk real-time INSTANT update
     let evtSource = null;
     let sseReconnectTimer = null;
@@ -11119,6 +11215,35 @@ app.get('/monitoring', async (_req, res) => {
           customSoundOn = data.settings.soundOn || '';
           customSoundOff = data.settings.soundOff || '';
           console.log('Sound settings updated');
+          return;
+        }
+
+        // Handle nominal settings update from admin
+        if (data.type === 'nominal_update') {
+          loadedNominals = data.nominals || [];
+          if (data.defaultVisible !== undefined) {
+            // Only update if user hasn't set preference
+            const savedPref = localStorage.getItem('nominalVisible');
+            if (savedPref === null) {
+              nominalVisible = data.defaultVisible;
+              const investStats = document.querySelector('.invest-stats');
+              const toggleBtn = document.getElementById('nominalToggleBtn');
+              const toggleText = document.getElementById('nominalToggleText');
+              if (investStats && toggleBtn && toggleText) {
+                if (nominalVisible) {
+                  investStats.classList.remove('hidden');
+                  toggleBtn.classList.remove('off');
+                  toggleText.textContent = 'Nominal ON';
+                } else {
+                  investStats.classList.add('hidden');
+                  toggleBtn.classList.add('off');
+                  toggleText.textContent = 'Nominal OFF';
+                }
+              }
+            }
+          }
+          updateMobileSelector();
+          console.log('Nominal settings updated');
           return;
         }
 
