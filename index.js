@@ -8203,54 +8203,25 @@ app.get('/monitoring', async (_req, res) => {
     /* Invest Stats Row - Baris kedua untuk nominal investasi */
     .invest-stats {
       display: flex;
-      flex-wrap: nowrap;
+      flex-wrap: wrap;
       gap: 6px;
       padding: 0 16px 12px 16px;
       justify-content: center;
-      overflow-x: auto;
     }
     .invest-stats .stat-item {
-      padding: 6px 10px;
-      min-width: auto;
-      flex: 1;
-      max-width: 120px;
+      padding: 6px 8px;
+      min-width: 80px;
+      flex: 1 1 auto;
     }
     .invest-stats .stat-item .stat-label {
       font-size: 0.65em;
     }
     .invest-stats .stat-item .stat-value {
-      font-size: 0.8em;
+      font-size: 0.75em;
     }
     .invest-stats .stat-item .stat-change {
-      font-size: 0.6em;
-      padding: 2px 6px;
-    }
-
-    /* Nominal Toggle Button */
-    .nominal-toggle-btn {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      background: rgba(247, 147, 26, 0.15);
-      border: 1px solid rgba(247, 147, 26, 0.3);
-      border-radius: 8px;
-      color: #f7931a;
-      font-size: 0.75em;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .nominal-toggle-btn:hover {
-      background: rgba(247, 147, 26, 0.25);
-    }
-    .nominal-toggle-btn.off {
-      background: rgba(107, 114, 128, 0.15);
-      border-color: rgba(107, 114, 128, 0.3);
-      color: #6b7280;
-    }
-    .invest-stats.hidden {
-      display: none !important;
+      font-size: 0.55em;
+      padding: 2px 5px;
     }
 
     /* Mobile Invest Selector */
@@ -9709,10 +9680,6 @@ app.get('/monitoring', async (_req, res) => {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10h8M8 14h8"/></svg>
             Hitung Emas
           </button>
-          <div class="promo-status-badge" id="promoStatusBadge">
-            <span class="promo-dot" id="promoDot"></span>
-            <span id="promoStatusText">-</span>
-          </div>
         </div>
         <div class="chart-stats">
           <div class="stat-item" id="buyCard">
@@ -9781,10 +9748,10 @@ app.get('/monitoring', async (_req, res) => {
             <div class="info-item clock-info">
               <span class="info-time" id="clock2">--:--:--</span>
             </div>
-            <button class="nominal-toggle-btn" id="nominalToggleBtn" onclick="toggleNominalVisibility()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-              <span id="nominalToggleText">Nominal ON</span>
-            </button>
+            <div class="promo-status-badge" id="promoStatusBadge">
+              <span class="promo-dot" id="promoDot"></span>
+              <span id="promoStatusText">-</span>
+            </div>
           </div>
           <div class="indicator-buttons-row">
             <button class="indicator-btn settings" onclick="openIndicatorSettings()">
@@ -11090,27 +11057,8 @@ app.get('/monitoring', async (_req, res) => {
       }
     })();
 
-    // 💰 Nominal Visibility Toggle
-    let nominalVisible = true;
+    // 💰 Nominal Settings from API
     let loadedNominals = [];
-
-    function toggleNominalVisibility() {
-      nominalVisible = !nominalVisible;
-      const investStats = document.querySelector('.invest-stats');
-      const toggleBtn = document.getElementById('nominalToggleBtn');
-      const toggleText = document.getElementById('nominalToggleText');
-
-      if (nominalVisible) {
-        investStats.classList.remove('hidden');
-        toggleBtn.classList.remove('off');
-        toggleText.textContent = 'Nominal ON';
-      } else {
-        investStats.classList.add('hidden');
-        toggleBtn.classList.add('off');
-        toggleText.textContent = 'Nominal OFF';
-      }
-      localStorage.setItem('nominalVisible', nominalVisible ? 'true' : 'false');
-    }
 
     // Load nominal settings from API
     function loadNominalSettings() {
@@ -11119,29 +11067,6 @@ app.get('/monitoring', async (_req, res) => {
         .then(data => {
           if (data.success) {
             loadedNominals = data.nominals;
-            // Check localStorage for user preference, fallback to admin default
-            const savedPref = localStorage.getItem('nominalVisible');
-            if (savedPref !== null) {
-              nominalVisible = savedPref === 'true';
-            } else {
-              nominalVisible = data.defaultVisible;
-            }
-            // Apply visibility
-            const investStats = document.querySelector('.invest-stats');
-            const toggleBtn = document.getElementById('nominalToggleBtn');
-            const toggleText = document.getElementById('nominalToggleText');
-            if (investStats && toggleBtn && toggleText) {
-              if (nominalVisible) {
-                investStats.classList.remove('hidden');
-                toggleBtn.classList.remove('off');
-                toggleText.textContent = 'Nominal ON';
-              } else {
-                investStats.classList.add('hidden');
-                toggleBtn.classList.add('off');
-                toggleText.textContent = 'Nominal OFF';
-              }
-            }
-            // Update mobile selector options
             updateMobileSelector();
           }
         })
@@ -11221,27 +11146,6 @@ app.get('/monitoring', async (_req, res) => {
         // Handle nominal settings update from admin
         if (data.type === 'nominal_update') {
           loadedNominals = data.nominals || [];
-          if (data.defaultVisible !== undefined) {
-            // Only update if user hasn't set preference
-            const savedPref = localStorage.getItem('nominalVisible');
-            if (savedPref === null) {
-              nominalVisible = data.defaultVisible;
-              const investStats = document.querySelector('.invest-stats');
-              const toggleBtn = document.getElementById('nominalToggleBtn');
-              const toggleText = document.getElementById('nominalToggleText');
-              if (investStats && toggleBtn && toggleText) {
-                if (nominalVisible) {
-                  investStats.classList.remove('hidden');
-                  toggleBtn.classList.remove('off');
-                  toggleText.textContent = 'Nominal ON';
-                } else {
-                  investStats.classList.add('hidden');
-                  toggleBtn.classList.add('off');
-                  toggleText.textContent = 'Nominal OFF';
-                }
-              }
-            }
-          }
           updateMobileSelector();
           console.log('Nominal settings updated');
           return;
