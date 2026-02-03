@@ -8224,6 +8224,117 @@ app.get('/monitoring', async (_req, res) => {
       padding: 2px 5px;
     }
 
+    /* Nominal Settings Button */
+    .nominal-settings-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      background: rgba(247, 147, 26, 0.15);
+      border: 1px solid rgba(247, 147, 26, 0.3);
+      border-radius: 8px;
+      color: #f7931a;
+      cursor: pointer;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .nominal-settings-btn:hover {
+      background: rgba(247, 147, 26, 0.25);
+    }
+
+    /* Nominal Settings Modal */
+    .nominal-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .nominal-modal-overlay.active { display: flex; }
+    .nominal-modal {
+      background: #141a22;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 20px;
+      max-width: 320px;
+      width: 90%;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .nominal-modal h3 {
+      color: #f7931a;
+      font-size: 1em;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .nominal-modal-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .nominal-modal-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .nominal-modal-item:hover { background: rgba(255,255,255,0.06); }
+    .nominal-modal-item input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: #f7931a;
+    }
+    .nominal-modal-item label {
+      flex: 1;
+      cursor: pointer;
+      color: #e7e9ea;
+      font-size: 0.9em;
+    }
+    .nominal-modal-item .nominal-discount {
+      color: #6b7280;
+      font-size: 0.75em;
+    }
+    .nominal-modal-actions {
+      display: flex;
+      gap: 10px;
+    }
+    .nominal-modal-actions button {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .nominal-modal-actions .btn-cancel {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #8b949e;
+    }
+    .nominal-modal-actions .btn-save {
+      background: #f7931a;
+      border: none;
+      color: #000;
+    }
+    /* User hidden nominal */
+    .stat-item.invest.user-hidden {
+      display: none !important;
+    }
+
     /* Mobile Invest Selector */
     .mobile-invest-selector {
       display: none;
@@ -9563,6 +9674,23 @@ app.get('/monitoring', async (_req, res) => {
 <body>
   <div class="toast-container" id="toastContainer"></div>
 
+  <!-- Nominal Settings Modal -->
+  <div class="nominal-modal-overlay" id="nominalSettingsModal">
+    <div class="nominal-modal">
+      <h3>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Pilih Nominal Investasi
+      </h3>
+      <div class="nominal-modal-list" id="nominalModalList">
+        <!-- Will be populated by JavaScript -->
+      </div>
+      <div class="nominal-modal-actions">
+        <button class="btn-cancel" onclick="closeNominalSettings()">Batal</button>
+        <button class="btn-save" onclick="saveNominalSettings()">Simpan</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Indicator Settings Modal -->
   <div class="indicator-settings-overlay" id="indicatorSettingsModal">
     <div class="indicator-settings-modal">
@@ -9728,6 +9856,9 @@ app.get('/monitoring', async (_req, res) => {
           </div>
         </div>
         <div class="invest-stats">
+          <button class="nominal-settings-btn" onclick="openNominalSettings()" title="Pilih Nominal">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
           <div class="mobile-invest-selector">
             <select id="mobileInvestSelect" onchange="showSelectedInvest(this.value)">
               <option value="10rb">10rb</option>
@@ -11085,6 +11216,7 @@ app.get('/monitoring', async (_req, res) => {
 
     // 💰 Nominal Settings from API
     let loadedNominals = [];
+    let userNominalPrefs = {}; // { id: true/false }
 
     // Load nominal settings from API
     function loadNominalSettings() {
@@ -11093,27 +11225,90 @@ app.get('/monitoring', async (_req, res) => {
         .then(data => {
           if (data.success) {
             loadedNominals = data.nominals;
+            // Load user preferences from localStorage
+            const saved = localStorage.getItem('userNominalPrefs');
+            if (saved) {
+              userNominalPrefs = JSON.parse(saved);
+            } else {
+              // Default: semua nominal aktif
+              loadedNominals.forEach(n => { userNominalPrefs[n.id] = true; });
+            }
+            applyNominalVisibility();
             updateMobileSelector();
           }
         })
         .catch(e => console.error('Error loading nominal settings:', e));
     }
 
+    function applyNominalVisibility() {
+      loadedNominals.forEach(n => {
+        const el = document.querySelector('.stat-item.invest[data-invest="' + n.id + '"]');
+        if (el) {
+          if (userNominalPrefs[n.id] !== false) {
+            el.style.display = '';
+            el.classList.remove('user-hidden');
+          } else {
+            el.style.display = 'none';
+            el.classList.add('user-hidden');
+          }
+        }
+      });
+    }
+
+    function openNominalSettings() {
+      const modal = document.getElementById('nominalSettingsModal');
+      const list = document.getElementById('nominalModalList');
+
+      list.innerHTML = loadedNominals.map(n => {
+        const checked = userNominalPrefs[n.id] !== false ? 'checked' : '';
+        const discountPercent = (n.discountRate * 100).toFixed(2);
+        return '<div class="nominal-modal-item" onclick="toggleNominalCheckbox(\'' + n.id + '\')">' +
+          '<input type="checkbox" id="nom_' + n.id + '" ' + checked + ' onclick="event.stopPropagation()">' +
+          '<label for="nom_' + n.id + '">' + n.label + '</label>' +
+          '<span class="nominal-discount">Disc ' + discountPercent + '%</span>' +
+        '</div>';
+      }).join('');
+
+      modal.classList.add('active');
+    }
+
+    function toggleNominalCheckbox(id) {
+      const cb = document.getElementById('nom_' + id);
+      if (cb) cb.checked = !cb.checked;
+    }
+
+    function closeNominalSettings() {
+      document.getElementById('nominalSettingsModal').classList.remove('active');
+    }
+
+    function saveNominalSettings() {
+      loadedNominals.forEach(n => {
+        const cb = document.getElementById('nom_' + n.id);
+        userNominalPrefs[n.id] = cb ? cb.checked : true;
+      });
+      localStorage.setItem('userNominalPrefs', JSON.stringify(userNominalPrefs));
+      applyNominalVisibility();
+      updateMobileSelector();
+      closeNominalSettings();
+    }
+
     function updateMobileSelector() {
       const select = document.getElementById('mobileInvestSelect');
       if (!select || !loadedNominals.length) return;
 
-      select.innerHTML = loadedNominals.map(n =>
+      // Only show enabled nominals in selector
+      const enabledNominals = loadedNominals.filter(n => userNominalPrefs[n.id] !== false);
+      select.innerHTML = enabledNominals.map(n =>
         '<option value="' + n.id + '">' + n.label + '</option>'
       ).join('');
 
       const saved = localStorage.getItem('selectedInvest');
-      if (saved && loadedNominals.find(n => n.id === saved)) {
+      if (saved && enabledNominals.find(n => n.id === saved)) {
         select.value = saved;
         showSelectedInvest(saved);
-      } else if (loadedNominals.length > 0) {
-        select.value = loadedNominals[0].id;
-        showSelectedInvest(loadedNominals[0].id);
+      } else if (enabledNominals.length > 0) {
+        select.value = enabledNominals[0].id;
+        showSelectedInvest(enabledNominals[0].id);
       }
     }
 
