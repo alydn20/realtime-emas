@@ -1570,23 +1570,24 @@ async function doPromoBroadcast() {
       nominalConfig = DEFAULT_NOMINAL_CONFIG
     }
 
-    // Get promoRef nominal (hanya 1 yang dipilih admin)
+    // Get promoRef nominal (hanya 1 yang dipilih admin via radio button)
     const promoRefNominal = (nominalConfig.nominals || []).find(n => n.promoRef && n.active)
 
-    // Default: jika tidak ada yang dipilih, gunakan nominal pertama > 9jt
+    // HANYA gunakan nominal yang dipilih admin, tidak ada fallback otomatis
     let nominalToCheck = promoRefNominal
-    if (!nominalToCheck) {
-      nominalToCheck = (nominalConfig.nominals || []).find(n => n.active && n.amount > 9000000)
-    }
 
     // Calculate profit for the selected nominal
     let hasPositiveProfit = false
-    if (nominalToCheck) {
+    if (!nominalToCheck) {
+      // Tidak ada nominal yang dipilih sebagai promoRef - default OFF
+      pushLog(`⚠️ Promo check #${promoCheckCount}: Tidak ada nominal promoRef yang dipilih admin`)
+    } else {
       const gram = nominalToCheck.amount / buyRate
       const netPrice = nominalToCheck.amount - (nominalToCheck.amount * nominalToCheck.discountRate)
       const sellValue = gram * sellRate
       const profit = sellValue - netPrice
       hasPositiveProfit = profit > 0
+      pushLog(`🎁 Promo check: ${nominalToCheck.label} profit=${Math.round(profit)} → ${hasPositiveProfit ? 'ON' : 'OFF'}`)
     }
 
     const currentStatus = hasPositiveProfit ? 'ON' : 'OFF'
