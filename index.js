@@ -180,7 +180,8 @@ const REDIS_KEYS = {
   BLOCKED_USERS: 'gold:blocked_users', // Hash: phone -> { blockedAt, reason }
   PENDING_REGISTRATIONS: 'gold:pending_reg_v2', // Hash: phone -> { name, phone, timestamp }
   USER_PINS: 'gold:user_pins',    // Hash: phone -> { pin (hashed), pinChanged (boolean) }
-  SOUND_SETTINGS: 'gold:sound_settings' // JSON: custom sound settings (soundUp, soundDown URLs)
+  SOUND_SETTINGS: 'gold:sound_settings', // JSON: custom sound settings (soundUp, soundDown URLs)
+  NOMINAL_SETTINGS: 'gold:nominal_settings' // JSON: nominal investment settings
 }
 
 // Admin password untuk akses admin panel
@@ -4417,6 +4418,115 @@ app.post('/api/admin/sound-settings', express.json({ limit: '10mb' }), async (re
   }
 })
 
+// ==================== NOMINAL SETTINGS MANAGEMENT ====================
+
+// Default nominal settings
+const DEFAULT_NOMINALS = [
+  { id: '10rb', label: '10rb', amount: 10000, discountRate: 0.4999, active: true },
+  { id: '10jt', label: '10jt', amount: 10000000, discountRate: 0.0331, active: true },
+  { id: '20jt', label: '20jt', amount: 20000000, discountRate: 0.0335, active: true },
+  { id: '30jt', label: '30jt', amount: 30000000, discountRate: 0.0335, active: true },
+  { id: '40jt', label: '40jt', amount: 40000000, discountRate: 0.0335, active: true },
+  { id: '50jt', label: '50jt', amount: 50000000, discountRate: 0.0335, active: true }
+]
+
+// Get nominal settings (public - for client)
+app.get('/api/nominal-settings', async (_req, res) => {
+  try {
+    const settings = await redis.get(REDIS_KEYS.NOMINAL_SETTINGS)
+    if (settings) {
+      const parsed = typeof settings === 'string' ? JSON.parse(settings) : settings
+      // Only return active nominals for public
+      const activeNominals = parsed.filter(n => n.active)
+      res.json({ success: true, nominals: activeNominals })
+    } else {
+      const activeNominals = DEFAULT_NOMINALS.filter(n => n.active)
+      res.json({ success: true, nominals: activeNominals })
+    }
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
+// Admin: Get all nominal settings (including inactive)
+app.get('/api/admin/nominal-settings', async (req, res) => {
+  const { password } = req.query
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  try {
+    const settings = await redis.get(REDIS_KEYS.NOMINAL_SETTINGS)
+    if (settings) {
+      const parsed = typeof settings === 'string' ? JSON.parse(settings) : settings
+      res.json({ success: true, nominals: parsed })
+    } else {
+      res.json({ success: true, nominals: DEFAULT_NOMINALS })
+    }
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
+// Admin: Update nominal settings
+app.post('/api/admin/nominal-settings', express.json(), async (req, res) => {
+  const { password, nominals } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  try {
+    await redis.set(REDIS_KEYS.NOMINAL_SETTINGS, JSON.stringify(nominals))
+    // Broadcast to all clients to update their nominals
+    const activeNominals = nominals.filter(n => n.active)
+    broadcastSSE({ type: 'nominal_update', nominals: activeNominals })
+    res.json({ success: true, nominals })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
+// Admin: Add new nominal
+app.post('/api/admin/nominal-add', express.json(), async (req, res) => {
+  const { password, nominal } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  try {
+    let settings = await redis.get(REDIS_KEYS.NOMINAL_SETTINGS)
+    let nominals = settings ? (typeof settings === 'string' ? JSON.parse(settings) : settings) : [...DEFAULT_NOMINALS]
+
+    // Check if id already exists
+    if (nominals.find(n => n.id === nominal.id)) {
+      return res.json({ success: false, error: 'Nominal dengan ID tersebut sudah ada' })
+    }
+
+    nominals.push(nominal)
+    await redis.set(REDIS_KEYS.NOMINAL_SETTINGS, JSON.stringify(nominals))
+
+    const activeNominals = nominals.filter(n => n.active)
+    broadcastSSE({ type: 'nominal_update', nominals: activeNominals })
+    res.json({ success: true, nominals })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
+// Admin: Delete nominal
+app.post('/api/admin/nominal-delete', express.json(), async (req, res) => {
+  const { password, id } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  try {
+    let settings = await redis.get(REDIS_KEYS.NOMINAL_SETTINGS)
+    let nominals = settings ? (typeof settings === 'string' ? JSON.parse(settings) : settings) : [...DEFAULT_NOMINALS]
+
+    nominals = nominals.filter(n => n.id !== id)
+    await redis.set(REDIS_KEYS.NOMINAL_SETTINGS, JSON.stringify(nominals))
+
+    const activeNominals = nominals.filter(n => n.active)
+    broadcastSSE({ type: 'nominal_update', nominals: activeNominals })
+    res.json({ success: true, nominals })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
 // ==================== WHATSAPP GROUP MANAGEMENT ====================
 
 // Admin: Get list of WhatsApp groups
@@ -6348,6 +6458,7 @@ ${authScript}
         <div class="section-tab" data-section="add">Tambah User</div>
         <div class="section-tab" data-section="pending">Pending <span id="pendingBadge" style="background:#f7931a;color:#000;padding:1px 6px;border-radius:8px;font-size:0.75em;margin-left:4px;">0</span></div>
         <div class="section-tab" data-section="whatsapp">WhatsApp</div>
+        <div class="section-tab" data-section="nominal">Nominal</div>
         <div class="section-tab" data-section="settings">Pengaturan</div>
       </div>
 
@@ -6530,6 +6641,67 @@ ${authScript}
           </div>
           <div class="warning-box">
             <p><strong>Catatan:</strong> WhatsApp menggunakan format LID (privacy) sehingga nomor telepon member tidak bisa diakses otomatis. User harus mendaftar sendiri via OTP atau ditambahkan manual oleh admin.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section: Nominal -->
+      <div class="section-content" id="section-nominal">
+        <div class="card">
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+            Kelola Nominal Investasi
+          </h2>
+          <p style="color:#6b7280;font-size:0.82em;margin-bottom:16px;">Atur nominal yang ditampilkan ke user, termasuk persentase diskon.</p>
+          <div class="result-msg" id="nominalResult"></div>
+
+          <!-- Add New Nominal -->
+          <div style="background:rgba(247,147,26,0.05);padding:16px;border-radius:12px;border:1px solid rgba(247,147,26,0.15);margin-bottom:20px;">
+            <label style="color:#f7931a;font-weight:600;display:block;margin-bottom:12px;font-size:0.9em;">Tambah Nominal Baru</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:10px;align-items:end;">
+              <div class="form-group" style="margin:0;">
+                <label>ID (unik)</label>
+                <input type="text" id="newNominalId" placeholder="cth: 100jt">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label>Label</label>
+                <input type="text" id="newNominalLabel" placeholder="cth: 100jt">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label>Nominal (Rp)</label>
+                <input type="number" id="newNominalAmount" placeholder="100000000">
+              </div>
+              <div class="form-group" style="margin:0;">
+                <label>Diskon (%)</label>
+                <input type="number" id="newNominalDiscount" placeholder="3.35" step="0.01">
+              </div>
+              <button class="btn btn-sm" style="background:#22c55e;height:38px;" onclick="addNominal()">+ Tambah</button>
+            </div>
+          </div>
+
+          <!-- Nominal List -->
+          <div style="overflow-x:auto;">
+            <table class="user-table" id="nominalTable">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Label</th>
+                  <th>Nominal</th>
+                  <th>Diskon (%)</th>
+                  <th>Status</th>
+                  <th>Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="nominalTableBody">
+                <tr><td colspan="6" style="text-align:center;color:#6b7280;">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="margin-top:16px;">
+            <button class="btn" style="background:#f7931a;color:#000;" onclick="saveNominals()">Simpan Perubahan</button>
           </div>
         </div>
       </div>
@@ -7125,6 +7297,134 @@ ${authScript}
         }
       });
     }
+
+    // ==================== Nominal Management Functions ====================
+    let currentNominals = [];
+
+    function loadNominals() {
+      fetch('/api/admin/nominal-settings?password=' + encodeURIComponent(adminPass))
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            currentNominals = data.nominals;
+            renderNominalTable();
+          }
+        })
+        .catch(e => console.error('Error loading nominals:', e));
+    }
+
+    function renderNominalTable() {
+      const tbody = document.getElementById('nominalTableBody');
+      if (!currentNominals || currentNominals.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#6b7280;">Tidak ada nominal</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = currentNominals.map((nom, idx) => {
+        const statusClass = nom.active ? 'badge-success' : 'badge-danger';
+        const statusText = nom.active ? 'Aktif' : 'Nonaktif';
+        const toggleText = nom.active ? 'Nonaktifkan' : 'Aktifkan';
+        const toggleColor = nom.active ? '#ef4444' : '#22c55e';
+
+        return '<tr>' +
+          '<td><input type="text" value="' + nom.id + '" onchange="updateNominal(' + idx + ', \\'id\\', this.value)" style="width:60px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
+          '<td><input type="text" value="' + nom.label + '" onchange="updateNominal(' + idx + ', \\'label\\', this.value)" style="width:60px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
+          '<td><input type="number" value="' + nom.amount + '" onchange="updateNominal(' + idx + ', \\'amount\\', parseFloat(this.value))" style="width:120px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
+          '<td><input type="number" value="' + (nom.discountRate * 100).toFixed(2) + '" onchange="updateNominal(' + idx + ', \\'discountRate\\', parseFloat(this.value) / 100)" step="0.01" style="width:80px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
+          '<td><span class="badge ' + statusClass + '">' + statusText + '</span></td>' +
+          '<td>' +
+            '<button class="action-btn" style="background:' + toggleColor + ';" onclick="toggleNominal(' + idx + ')">' + toggleText + '</button> ' +
+            '<button class="action-btn" style="background:#ef4444;" onclick="deleteNominal(' + idx + ')">Hapus</button>' +
+          '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    function updateNominal(idx, field, value) {
+      if (currentNominals[idx]) {
+        currentNominals[idx][field] = value;
+      }
+    }
+
+    function toggleNominal(idx) {
+      if (currentNominals[idx]) {
+        currentNominals[idx].active = !currentNominals[idx].active;
+        renderNominalTable();
+      }
+    }
+
+    async function deleteNominal(idx) {
+      const nom = currentNominals[idx];
+      const confirmed = await showConfirm('Hapus nominal "' + nom.label + '"?', { title: 'Hapus Nominal', type: 'danger' });
+      if (!confirmed) return;
+
+      currentNominals.splice(idx, 1);
+      renderNominalTable();
+    }
+
+    function addNominal() {
+      const id = document.getElementById('newNominalId').value.trim();
+      const label = document.getElementById('newNominalLabel').value.trim();
+      const amount = parseFloat(document.getElementById('newNominalAmount').value);
+      const discountRate = parseFloat(document.getElementById('newNominalDiscount').value) / 100;
+
+      if (!id || !label || !amount || isNaN(discountRate)) {
+        showAlert('Semua field harus diisi dengan benar!', 'danger');
+        return;
+      }
+
+      if (currentNominals.find(n => n.id === id)) {
+        showAlert('ID nominal sudah ada!', 'danger');
+        return;
+      }
+
+      currentNominals.push({
+        id: id,
+        label: label,
+        amount: amount,
+        discountRate: discountRate,
+        active: true
+      });
+
+      // Clear inputs
+      document.getElementById('newNominalId').value = '';
+      document.getElementById('newNominalLabel').value = '';
+      document.getElementById('newNominalAmount').value = '';
+      document.getElementById('newNominalDiscount').value = '';
+
+      renderNominalTable();
+      showAlert('Nominal ditambahkan. Klik "Simpan Perubahan" untuk menyimpan.', 'success');
+    }
+
+    function saveNominals() {
+      const result = document.getElementById('nominalResult');
+      result.className = 'result-msg success';
+      result.textContent = 'Menyimpan...';
+
+      fetch('/api/admin/nominal-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass, nominals: currentNominals })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          result.className = 'result-msg success';
+          result.textContent = 'Nominal berhasil disimpan!';
+        } else {
+          result.className = 'result-msg error';
+          result.textContent = 'Gagal: ' + data.error;
+        }
+        setTimeout(() => result.className = 'result-msg', 5000);
+      })
+      .catch(e => {
+        result.className = 'result-msg error';
+        result.textContent = 'Error: ' + e.message;
+      });
+    }
+
+    // Load nominals on page load
+    loadNominals();
 
     // ==================== WhatsApp Group Functions ====================
     function loadWaGroups() {
