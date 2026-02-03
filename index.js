@@ -1544,7 +1544,7 @@ async function doPromoBroadcast() {
 
   try {
     // Get current prices
-    const treasuryData = cachedTreasuryData
+    const treasuryData = await fetchTreasury()
     if (!treasuryData || !treasuryData.data) {
       pushLog(`⚠️ Promo check #${promoCheckCount}: No price data`)
       return
