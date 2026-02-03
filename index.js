@@ -9471,12 +9471,15 @@ app.get('/monitoring', async (_req, res) => {
       }
       .chart-stats > .stat-item:not(.invest) {
         padding: 5px 8px;
-        gap: 2px;
+        gap: 4px;
         border-radius: 6px;
         min-width: 0;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
       }
       .chart-stats > .stat-item:not(.invest) .stat-label { font-size: 0.5em; }
-      .chart-stats > .stat-item:not(.invest) .stat-value { font-size: 0.65em; }
+      .chart-stats > .stat-item:not(.invest) .stat-value { font-size: 0.6em; }
       .chart-stats > .stat-item:not(.invest) .stat-change { font-size: 0.45em; padding: 1px 4px; border-radius: 3px; }
       .tradingview-widget-container { height: 350px; }
 
