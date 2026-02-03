@@ -7328,10 +7328,10 @@ ${authScript}
 
         return '<tr>' +
           '<td style="text-align:center;"><input type="radio" name="promoRef" ' + promoChecked + ' onchange="setPromoRef(' + idx + ')" style="width:18px;height:18px;cursor:pointer;accent-color:#22c55e;" title="Patokan Promo ON/OFF"></td>' +
-          '<td><input type="text" value="' + nom.id + '" onchange="updateNominal(' + idx + ', \\'id\\', this.value)" style="width:60px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
-          '<td><input type="text" value="' + nom.label + '" onchange="updateNominal(' + idx + ', \\'label\\', this.value)" style="width:60px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
-          '<td><input type="number" value="' + nom.amount + '" onchange="updateNominal(' + idx + ', \\'amount\\', parseFloat(this.value))" style="width:120px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
-          '<td><input type="number" value="' + (nom.discountRate * 100).toFixed(2) + '" onchange="updateNominal(' + idx + ', \\'discountRate\\', parseFloat(this.value) / 100)" step="0.01" style="width:80px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
+          '<td><input type="text" value="' + nom.id + '" onchange="updateNominal(' + idx + ', \'id\', this.value)" style="width:60px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
+          '<td><input type="text" value="' + nom.label + '" onchange="updateNominal(' + idx + ', \'label\', this.value)" style="width:60px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
+          '<td><input type="number" value="' + nom.amount + '" onchange="updateNominal(' + idx + ', \'amount\', parseFloat(this.value))" style="width:120px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
+          '<td><input type="number" value="' + (nom.discountRate * 100).toFixed(2) + '" onchange="updateNominal(' + idx + ', \'discountRate\', parseFloat(this.value) / 100)" step="0.01" style="width:80px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
           '<td><span class="badge ' + statusClass + '">' + statusText + '</span></td>' +
           '<td>' +
             '<button class="action-btn" style="background:' + toggleColor + ';" onclick="toggleNominal(' + idx + ')">' + toggleText + '</button> ' +
@@ -7732,8 +7732,8 @@ ${authScript}
               ? '<span class="pin-badge pin-changed">Changed</span>'
               : '<span class="pin-badge pin-default">Default</span>';
             const blockBtn = u.isBlocked
-              ? '<button class="action-btn unblock" onclick="unblockUser(\\'' + u.phone + '\\')">Unblock</button>'
-              : '<button class="action-btn block" onclick="blockUser(\\'' + u.phone + '\\')">Block</button>';
+              ? '<button class="action-btn unblock" onclick="unblockUser(\'' + u.phone + '\')">Unblock</button>'
+              : '<button class="action-btn block" onclick="blockUser(\'' + u.phone + '\')">Block</button>';
 
             return '<tr' + (u.isBlocked ? ' style="opacity:0.6;background:rgba(255,82,82,0.05);"' : '') + '>' +
               '<td class="phone">+' + u.phone + '</td>' +
@@ -7744,12 +7744,12 @@ ${authScript}
               '<td>' + expDate + '</td>' +
               '<td>' +
                 '<div class="action-btns">' +
-                  '<button class="action-btn edit" onclick="editUser(\\'' + u.phone + '\\',\\'' + (u.name||'') + '\\')">Edit</button>' +
-                  '<button class="action-btn push" onclick="openPushModal(\\'' + u.phone + '\\')">Push</button>' +
-                  '<button class="action-btn pin" onclick="resetPin(\\'' + u.phone + '\\')">Reset PIN</button>' +
+                  '<button class="action-btn edit" onclick="editUser(\'' + u.phone + '\',\'' + (u.name||'') + '\')">Edit</button>' +
+                  '<button class="action-btn push" onclick="openPushModal(\'' + u.phone + '\')">Push</button>' +
+                  '<button class="action-btn pin" onclick="resetPin(\'' + u.phone + '\')">Reset PIN</button>' +
                   blockBtn +
-                  '<button class="action-btn delete" onclick="deleteUser(\\'' + u.phone + '\\')">Hapus</button>' +
-                  '<button class="action-btn kick" onclick="kickUser(\\'' + u.phone + '\\')">Kick</button>' +
+                  '<button class="action-btn delete" onclick="deleteUser(\'' + u.phone + '\')">Hapus</button>' +
+                  '<button class="action-btn kick" onclick="kickUser(\'' + u.phone + '\')">Kick</button>' +
                 '</div>' +
               '</td>' +
             '</tr>';
@@ -10327,7 +10327,7 @@ app.get('/monitoring', async (_req, res) => {
               '<span>' + ind.desc + '</span>' +
             '</div>' +
           '</div>' +
-          '<div class="indicator-toggle ' + (isActive ? 'active' : '') + '" onclick="toggleIndicator(\\'' + ind.id + '\\', this)"></div>' +
+          '<div class="indicator-toggle ' + (isActive ? 'active' : '') + '" onclick="toggleIndicator(\'' + ind.id + '\', this)"></div>' +
         '</div>';
       });
 
