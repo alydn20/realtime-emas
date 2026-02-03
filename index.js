@@ -9384,18 +9384,44 @@ app.get('/monitoring', async (_req, res) => {
       .chart-header h2 { font-size: 0.95em; }
       .chart-header h2 svg { width: 14px; height: 14px; }
       .live-badge { font-size: 0.6em; padding: 4px 10px; }
-      .chart-stats { gap: 6px; }
-      .stat-item { padding: 8px 12px; gap: 6px; border-radius: 8px; }
-      .stat-item .stat-label { font-size: 0.65em; }
-      .stat-item .stat-value { font-size: 0.85em; }
-      .stat-item .stat-change { font-size: 0.7em; padding: 2px 6px; border-radius: 4px; }
+      /* Mobile: Beli, Jual, Spread, USD/IDR sebaris */
+      .chart-stats {
+        gap: 4px;
+        flex-wrap: nowrap;
+        justify-content: space-between;
+        padding: 0 10px;
+      }
+      .chart-stats > .stat-item:not(.invest) {
+        padding: 6px 8px;
+        gap: 3px;
+        border-radius: 6px;
+        flex: 1;
+        min-width: 0;
+      }
+      .chart-stats > .stat-item:not(.invest) .stat-label { font-size: 0.55em; }
+      .chart-stats > .stat-item:not(.invest) .stat-value { font-size: 0.7em; }
+      .chart-stats > .stat-item:not(.invest) .stat-change { font-size: 0.55em; padding: 1px 4px; border-radius: 3px; }
       .tradingview-widget-container { height: 350px; }
 
       /* Mobile: Show selector, hide all invest except selected */
       .mobile-invest-selector { display: block; }
-      .invest-stats { padding: 0 12px 10px 12px; }
+      .invest-stats {
+        padding: 8px 10px;
+        gap: 4px;
+        flex-wrap: nowrap;
+        justify-content: center;
+      }
       .invest-stats .stat-item.invest { display: none; }
-      .invest-stats .stat-item.invest.mobile-visible { display: flex; flex: none; width: auto; max-width: none; }
+      .invest-stats .stat-item.invest.mobile-visible {
+        display: flex;
+        flex: none;
+        width: auto;
+        max-width: none;
+        padding: 6px 10px;
+      }
+      .invest-stats .stat-item.invest.mobile-visible .stat-label { font-size: 0.6em; }
+      .invest-stats .stat-item.invest.mobile-visible .stat-value { font-size: 0.75em; }
+      .invest-stats .stat-item.invest.mobile-visible .stat-change { font-size: 0.6em; }
 
       /* Responsive buttons */
       .chart-bottom-row {
