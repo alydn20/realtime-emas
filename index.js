@@ -7914,6 +7914,33 @@ app.get('/monitoring', async (_req, res) => {
     .stat-item.price-down .stat-value { color: #f87171; }
     .stat-item.invest .stat-label { color: #f7931a; }
 
+    /* Mobile Invest Selector */
+    .mobile-invest-selector {
+      display: none;
+      width: 100%;
+      padding: 8px 12px;
+    }
+    .mobile-invest-selector select {
+      width: 100%;
+      padding: 10px 14px;
+      background: rgba(247, 147, 26, 0.1);
+      border: 1px solid rgba(247, 147, 26, 0.3);
+      border-radius: 8px;
+      color: #f7931a;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9em;
+      font-weight: 600;
+      cursor: pointer;
+      outline: none;
+    }
+    .mobile-invest-selector select:focus {
+      border-color: #f7931a;
+    }
+    .mobile-invest-selector select option {
+      background: #141a22;
+      color: #e7e9ea;
+    }
+
     /* Chart Section */
     .chart-section {
       background: rgba(20, 26, 34, 0.8);
@@ -9054,6 +9081,11 @@ app.get('/monitoring', async (_req, res) => {
       .stat-item .stat-change { font-size: 0.7em; padding: 2px 6px; border-radius: 4px; }
       .tradingview-widget-container { height: 350px; }
 
+      /* Mobile: Show selector, hide all invest except selected */
+      .mobile-invest-selector { display: block; }
+      .stat-item.invest { display: none; }
+      .stat-item.invest.mobile-visible { display: flex; }
+
       /* Responsive buttons */
       .chart-bottom-row {
         flex-direction: column;
@@ -9361,32 +9393,42 @@ app.get('/monitoring', async (_req, res) => {
             <span class="stat-label">USD/IDR</span>
             <span class="stat-value blue" id="usdIdr">-</span>
           </div>
-          <div class="stat-item invest">
+          <div class="mobile-invest-selector">
+            <select id="mobileInvestSelect" onchange="showSelectedInvest(this.value)">
+              <option value="10rb">10rb</option>
+              <option value="10jt">10jt</option>
+              <option value="20jt" selected>20jt</option>
+              <option value="30jt">30jt</option>
+              <option value="40jt">40jt</option>
+              <option value="50jt">50jt</option>
+            </select>
+          </div>
+          <div class="stat-item invest" data-invest="10rb">
             <span class="stat-label">10rb</span>
             <span class="stat-value" id="gram10rb">-</span>
             <span class="stat-change up" id="profit10rb">-</span>
           </div>
-          <div class="stat-item invest">
+          <div class="stat-item invest" data-invest="10jt">
             <span class="stat-label">10jt</span>
             <span class="stat-value" id="gram10jt">-</span>
             <span class="stat-change up" id="profit10jt">-</span>
           </div>
-          <div class="stat-item invest">
+          <div class="stat-item invest" data-invest="20jt">
             <span class="stat-label">20jt</span>
             <span class="stat-value" id="gram20">-</span>
             <span class="stat-change up" id="profit20">-</span>
           </div>
-          <div class="stat-item invest">
+          <div class="stat-item invest" data-invest="30jt">
             <span class="stat-label">30jt</span>
             <span class="stat-value" id="gram30">-</span>
             <span class="stat-change up" id="profit30">-</span>
           </div>
-          <div class="stat-item invest">
+          <div class="stat-item invest" data-invest="40jt">
             <span class="stat-label">40jt</span>
             <span class="stat-value" id="gram40">-</span>
             <span class="stat-change up" id="profit40">-</span>
           </div>
-          <div class="stat-item invest">
+          <div class="stat-item invest" data-invest="50jt">
             <span class="stat-label">50jt</span>
             <span class="stat-value" id="gram50">-</span>
             <span class="stat-change up" id="profit50">-</span>
@@ -10679,6 +10721,28 @@ app.get('/monitoring', async (_req, res) => {
 
     setInterval(updateClock, 100);
     updateClock();
+
+    // 📱 Mobile Invest Selector
+    function showSelectedInvest(value) {
+      const investItems = document.querySelectorAll('.stat-item.invest');
+      investItems.forEach(function(item) {
+        item.classList.remove('mobile-visible');
+        if (item.dataset.invest === value) {
+          item.classList.add('mobile-visible');
+        }
+      });
+      localStorage.setItem('selectedInvest', value);
+    }
+
+    // Initialize mobile selector on page load
+    (function() {
+      const saved = localStorage.getItem('selectedInvest') || '20jt';
+      const select = document.getElementById('mobileInvestSelect');
+      if (select) {
+        select.value = saved;
+        showSelectedInvest(saved);
+      }
+    })();
 
     // 🚀 SSE (Server-Sent Events) untuk real-time INSTANT update
     let evtSource = null;
