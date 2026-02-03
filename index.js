@@ -1570,27 +1570,23 @@ async function doPromoBroadcast() {
       nominalConfig = DEFAULT_NOMINAL_CONFIG
     }
 
-    // Get promoRef nominals (yang dicentang admin)
-    const promoRefNominals = (nominalConfig.nominals || []).filter(n => n.promoRef && n.active)
+    // Get promoRef nominal (hanya 1 yang dipilih admin)
+    const promoRefNominal = (nominalConfig.nominals || []).find(n => n.promoRef && n.active)
 
-    // Default: jika tidak ada yang dicentang, gunakan nominal > 9jt
-    let nominalsToCheck = promoRefNominals
-    if (nominalsToCheck.length === 0) {
-      nominalsToCheck = (nominalConfig.nominals || []).filter(n => n.active && n.amount > 9000000)
+    // Default: jika tidak ada yang dipilih, gunakan nominal pertama > 9jt
+    let nominalToCheck = promoRefNominal
+    if (!nominalToCheck) {
+      nominalToCheck = (nominalConfig.nominals || []).find(n => n.active && n.amount > 9000000)
     }
 
-    // Calculate profit for each nominal
+    // Calculate profit for the selected nominal
     let hasPositiveProfit = false
-    for (const nom of nominalsToCheck) {
-      const gram = nom.amount / buyRate
-      const netPrice = nom.amount - (nom.amount * nom.discountRate)
+    if (nominalToCheck) {
+      const gram = nominalToCheck.amount / buyRate
+      const netPrice = nominalToCheck.amount - (nominalToCheck.amount * nominalToCheck.discountRate)
       const sellValue = gram * sellRate
       const profit = sellValue - netPrice
-
-      if (profit > 0) {
-        hasPositiveProfit = true
-        break
-      }
+      hasPositiveProfit = profit > 0
     }
 
     const currentStatus = hasPositiveProfit ? 'ON' : 'OFF'
@@ -7329,10 +7325,9 @@ ${authScript}
         const toggleText = nom.active ? 'Nonaktifkan' : 'Aktifkan';
         const toggleColor = nom.active ? '#ef4444' : '#22c55e';
         const promoChecked = nom.promoRef ? 'checked' : '';
-        const promoStyle = nom.promoRef ? 'background:#22c55e;' : 'background:#374151;';
 
         return '<tr>' +
-          '<td style="text-align:center;"><input type="checkbox" ' + promoChecked + ' onchange="togglePromoRef(' + idx + ')" style="width:18px;height:18px;cursor:pointer;accent-color:#22c55e;" title="Patokan Promo ON/OFF"></td>' +
+          '<td style="text-align:center;"><input type="radio" name="promoRef" ' + promoChecked + ' onchange="setPromoRef(' + idx + ')" style="width:18px;height:18px;cursor:pointer;accent-color:#22c55e;" title="Patokan Promo ON/OFF"></td>' +
           '<td><input type="text" value="' + nom.id + '" onchange="updateNominal(' + idx + ', \\'id\\', this.value)" style="width:60px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
           '<td><input type="text" value="' + nom.label + '" onchange="updateNominal(' + idx + ', \\'label\\', this.value)" style="width:60px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
           '<td><input type="number" value="' + nom.amount + '" onchange="updateNominal(' + idx + ', \\'amount\\', parseFloat(this.value))" style="width:120px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
@@ -7346,10 +7341,11 @@ ${authScript}
       }).join('');
     }
 
-    function togglePromoRef(idx) {
-      if (currentNominals[idx]) {
-        currentNominals[idx].promoRef = !currentNominals[idx].promoRef;
-      }
+    function setPromoRef(idx) {
+      // Hanya 1 yang bisa dipilih - clear semua dulu, lalu set yang dipilih
+      currentNominals.forEach((nom, i) => {
+        nom.promoRef = (i === idx);
+      });
     }
 
     function updateNominal(idx, field, value) {
