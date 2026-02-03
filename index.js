@@ -1543,54 +1543,20 @@ async function doPromoBroadcast() {
   promoCheckCount++
 
   try {
-    // Get current prices
-    const treasuryData = await fetchTreasury()
-    if (!treasuryData || !treasuryData.data) {
-      pushLog(`⚠️ Promo check #${promoCheckCount}: No price data`)
+    // Fetch nominal promo data dari Treasury API
+    const nominalData = await fetchNominalPromo().catch(() => null)
+
+    if (!nominalData) {
+      pushLog(`⚠️ Promo check #${promoCheckCount}: Gagal fetch data`)
       return
     }
 
-    const buyRate = treasuryData.data.buying_rate
-    const sellRate = treasuryData.data.selling_rate
-
-    if (!buyRate || !sellRate) {
-      pushLog(`⚠️ Promo check #${promoCheckCount}: Invalid prices`)
-      return
-    }
-
-    // Load nominal settings from Redis
-    let nominalConfig = null
-    try {
-      const settings = await redis.get(REDIS_KEYS.NOMINAL_SETTINGS)
-      nominalConfig = settings ? (typeof settings === 'string' ? JSON.parse(settings) : settings) : DEFAULT_NOMINAL_CONFIG
-      if (Array.isArray(nominalConfig)) {
-        nominalConfig = { nominals: nominalConfig }
-      }
-    } catch (e) {
-      nominalConfig = DEFAULT_NOMINAL_CONFIG
-    }
-
-    // Get promoRef nominal (hanya 1 yang dipilih admin via radio button)
-    const promoRefNominal = (nominalConfig.nominals || []).find(n => n.promoRef && n.active)
-
-    // HANYA gunakan nominal yang dipilih admin, tidak ada fallback otomatis
-    let nominalToCheck = promoRefNominal
-
-    // Calculate profit for the selected nominal
-    let hasPositiveProfit = false
-    if (!nominalToCheck) {
-      // Tidak ada nominal yang dipilih sebagai promoRef - default OFF
-      pushLog(`⚠️ Promo check #${promoCheckCount}: Tidak ada nominal promoRef yang dipilih admin`)
-    } else {
-      const gram = nominalToCheck.amount / buyRate
-      const netPrice = nominalToCheck.amount - (nominalToCheck.amount * nominalToCheck.discountRate)
-      const sellValue = gram * sellRate
-      const profit = sellValue - netPrice
-      hasPositiveProfit = profit > 0
-      pushLog(`🎁 Promo check: ${nominalToCheck.label} profit=${Math.round(profit)} → ${hasPositiveProfit ? 'ON' : 'OFF'}`)
-    }
-
-    const currentStatus = hasPositiveProfit ? 'ON' : 'OFF'
+    // Cek apakah ada promo 20jt aktif (promotion_amount = 19315000 atau default_amount = 20000000)
+    const has20jt = nominalData.data.some(n =>
+      n.status === true &&
+      (n.promotion_amount === 19315000 || n.default_amount === 20000000)
+    )
+    const currentStatus = has20jt ? 'ON' : 'OFF'
 
     // Detect status change
     const isFirstCheck = lastPromoStatus === null
