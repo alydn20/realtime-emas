@@ -6619,17 +6619,8 @@ ${authScript}
             </svg>
             Kelola Nominal Investasi
           </h2>
-          <p style="color:#6b7280;font-size:0.82em;margin-bottom:16px;">Atur nominal yang ditampilkan ke user, termasuk persentase diskon.</p>
+          <p style="color:#6b7280;font-size:0.82em;margin-bottom:16px;">Atur nominal investasi dan pilih mana yang jadi patokan Promo ON/OFF.</p>
           <div class="result-msg" id="nominalResult"></div>
-
-          <!-- Default Visibility Setting -->
-          <div style="background:rgba(96,165,250,0.05);padding:16px;border-radius:12px;border:1px solid rgba(96,165,250,0.15);margin-bottom:20px;">
-            <label style="color:#60a5fa;font-weight:600;display:flex;align-items:center;gap:10px;font-size:0.9em;cursor:pointer;">
-              <input type="checkbox" id="defaultVisibleToggle" onchange="updateDefaultVisible()" style="width:18px;height:18px;cursor:pointer;">
-              Default Tampilkan Nominal (ON) - User bisa toggle sendiri
-            </label>
-            <p style="color:#6b7280;font-size:0.75em;margin-top:8px;">Jika dicentang, nominal akan tampil secara default saat user buka halaman.</p>
-          </div>
 
           <!-- Add New Nominal -->
           <div style="background:rgba(247,147,26,0.05);padding:16px;border-radius:12px;border:1px solid rgba(247,147,26,0.15);margin-bottom:20px;">
@@ -6660,6 +6651,7 @@ ${authScript}
             <table class="user-table" id="nominalTable">
               <thead>
                 <tr>
+                  <th>Promo</th>
                   <th>ID</th>
                   <th>Label</th>
                   <th>Nominal</th>
@@ -6669,7 +6661,7 @@ ${authScript}
                 </tr>
               </thead>
               <tbody id="nominalTableBody">
-                <tr><td colspan="6" style="text-align:center;color:#6b7280;">Loading...</td></tr>
+                <tr><td colspan="7" style="text-align:center;color:#6b7280;">Loading...</td></tr>
               </tbody>
             </table>
           </div>
@@ -7274,7 +7266,6 @@ ${authScript}
 
     // ==================== Nominal Management Functions ====================
     let currentNominals = [];
-    let currentDefaultVisible = true;
 
     function loadNominals() {
       fetch('/api/admin/nominal-settings?password=' + encodeURIComponent(adminPass))
@@ -7282,22 +7273,16 @@ ${authScript}
         .then(data => {
           if (data.success) {
             currentNominals = data.config.nominals || [];
-            currentDefaultVisible = data.config.defaultVisible !== false;
-            document.getElementById('defaultVisibleToggle').checked = currentDefaultVisible;
             renderNominalTable();
           }
         })
         .catch(e => console.error('Error loading nominals:', e));
     }
 
-    function updateDefaultVisible() {
-      currentDefaultVisible = document.getElementById('defaultVisibleToggle').checked;
-    }
-
     function renderNominalTable() {
       const tbody = document.getElementById('nominalTableBody');
       if (!currentNominals || currentNominals.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#6b7280;">Tidak ada nominal</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#6b7280;">Tidak ada nominal</td></tr>';
         return;
       }
 
@@ -7306,8 +7291,11 @@ ${authScript}
         const statusText = nom.active ? 'Aktif' : 'Nonaktif';
         const toggleText = nom.active ? 'Nonaktifkan' : 'Aktifkan';
         const toggleColor = nom.active ? '#ef4444' : '#22c55e';
+        const promoChecked = nom.promoRef ? 'checked' : '';
+        const promoStyle = nom.promoRef ? 'background:#22c55e;' : 'background:#374151;';
 
         return '<tr>' +
+          '<td style="text-align:center;"><input type="checkbox" ' + promoChecked + ' onchange="togglePromoRef(' + idx + ')" style="width:18px;height:18px;cursor:pointer;accent-color:#22c55e;" title="Patokan Promo ON/OFF"></td>' +
           '<td><input type="text" value="' + nom.id + '" onchange="updateNominal(' + idx + ', \\'id\\', this.value)" style="width:60px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
           '<td><input type="text" value="' + nom.label + '" onchange="updateNominal(' + idx + ', \\'label\\', this.value)" style="width:60px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
           '<td><input type="number" value="' + nom.amount + '" onchange="updateNominal(' + idx + ', \\'amount\\', parseFloat(this.value))" style="width:120px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
@@ -7319,6 +7307,12 @@ ${authScript}
           '</td>' +
         '</tr>';
       }).join('');
+    }
+
+    function togglePromoRef(idx) {
+      if (currentNominals[idx]) {
+        currentNominals[idx].promoRef = !currentNominals[idx].promoRef;
+      }
     }
 
     function updateNominal(idx, field, value) {
@@ -7383,7 +7377,6 @@ ${authScript}
       result.textContent = 'Menyimpan...';
 
       const config = {
-        defaultVisible: currentDefaultVisible,
         nominals: currentNominals
       };
 
