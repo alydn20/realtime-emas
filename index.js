@@ -9479,9 +9479,9 @@ app.get('/monitoring', async (_req, res) => {
         flex-direction: row;
         align-items: center;
       }
-      .chart-stats > .stat-item:not(.invest) .stat-label { font-size: 0.5em; margin-right: 3px; }
-      .chart-stats > .stat-item:not(.invest) .stat-value { font-size: 0.65em; }
-      .chart-stats > .stat-item:not(.invest) .stat-change { font-size: 0.5em; padding: 1px 3px; border-radius: 3px; margin-left: 2px; }
+      .chart-stats > .stat-item:not(.invest) .stat-label { font-size: 0.45em; }
+      .chart-stats > .stat-item:not(.invest) .stat-value { font-size: 0.55em; }
+      .chart-stats > .stat-item:not(.invest) .stat-change { font-size: 0.4em; padding: 1px 2px; border-radius: 2px; }
       .tradingview-widget-container { height: 350px; }
 
       /* Mobile: Show all enabled invest items */
