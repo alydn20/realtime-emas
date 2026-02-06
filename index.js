@@ -9973,12 +9973,12 @@ app.get('/monitoring', async (_req, res) => {
             <th>Jual</th>
             <th>Spread</th>
             <th>USD/IDR</th>
-            <th>10rb</th>
-            <th>10jt</th>
-            <th>20jt</th>
-            <th>30jt</th>
-            <th>40jt</th>
-            <th>50jt</th>
+            <th class="th-nominal" data-nominal="10rb">10rb</th>
+            <th class="th-nominal" data-nominal="10jt">10jt</th>
+            <th class="th-nominal" data-nominal="20jt">20jt</th>
+            <th class="th-nominal" data-nominal="30jt">30jt</th>
+            <th class="th-nominal" data-nominal="40jt">40jt</th>
+            <th class="th-nominal" data-nominal="50jt">50jt</th>
             <th>+/-</th>
           </tr>
         </thead>
@@ -10570,18 +10570,27 @@ app.get('/monitoring', async (_req, res) => {
         const profitSign40 = profit40jt >= 0 ? '+' : '-';
         const profitSign50 = profit50jt >= 0 ? '+' : '-';
 
+        // Check which nominals are active from admin
+        const nomIds = window.adminNominalIds || ['10rb', '10jt', '20jt', '30jt', '40jt', '50jt'];
+        const show10rb = nomIds.includes('10rb') ? '' : 'style="display:none"';
+        const show10jt = nomIds.includes('10jt') ? '' : 'style="display:none"';
+        const show20jt = nomIds.includes('20jt') ? '' : 'style="display:none"';
+        const show30jt = nomIds.includes('30jt') ? '' : 'style="display:none"';
+        const show40jt = nomIds.includes('40jt') ? '' : 'style="display:none"';
+        const show50jt = nomIds.includes('50jt') ? '' : 'style="display:none"';
+
         html += '<tr>' +
           '<td class="time-col">' + timeStr + '</td>' +
           '<td>' + formatRupiahShort(item.buy) + '</td>' +
           '<td>' + formatRupiahShort(item.sell) + '</td>' +
           '<td class="' + spreadClass + '">' + spread + '%</td>' +
           '<td>' + usdIdr + (usdIdrChange !== 0 ? '<br><small class="' + usdIdrChangeClass + '">' + usdIdrChangeSign + Math.abs(usdIdrChange).toLocaleString('id-ID') + '</small>' : '') + '</td>' +
-          '<td><span style="color:#e7e9ea;">' + gram10rb.toFixed(4) + 'g</span><br><small class="' + profitClass10rb + '">' + profitSign10rb + 'Rp ' + Math.abs(profit10rb).toLocaleString('id-ID') + '</small></td>' +
-          '<td><span style="color:#e7e9ea;">' + gram10jt.toFixed(4) + 'g</span><br><small class="' + profitClass10jt + '">' + profitSign10jt + 'Rp ' + Math.abs(profit10jt).toLocaleString('id-ID') + '</small></td>' +
-          '<td><span style="color:#e7e9ea;">' + gram20jt.toFixed(4) + 'g</span><br><small class="' + profitClass20 + '">' + profitSign20 + 'Rp ' + Math.abs(profit20jt).toLocaleString('id-ID') + '</small></td>' +
-          '<td><span style="color:#e7e9ea;">' + gram30jt.toFixed(4) + 'g</span><br><small class="' + profitClass30 + '">' + profitSign30 + 'Rp ' + Math.abs(profit30jt).toLocaleString('id-ID') + '</small></td>' +
-          '<td><span style="color:#e7e9ea;">' + gram40jt.toFixed(4) + 'g</span><br><small class="' + profitClass40 + '">' + profitSign40 + 'Rp ' + Math.abs(profit40jt).toLocaleString('id-ID') + '</small></td>' +
-          '<td><span style="color:#e7e9ea;">' + gram50jt.toFixed(4) + 'g</span><br><small class="' + profitClass50 + '">' + profitSign50 + 'Rp ' + Math.abs(profit50jt).toLocaleString('id-ID') + '</small></td>' +
+          '<td ' + show10rb + '><span style="color:#e7e9ea;">' + gram10rb.toFixed(4) + 'g</span><br><small class="' + profitClass10rb + '">' + profitSign10rb + 'Rp ' + Math.abs(profit10rb).toLocaleString('id-ID') + '</small></td>' +
+          '<td ' + show10jt + '><span style="color:#e7e9ea;">' + gram10jt.toFixed(4) + 'g</span><br><small class="' + profitClass10jt + '">' + profitSign10jt + 'Rp ' + Math.abs(profit10jt).toLocaleString('id-ID') + '</small></td>' +
+          '<td ' + show20jt + '><span style="color:#e7e9ea;">' + gram20jt.toFixed(4) + 'g</span><br><small class="' + profitClass20 + '">' + profitSign20 + 'Rp ' + Math.abs(profit20jt).toLocaleString('id-ID') + '</small></td>' +
+          '<td ' + show30jt + '><span style="color:#e7e9ea;">' + gram30jt.toFixed(4) + 'g</span><br><small class="' + profitClass30 + '">' + profitSign30 + 'Rp ' + Math.abs(profit30jt).toLocaleString('id-ID') + '</small></td>' +
+          '<td ' + show40jt + '><span style="color:#e7e9ea;">' + gram40jt.toFixed(4) + 'g</span><br><small class="' + profitClass40 + '">' + profitSign40 + 'Rp ' + Math.abs(profit40jt).toLocaleString('id-ID') + '</small></td>' +
+          '<td ' + show50jt + '><span style="color:#e7e9ea;">' + gram50jt.toFixed(4) + 'g</span><br><small class="' + profitClass50 + '">' + profitSign50 + 'Rp ' + Math.abs(profit50jt).toLocaleString('id-ID') + '</small></td>' +
           '<td class="' + changeClass + '">' + changeSign + formatChangeShort(buyChange) + '</td>' +
           '</tr>';
       });
@@ -11215,15 +11224,42 @@ app.get('/monitoring', async (_req, res) => {
             }
             applyNominalVisibility();
             updateMobileSelector();
+            // Re-render table with correct column visibility
+            updateHistory();
           }
         })
         .catch(e => console.error('Error loading nominal settings:', e));
     }
 
     function applyNominalVisibility() {
+      // Get all nominal IDs from admin settings
+      const adminNominalIds = loadedNominals.map(n => n.id);
+
+      // Hide all invest items that are NOT in admin settings
+      document.querySelectorAll('.stat-item.invest').forEach(el => {
+        const investId = el.getAttribute('data-invest');
+        if (!adminNominalIds.includes(investId)) {
+          // This nominal was removed from admin, hide it
+          el.style.display = 'none';
+          el.classList.add('admin-hidden');
+        }
+      });
+
+      // Hide table headers for nominals NOT in admin settings
+      document.querySelectorAll('.th-nominal').forEach(th => {
+        const nominalId = th.getAttribute('data-nominal');
+        if (!adminNominalIds.includes(nominalId)) {
+          th.style.display = 'none';
+        } else {
+          th.style.display = '';
+        }
+      });
+
+      // Show/hide based on user preferences for nominals that ARE in admin settings
       loadedNominals.forEach(n => {
         const el = document.querySelector('.stat-item.invest[data-invest="' + n.id + '"]');
         if (el) {
+          el.classList.remove('admin-hidden');
           if (userNominalPrefs[n.id] !== false) {
             el.style.display = '';
             el.classList.remove('user-hidden');
@@ -11233,6 +11269,9 @@ app.get('/monitoring', async (_req, res) => {
           }
         }
       });
+
+      // Store admin nominal IDs for table row rendering
+      window.adminNominalIds = adminNominalIds;
     }
 
     function openNominalSettings() {
