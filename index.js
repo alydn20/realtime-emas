@@ -8217,9 +8217,9 @@ app.get('/monitoring', async (_req, res) => {
       padding: 2px 5px;
     }
 
-    /* Nominal Settings Button - hanya muncul di mobile */
+    /* Nominal Settings Button - tampil di semua mode */
     .nominal-settings-btn {
-      display: none; /* Hidden on desktop */
+      display: flex; /* Visible on all modes */
       align-items: center;
       justify-content: center;
       width: 32px;
@@ -9406,7 +9406,7 @@ app.get('/monitoring', async (_req, res) => {
     @media (max-width: 768px) {
       body { padding: 12px; }
       .container { max-width: 100%; }
-      .nominal-settings-btn { display: flex; } /* Show on mobile */
+      /* nominal-settings-btn already visible from base style */
       .header {
         flex-direction: column;
         text-align: center;
@@ -9816,9 +9816,10 @@ app.get('/monitoring', async (_req, res) => {
             <span class="stat-label">Spread</span>
             <span class="stat-value green" id="spreadPercent">-</span>
           </div>
-          <div class="stat-item">
+          <div class="stat-item" id="usdIdrCard">
             <span class="stat-label">USD/IDR</span>
             <span class="stat-value blue" id="usdIdr">-</span>
+            <span class="stat-change" id="usdIdrChange"></span>
           </div>
         </div>
         <div class="invest-stats">
@@ -10456,6 +10457,7 @@ app.get('/monitoring', async (_req, res) => {
 
     let lastBuy = 0;
     let lastSell = 0;
+    let lastUsdIdr = 0;
     let lastUpdatedAt = 0; // Track timestamp untuk anti flip-flop
     const PER_PAGE = 10;
     let currentPage = 1;
@@ -10531,6 +10533,13 @@ app.get('/monitoring', async (_req, res) => {
         const usdIdrVal = item.usdIdr || currentUsdIdr;
         const usdIdr = usdIdrVal ? Math.round(usdIdrVal).toLocaleString('id-ID') : '-';
 
+        // USD/IDR change - compare with next item (older) in list
+        const nextItem = items[index + 1];
+        const prevUsdIdr = nextItem ? (nextItem.usdIdr || currentUsdIdr) : usdIdrVal;
+        const usdIdrChange = usdIdrVal && prevUsdIdr ? Math.round(usdIdrVal) - Math.round(prevUsdIdr) : 0;
+        const usdIdrChangeSign = usdIdrChange >= 0 ? '+' : '';
+        const usdIdrChangeClass = usdIdrChange >= 0 ? 'price-up' : 'price-down';
+
         // Calculate gram for 10rb, 10jt, 20jt, 30jt, 40jt, 50jt based on buy price
         const gram10rb = 10000 / item.buy;
         const gram10jt = 10000000 / item.buy;
@@ -10554,19 +10563,19 @@ app.get('/monitoring', async (_req, res) => {
         const profitClass30 = profit30jt >= 0 ? 'price-up' : 'price-down';
         const profitClass40 = profit40jt >= 0 ? 'price-up' : 'price-down';
         const profitClass50 = profit50jt >= 0 ? 'price-up' : 'price-down';
-        const profitSign10rb = profit10rb >= 0 ? '+' : '';
-        const profitSign10jt = profit10jt >= 0 ? '+' : '';
-        const profitSign20 = profit20jt >= 0 ? '+' : '';
-        const profitSign30 = profit30jt >= 0 ? '+' : '';
-        const profitSign40 = profit40jt >= 0 ? '+' : '';
-        const profitSign50 = profit50jt >= 0 ? '+' : '';
+        const profitSign10rb = profit10rb >= 0 ? '+' : '-';
+        const profitSign10jt = profit10jt >= 0 ? '+' : '-';
+        const profitSign20 = profit20jt >= 0 ? '+' : '-';
+        const profitSign30 = profit30jt >= 0 ? '+' : '-';
+        const profitSign40 = profit40jt >= 0 ? '+' : '-';
+        const profitSign50 = profit50jt >= 0 ? '+' : '-';
 
         html += '<tr>' +
           '<td class="time-col">' + timeStr + '</td>' +
           '<td>' + formatRupiahShort(item.buy) + '</td>' +
           '<td>' + formatRupiahShort(item.sell) + '</td>' +
           '<td class="' + spreadClass + '">' + spread + '%</td>' +
-          '<td>' + usdIdr + '</td>' +
+          '<td>' + usdIdr + (usdIdrChange !== 0 ? '<br><small class="' + usdIdrChangeClass + '">' + usdIdrChangeSign + Math.abs(usdIdrChange).toLocaleString('id-ID') + '</small>' : '') + '</td>' +
           '<td><span style="color:#e7e9ea;">' + gram10rb.toFixed(4) + 'g</span><br><small class="' + profitClass10rb + '">' + profitSign10rb + 'Rp ' + Math.abs(profit10rb).toLocaleString('id-ID') + '</small></td>' +
           '<td><span style="color:#e7e9ea;">' + gram10jt.toFixed(4) + 'g</span><br><small class="' + profitClass10jt + '">' + profitSign10jt + 'Rp ' + Math.abs(profit10jt).toLocaleString('id-ID') + '</small></td>' +
           '<td><span style="color:#e7e9ea;">' + gram20jt.toFixed(4) + 'g</span><br><small class="' + profitClass20 + '">' + profitSign20 + 'Rp ' + Math.abs(profit20jt).toLocaleString('id-ID') + '</small></td>' +
@@ -11136,7 +11145,22 @@ app.get('/monitoring', async (_req, res) => {
         }
 
         if (data.usdIdr) {
-          document.getElementById('usdIdr').textContent = 'Rp ' + Math.round(data.usdIdr).toLocaleString('id-ID');
+          const usdIdrRounded = Math.round(data.usdIdr);
+          document.getElementById('usdIdr').textContent = 'Rp ' + usdIdrRounded.toLocaleString('id-ID');
+          if (usdIdrRounded !== lastUsdIdr && lastUsdIdr > 0) {
+            const change = usdIdrRounded - lastUsdIdr;
+            const sign = change > 0 ? '+' : '';
+            const cls = change > 0 ? 'up' : 'down';
+            document.getElementById('usdIdrChange').textContent = sign + change.toLocaleString('id-ID');
+            document.getElementById('usdIdrChange').className = 'stat-change ' + cls;
+
+            // Flash animation
+            const usdIdrCard = document.getElementById('usdIdrCard');
+            usdIdrCard.classList.remove('updated');
+            void usdIdrCard.offsetWidth;
+            usdIdrCard.classList.add('updated');
+          }
+          lastUsdIdr = usdIdrRounded;
         }
       } catch (e) {
         // Silent fail
@@ -11476,7 +11500,22 @@ app.get('/monitoring', async (_req, res) => {
 
           // Update USD/IDR
           if (data.usdIdr) {
-            document.getElementById('usdIdr').textContent = 'Rp ' + Math.round(data.usdIdr).toLocaleString('id-ID');
+            const usdIdrRounded = Math.round(data.usdIdr);
+            document.getElementById('usdIdr').textContent = 'Rp ' + usdIdrRounded.toLocaleString('id-ID');
+            if (usdIdrRounded !== lastUsdIdr && lastUsdIdr > 0) {
+              const change = usdIdrRounded - lastUsdIdr;
+              const sign = change > 0 ? '+' : '';
+              const cls = change > 0 ? 'up' : 'down';
+              document.getElementById('usdIdrChange').textContent = sign + change.toLocaleString('id-ID');
+              document.getElementById('usdIdrChange').className = 'stat-change ' + cls;
+
+              // Flash animation
+              const usdIdrCard = document.getElementById('usdIdrCard');
+              usdIdrCard.classList.remove('updated');
+              void usdIdrCard.offsetWidth;
+              usdIdrCard.classList.add('updated');
+            }
+            lastUsdIdr = usdIdrRounded;
           }
 
           // Update Spread dan Investasi
@@ -11504,12 +11543,24 @@ app.get('/monitoring', async (_req, res) => {
             document.getElementById('gram30').textContent = gram30.toFixed(4) + ' gr';
             document.getElementById('gram40').textContent = gram40.toFixed(4) + ' gr';
             document.getElementById('gram50').textContent = gram50.toFixed(4) + ' gr';
-            document.getElementById('profit10rb').textContent = '+Rp ' + Math.round(profit10rb).toLocaleString('id-ID');
-            document.getElementById('profit10jt').textContent = '+Rp ' + Math.round(profit10jt).toLocaleString('id-ID');
-            document.getElementById('profit20').textContent = '+Rp ' + Math.round(profit20).toLocaleString('id-ID');
-            document.getElementById('profit30').textContent = '+Rp ' + Math.round(profit30).toLocaleString('id-ID');
-            document.getElementById('profit40').textContent = '+Rp ' + Math.round(profit40).toLocaleString('id-ID');
-            document.getElementById('profit50').textContent = '+Rp ' + Math.round(profit50).toLocaleString('id-ID');
+
+            // Helper function to format profit with proper sign and color
+            function updateProfit(elementId, profitValue) {
+              const el = document.getElementById(elementId);
+              const rounded = Math.round(profitValue);
+              const isPositive = rounded >= 0;
+              const sign = isPositive ? '+' : '-';
+              el.textContent = sign + 'Rp ' + Math.abs(rounded).toLocaleString('id-ID');
+              el.classList.remove('up', 'down');
+              el.classList.add(isPositive ? 'up' : 'down');
+            }
+
+            updateProfit('profit10rb', profit10rb);
+            updateProfit('profit10jt', profit10jt);
+            updateProfit('profit20', profit20);
+            updateProfit('profit30', profit30);
+            updateProfit('profit40', profit40);
+            updateProfit('profit50', profit50);
           }
         }
       } catch (e) {}
