@@ -8026,87 +8026,29 @@ app.get('/monitoring', async (_req, res) => {
   <title>Gold Price Monitor</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
-    /* Animated gradient background */
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: linear-gradient(-45deg, #0a0e13, #1a1f2e, #0f1419, #151b26);
-      background-size: 400% 400%;
-      animation: gradientBG 15s ease infinite;
+      background: linear-gradient(180deg, #0a0e13 0%, #0f1419 100%);
       min-height: 100vh;
       padding: 16px;
       color: #e7e9ea;
-      position: relative;
     }
+    .container { max-width: 1400px; width: 100%; margin: 0 auto; }
 
-    /* Animated background gradient */
-    @keyframes gradientBG {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
-    }
-
-    /* Subtle grid pattern overlay */
-    body::before {
-      content: '';
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background-image:
-        radial-gradient(circle at 25% 25%, rgba(247, 147, 26, 0.03) 0%, transparent 50%),
-        radial-gradient(circle at 75% 75%, rgba(96, 165, 250, 0.03) 0%, transparent 50%);
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    .container { max-width: 1400px; width: 100%; margin: 0 auto; position: relative; z-index: 1; }
-
-    /* Skeleton loading animation */
-    @keyframes shimmer {
-      0% { background-position: -200% 0; }
-      100% { background-position: 200% 0; }
-    }
-    .skeleton {
-      background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
-      background-size: 200% 100%;
-      animation: shimmer 1.5s infinite;
-      border-radius: 4px;
-    }
-
-    /* Smooth fade in animation */
-    @keyframes fadeInUp {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .fade-in { animation: fadeInUp 0.5s ease forwards; }
-
-    /* Header - Modern Glassmorphism */
+    /* Header - Modern */
     .header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 20px;
       padding: 16px 20px;
-      background: linear-gradient(135deg, rgba(20, 26, 34, 0.9) 0%, rgba(30, 36, 44, 0.85) 100%);
-      backdrop-filter: blur(24px) saturate(180%);
-      -webkit-backdrop-filter: blur(24px) saturate(180%);
-      border-radius: 20px;
-      border: 1px solid rgba(255,255,255,0.08);
-      box-shadow:
-        0 4px 24px rgba(0,0,0,0.3),
-        0 1px 0 rgba(255,255,255,0.05) inset,
-        0 -1px 0 rgba(0,0,0,0.2) inset;
-      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-      animation: fadeInUp 0.6s ease forwards;
-    }
-    .header:hover {
-      border-color: rgba(247, 147, 26, 0.2);
-      box-shadow:
-        0 8px 32px rgba(0,0,0,0.4),
-        0 0 0 1px rgba(247, 147, 26, 0.1),
-        0 1px 0 rgba(255,255,255,0.05) inset;
+      background: rgba(20, 26, 34, 0.8);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.06);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
     }
     .header-left h1 {
       font-size: 1.4em;
@@ -8156,50 +8098,26 @@ app.get('/monitoring', async (_req, res) => {
       gap: 12px;
     }
 
-    /* Install Button - Enhanced */
+    /* Install Button */
     .install-btn {
       display: none;
       align-items: center;
       gap: 8px;
-      padding: 10px 18px;
-      background: linear-gradient(135deg, #f7931a 0%, #e8850f 50%, #f7931a 100%);
-      background-size: 200% 100%;
+      padding: 10px 16px;
+      background: linear-gradient(135deg, #f7931a 0%, #e8850f 100%);
       color: #000;
       border: none;
-      border-radius: 12px;
+      border-radius: 10px;
       font-size: 0.85em;
       font-weight: 600;
       cursor: pointer;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: all 0.2s ease;
       font-family: inherit;
-      box-shadow:
-        0 4px 15px rgba(247,147,26,0.3),
-        0 1px 0 rgba(255,255,255,0.2) inset;
-      position: relative;
-      overflow: hidden;
-    }
-    .install-btn::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: -100%;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-      transition: left 0.5s ease;
+      box-shadow: 0 4px 15px rgba(247,147,26,0.3);
     }
     .install-btn:hover {
-      transform: translateY(-3px) scale(1.02);
-      box-shadow:
-        0 8px 25px rgba(247,147,26,0.4),
-        0 1px 0 rgba(255,255,255,0.3) inset;
-      background-position: 100% 0;
-    }
-    .install-btn:hover::before {
-      left: 100%;
-    }
-    .install-btn:active {
-      transform: translateY(-1px) scale(0.98);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(247,147,26,0.4);
     }
     .install-btn svg {
       width: 16px;
@@ -8224,63 +8142,42 @@ app.get('/monitoring', async (_req, res) => {
       transform: scale(1.05);
     }
 
-    /* Stat Items - Enhanced Cards */
+    /* Stat Items */
     .stat-item {
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 14px 20px;
-      background: linear-gradient(135deg, rgba(20, 26, 34, 0.7) 0%, rgba(25, 31, 39, 0.6) 100%);
-      backdrop-filter: blur(16px) saturate(150%);
-      -webkit-backdrop-filter: blur(16px) saturate(150%);
-      border-radius: 16px;
-      border: 1px solid rgba(255,255,255,0.08);
-      box-shadow:
-        0 4px 16px rgba(0,0,0,0.2),
-        0 1px 0 rgba(255,255,255,0.04) inset;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      position: relative;
-      overflow: hidden;
-    }
-    .stat-item::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+      padding: 12px 18px;
+      background: rgba(20, 26, 34, 0.6);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.06);
+      transition: all 0.2s ease, border-color 0.3s ease, box-shadow 0.3s ease;
     }
     .stat-item:hover {
-      background: linear-gradient(135deg, rgba(25, 31, 39, 0.8) 0%, rgba(30, 36, 44, 0.7) 100%);
-      border-color: rgba(255,255,255,0.12);
-      transform: translateY(-2px);
-      box-shadow:
-        0 8px 24px rgba(0,0,0,0.3),
-        0 1px 0 rgba(255,255,255,0.06) inset;
+      background: rgba(20, 26, 34, 0.8);
+      border-color: rgba(255,255,255,0.1);
     }
     .stat-item .stat-label {
-      font-size: 0.72em;
+      font-size: 0.75em;
       color: #8b949e;
       text-transform: uppercase;
       font-weight: 600;
-      letter-spacing: 0.8px;
+      letter-spacing: 0.5px;
     }
     .stat-item .stat-value {
-      font-size: 1.15em;
+      font-size: 1.1em;
       font-weight: 700;
       color: #ffffff;
       font-family: 'JetBrains Mono', monospace;
-      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
     }
-    .stat-item .stat-value.green { color: #4ade80; text-shadow: 0 0 20px rgba(74, 222, 128, 0.3); }
-    .stat-item .stat-value.blue { color: #60a5fa; text-shadow: 0 0 20px rgba(96, 165, 250, 0.3); }
+    .stat-item .stat-value.green { color: #4ade80; }
+    .stat-item .stat-value.blue { color: #60a5fa; }
     .stat-item .stat-change {
       font-size: 0.8em;
-      padding: 5px 12px;
-      border-radius: 8px;
+      padding: 4px 10px;
+      border-radius: 6px;
       font-weight: 600;
-      font-family: 'JetBrains Mono', monospace;
     }
     .stat-item .stat-change.up {
       color: #4ade80;
@@ -8431,33 +8328,17 @@ app.get('/monitoring', async (_req, res) => {
       display: none !important;
     }
 
-    /* Chart Section - Enhanced Glassmorphism */
+    /* Chart Section */
     .chart-section {
-      background: linear-gradient(180deg, rgba(20, 26, 34, 0.9) 0%, rgba(15, 20, 25, 0.85) 100%);
-      backdrop-filter: blur(24px) saturate(180%);
-      -webkit-backdrop-filter: blur(24px) saturate(180%);
-      border-radius: 24px;
-      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(20, 26, 34, 0.8);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 20px;
+      border: 2px solid rgba(255,255,255,0.06);
       overflow: hidden;
       margin-bottom: 24px;
-      box-shadow:
-        0 8px 32px rgba(0,0,0,0.3),
-        0 1px 0 rgba(255,255,255,0.05) inset,
-        0 -2px 20px rgba(247, 147, 26, 0.03) inset;
-      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-      animation: fadeInUp 0.7s ease forwards;
-      animation-delay: 0.1s;
-      opacity: 0;
-      position: relative;
-    }
-    .chart-section::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(247, 147, 26, 0.3), transparent);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
     }
     /* Glow effect classes - blinking animation for 5 seconds */
     .glow-up {
@@ -8510,55 +8391,32 @@ app.get('/monitoring', async (_req, res) => {
       background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
       color: #fff;
       font-size: 0.7em;
-      padding: 6px 14px;
+      padding: 5px 12px;
       border-radius: 20px;
       font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: 0.8px;
-      box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
-      position: relative;
-      overflow: hidden;
+      letter-spacing: 0.5px;
       box-shadow: 0 2px 10px rgba(34,197,94,0.3);
       animation: pulse 2s infinite;
     }
     .calc-btn-header {
-      background: linear-gradient(135deg, #f7931a 0%, #e8850a 50%, #f7931a 100%);
-      background-size: 200% 100%;
+      background: linear-gradient(135deg, #f7931a 0%, #e8850a 100%);
       color: #fff;
       font-size: 0.7em;
-      padding: 7px 16px;
+      padding: 5px 12px;
       border-radius: 20px;
       font-weight: 600;
       border: none;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      box-shadow: 0 4px 15px rgba(247,147,26,0.35);
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      position: relative;
-      overflow: hidden;
-    }
-    .calc-btn-header::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: -100%;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-      transition: left 0.5s ease;
+      gap: 5px;
+      box-shadow: 0 2px 10px rgba(247,147,26,0.3);
+      transition: all 0.2s ease;
     }
     .calc-btn-header:hover {
-      transform: translateY(-2px) scale(1.02);
-      box-shadow: 0 6px 20px rgba(247,147,26,0.45);
-      background-position: 100% 0;
-    }
-    .calc-btn-header:hover::before {
-      left: 100%;
-    }
-    .calc-btn-header:active {
-      transform: translateY(0) scale(0.98);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 15px rgba(247,147,26,0.4);
     }
     .calc-btn-header svg {
       width: 12px;
@@ -8608,14 +8466,8 @@ app.get('/monitoring', async (_req, res) => {
       50% { box-shadow: 0 0 15px rgba(0,200,83,0.5); }
     }
     @keyframes pulse {
-      0%, 100% {
-        opacity: 1;
-        box-shadow: 0 4px 15px rgba(34, 197, 94, 0.4);
-      }
-      50% {
-        opacity: 0.85;
-        box-shadow: 0 4px 25px rgba(34, 197, 94, 0.6);
-      }
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
     }
     .chart-stats {
       display: flex;
@@ -9414,46 +9266,34 @@ app.get('/monitoring', async (_req, res) => {
       margin-top: 2px;
     }
 
-    /* History Table - Enhanced */
+    /* History Table */
     .history-section {
-      background: linear-gradient(180deg, rgba(20, 26, 34, 0.9) 0%, rgba(15, 20, 25, 0.85) 100%);
-      backdrop-filter: blur(24px) saturate(180%);
-      -webkit-backdrop-filter: blur(24px) saturate(180%);
-      border-radius: 24px;
-      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(20, 26, 34, 0.8);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.06);
       overflow: hidden;
-      box-shadow:
-        0 8px 32px rgba(0,0,0,0.3),
-        0 1px 0 rgba(255,255,255,0.05) inset;
-      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-      animation: fadeInUp 0.8s ease forwards;
-      animation-delay: 0.2s;
-      opacity: 0;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
     }
     .history-header {
-      padding: 20px 24px;
+      padding: 18px 24px;
       border-bottom: 1px solid rgba(255,255,255,0.06);
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: linear-gradient(90deg, rgba(247, 147, 26, 0.03) 0%, transparent 50%);
     }
     .history-header h2 {
       font-size: 1.1em;
       font-weight: 700;
       color: #ffffff;
       letter-spacing: -0.02em;
-      display: flex;
-      align-items: center;
-      gap: 10px;
     }
     .history-header .count {
-      font-size: 0.85em;
+      font-size: 0.9em;
       color: #8b949e;
       font-weight: 500;
-      background: rgba(255,255,255,0.05);
-      padding: 4px 12px;
-      border-radius: 20px;
     }
     .history-table {
       width: 100%;
@@ -9462,46 +9302,36 @@ app.get('/monitoring', async (_req, res) => {
     }
     .history-table th {
       text-align: left;
-      padding: 14px 12px;
-      font-size: 0.72em;
+      padding: 12px 10px;
+      font-size: 0.75em;
       color: #8b949e;
       text-transform: uppercase;
-      letter-spacing: 0.8px;
-      background: linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.2) 100%);
+      letter-spacing: 0.5px;
+      background: rgba(0,0,0,0.2);
       font-weight: 600;
       white-space: nowrap;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
     }
     .history-table td {
-      padding: 14px 12px;
-      font-size: 0.88em;
+      padding: 14px 10px;
+      font-size: 0.9em;
       border-bottom: 1px solid rgba(255,255,255,0.04);
       color: #e7e9ea;
       white-space: nowrap;
       font-family: 'JetBrains Mono', monospace;
-      transition: background 0.2s ease;
     }
     .history-table tr:last-child td {
       border-bottom: none;
     }
-    .history-table tr:hover td {
-      background: rgba(247, 147, 26, 0.05);
+    .history-table tr:hover {
+      background: rgba(255,255,255,0.03);
     }
-    .history-table .price-up {
-      color: #4ade80;
-      font-weight: 600;
-      text-shadow: 0 0 10px rgba(74, 222, 128, 0.3);
-    }
-    .history-table .price-down {
-      color: #f87171;
-      font-weight: 600;
-      text-shadow: 0 0 10px rgba(248, 113, 113, 0.3);
-    }
+    .history-table .price-up { color: #4ade80; font-weight: 600; }
+    .history-table .price-down { color: #f87171; font-weight: 600; }
     .history-table .time-col { color: #8b949e; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; }
     .history-table .no-data {
       text-align: center;
       color: #8b949e;
-      padding: 60px 20px;
+      padding: 50px 20px;
       font-size: 0.95em;
     }
     .history-pagination {
@@ -9509,56 +9339,28 @@ app.get('/monitoring', async (_req, res) => {
       justify-content: center;
       align-items: center;
       gap: 16px;
-      padding: 20px 24px;
+      padding: 18px 24px;
       border-top: 1px solid rgba(255,255,255,0.06);
-      background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.1) 100%);
     }
     .page-btn {
-      background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%);
+      background: rgba(255,255,255,0.08);
       color: #e7e9ea;
       border: 1px solid rgba(255,255,255,0.1);
-      padding: 12px 24px;
-      border-radius: 12px;
+      padding: 10px 20px;
+      border-radius: 10px;
       cursor: pointer;
-      font-size: 0.88em;
-      font-weight: 600;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      font-family: inherit;
-      position: relative;
-      overflow: hidden;
-    }
-    .page-btn::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: -100%;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
-      transition: left 0.4s ease;
-    }
-    .page-btn:hover:not(:disabled) {
-      background: linear-gradient(135deg, rgba(247,147,26,0.2) 0%, rgba(247,147,26,0.1) 100%);
-      border-color: rgba(247,147,26,0.4);
-      color: #f7931a;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 15px rgba(247,147,26,0.2);
-    }
-    .page-btn:hover:not(:disabled)::before {
-      left: 100%;
-    }
-    .page-btn:active:not(:disabled) {
-      transform: translateY(0);
-    }
-    .page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-    .page-info {
-      color: #8b949e;
       font-size: 0.9em;
       font-weight: 500;
-      background: rgba(255,255,255,0.05);
-      padding: 8px 16px;
-      border-radius: 20px;
+      transition: all 0.2s ease;
+      font-family: inherit;
     }
+    .page-btn:hover:not(:disabled) {
+      background: rgba(247,147,26,0.15);
+      border-color: rgba(247,147,26,0.3);
+      color: #f7931a;
+    }
+    .page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .page-info { color: #8b949e; font-size: 0.9em; font-weight: 500; }
 
     /* Animations - color based on price direction */
     .price-card.updated-up {
@@ -9739,7 +9541,7 @@ app.get('/monitoring', async (_req, res) => {
       .history-table th, .history-table td { padding: 6px 8px; font-size: 1.3em; }
     }
 
-    /* Professional Toast System - Enhanced */
+    /* Professional Toast System */
     .toast-container {
       position: fixed;
       top: 20px;
@@ -9747,55 +9549,38 @@ app.get('/monitoring', async (_req, res) => {
       z-index: 9999;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 10px;
     }
     .toast {
-      background: linear-gradient(135deg, rgba(20, 26, 34, 0.95) 0%, rgba(25, 31, 39, 0.9) 100%);
-      backdrop-filter: blur(20px) saturate(180%);
-      -webkit-backdrop-filter: blur(20px) saturate(180%);
-      border-radius: 16px;
-      padding: 16px 20px;
+      background: rgba(20, 26, 34, 0.98);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 14px 18px;
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 12px;
       border: 1px solid rgba(255,255,255,0.1);
-      box-shadow:
-        0 10px 40px rgba(0,0,0,0.5),
-        0 1px 0 rgba(255,255,255,0.05) inset;
-      animation: toastSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-      max-width: 360px;
-      position: relative;
-      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+      animation: slideIn 0.3s ease;
+      max-width: 320px;
     }
-    .toast::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
-    }
-    @keyframes toastSlideIn {
-      from { transform: translateX(120%) scale(0.9); opacity: 0; }
-      to { transform: translateX(0) scale(1); opacity: 1; }
-    }
-    @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(120%); opacity: 0; } }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
     .toast-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
     }
-    .toast-icon svg { width: 20px; height: 20px; }
-    .toast.info .toast-icon { background: linear-gradient(135deg, rgba(59,130,246,0.2) 0%, rgba(59,130,246,0.1) 100%); color: #60a5fa; box-shadow: 0 4px 15px rgba(59,130,246,0.2); }
-    .toast.success .toast-icon { background: linear-gradient(135deg, rgba(34,197,94,0.2) 0%, rgba(34,197,94,0.1) 100%); color: #4ade80; box-shadow: 0 4px 15px rgba(34,197,94,0.2); }
-    .toast.warning .toast-icon { background: linear-gradient(135deg, rgba(251,191,36,0.2) 0%, rgba(251,191,36,0.1) 100%); color: #fbbf24; box-shadow: 0 4px 15px rgba(251,191,36,0.2); }
-    .toast.danger .toast-icon { background: linear-gradient(135deg, rgba(239,68,68,0.2) 0%, rgba(239,68,68,0.1) 100%); color: #f87171; box-shadow: 0 4px 15px rgba(239,68,68,0.2); }
-    .toast-message { color: #e7e9ea; font-size: 0.9em; line-height: 1.5; font-weight: 500; }
+    .toast-icon svg { width: 18px; height: 18px; }
+    .toast.info .toast-icon { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .toast.success .toast-icon { background: rgba(34,197,94,0.15); color: #4ade80; }
+    .toast.warning .toast-icon { background: rgba(251,191,36,0.15); color: #fbbf24; }
+    .toast.danger .toast-icon { background: rgba(239,68,68,0.15); color: #f87171; }
+    .toast-message { color: #e7e9ea; font-size: 0.9em; line-height: 1.4; }
 
     /* Confirm Modal */
     .confirm-modal {
