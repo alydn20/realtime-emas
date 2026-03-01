@@ -9826,36 +9826,7 @@ app.get('/monitoring', async (_req, res) => {
           <button class="nominal-settings-btn" onclick="openNominalSettings()" title="Pilih Nominal">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           </button>
-          <div class="stat-item invest" data-invest="10rb">
-            <span class="stat-label">10rb</span>
-            <span class="stat-value" id="gram10rb">-</span>
-            <span class="stat-change up" id="profit10rb">-</span>
-          </div>
-          <div class="stat-item invest" data-invest="10jt">
-            <span class="stat-label">10jt</span>
-            <span class="stat-value" id="gram10jt">-</span>
-            <span class="stat-change up" id="profit10jt">-</span>
-          </div>
-          <div class="stat-item invest" data-invest="20jt">
-            <span class="stat-label">20jt</span>
-            <span class="stat-value" id="gram20">-</span>
-            <span class="stat-change up" id="profit20">-</span>
-          </div>
-          <div class="stat-item invest" data-invest="30jt">
-            <span class="stat-label">30jt</span>
-            <span class="stat-value" id="gram30">-</span>
-            <span class="stat-change up" id="profit30">-</span>
-          </div>
-          <div class="stat-item invest" data-invest="40jt">
-            <span class="stat-label">40jt</span>
-            <span class="stat-value" id="gram40">-</span>
-            <span class="stat-change up" id="profit40">-</span>
-          </div>
-          <div class="stat-item invest" data-invest="50jt">
-            <span class="stat-label">50jt</span>
-            <span class="stat-value" id="gram50">-</span>
-            <span class="stat-change up" id="profit50">-</span>
-          </div>
+          <div id="investStatsList"></div>
         </div>
         <div class="chart-bottom-row">
           <div class="chart-info-row">
@@ -9967,18 +9938,12 @@ app.get('/monitoring', async (_req, res) => {
       <div style="overflow-x:auto;">
       <table class="history-table">
         <thead>
-          <tr>
+          <tr id="historyHeaderRow">
             <th>Waktu</th>
             <th>Beli</th>
             <th>Jual</th>
             <th>Spread</th>
             <th>USD/IDR</th>
-            <th class="th-nominal" data-nominal="10rb">10rb</th>
-            <th class="th-nominal" data-nominal="10jt">10jt</th>
-            <th class="th-nominal" data-nominal="20jt">20jt</th>
-            <th class="th-nominal" data-nominal="30jt">30jt</th>
-            <th class="th-nominal" data-nominal="40jt">40jt</th>
-            <th class="th-nominal" data-nominal="50jt">50jt</th>
             <th>+/-</th>
           </tr>
         </thead>
@@ -10540,44 +10505,14 @@ app.get('/monitoring', async (_req, res) => {
         const usdIdrChangeSign = usdIdrChange >= 0 ? '+' : '';
         const usdIdrChangeClass = usdIdrChange >= 0 ? 'price-up' : 'price-down';
 
-        // Calculate gram for 10rb, 10jt, 20jt, 30jt, 40jt, 50jt based on buy price
-        const gram10rb = 10000 / item.buy;
-        const gram10jt = 10000000 / item.buy;
-        const gram20jt = 20000000 / item.buy;
-        const gram30jt = 30000000 / item.buy;
-        const gram40jt = 40000000 / item.buy;
-        const gram50jt = 50000000 / item.buy;
-
-        // Calculate profit: (gram * harga_jual) - (modal - diskon)
-        // Diskon: ≤10rb: 49.99%, ≤10jt: 3.31%, >10jt: 3.35%
-        const profit10rb = Math.round((gram10rb * item.sell) - (10000 - 10000 * 0.4999));
-        const profit10jt = Math.round((gram10jt * item.sell) - (10000000 - 10000000 * 0.0331));
-        const profit20jt = Math.round((gram20jt * item.sell) - (20000000 - 20000000 * 0.0335));
-        const profit30jt = Math.round((gram30jt * item.sell) - (30000000 - 30000000 * 0.0335));
-        const profit40jt = Math.round((gram40jt * item.sell) - (40000000 - 40000000 * 0.0335));
-        const profit50jt = Math.round((gram50jt * item.sell) - (50000000 - 50000000 * 0.0335));
-
-        const profitClass10rb = profit10rb >= 0 ? 'price-up' : 'price-down';
-        const profitClass10jt = profit10jt >= 0 ? 'price-up' : 'price-down';
-        const profitClass20 = profit20jt >= 0 ? 'price-up' : 'price-down';
-        const profitClass30 = profit30jt >= 0 ? 'price-up' : 'price-down';
-        const profitClass40 = profit40jt >= 0 ? 'price-up' : 'price-down';
-        const profitClass50 = profit50jt >= 0 ? 'price-up' : 'price-down';
-        const profitSign10rb = profit10rb >= 0 ? '+' : '-';
-        const profitSign10jt = profit10jt >= 0 ? '+' : '-';
-        const profitSign20 = profit20jt >= 0 ? '+' : '-';
-        const profitSign30 = profit30jt >= 0 ? '+' : '-';
-        const profitSign40 = profit40jt >= 0 ? '+' : '-';
-        const profitSign50 = profit50jt >= 0 ? '+' : '-';
-
-        // Check which nominals are active from admin
-        const nomIds = window.adminNominalIds || ['10rb', '10jt', '20jt', '30jt', '40jt', '50jt'];
-        const show10rb = nomIds.includes('10rb') ? '' : 'style="display:none"';
-        const show10jt = nomIds.includes('10jt') ? '' : 'style="display:none"';
-        const show20jt = nomIds.includes('20jt') ? '' : 'style="display:none"';
-        const show30jt = nomIds.includes('30jt') ? '' : 'style="display:none"';
-        const show40jt = nomIds.includes('40jt') ? '' : 'style="display:none"';
-        const show50jt = nomIds.includes('50jt') ? '' : 'style="display:none"';
+        // Calculate gram & profit dynamically for all admin nominals
+        const nominalCols = loadedNominals.map(n => {
+          const gram = n.amount / item.buy;
+          const profit = Math.round((gram * item.sell) - (n.amount - n.amount * n.discountRate));
+          const profitClass = profit >= 0 ? 'price-up' : 'price-down';
+          const profitSign = profit >= 0 ? '+' : '-';
+          return '<td><span style="color:#e7e9ea;">' + gram.toFixed(4) + 'g</span><br><small class="' + profitClass + '">' + profitSign + 'Rp ' + Math.abs(profit).toLocaleString('id-ID') + '</small></td>';
+        }).join('');
 
         html += '<tr>' +
           '<td class="time-col">' + timeStr + '</td>' +
@@ -10585,12 +10520,7 @@ app.get('/monitoring', async (_req, res) => {
           '<td>' + formatRupiahShort(item.sell) + '</td>' +
           '<td class="' + spreadClass + '">' + spread + '%</td>' +
           '<td>' + usdIdr + (usdIdrChange !== 0 ? '<br><small class="' + usdIdrChangeClass + '">' + usdIdrChangeSign + Math.abs(usdIdrChange).toLocaleString('id-ID') + '</small>' : '') + '</td>' +
-          '<td ' + show10rb + '><span style="color:#e7e9ea;">' + gram10rb.toFixed(4) + 'g</span><br><small class="' + profitClass10rb + '">' + profitSign10rb + 'Rp ' + Math.abs(profit10rb).toLocaleString('id-ID') + '</small></td>' +
-          '<td ' + show10jt + '><span style="color:#e7e9ea;">' + gram10jt.toFixed(4) + 'g</span><br><small class="' + profitClass10jt + '">' + profitSign10jt + 'Rp ' + Math.abs(profit10jt).toLocaleString('id-ID') + '</small></td>' +
-          '<td ' + show20jt + '><span style="color:#e7e9ea;">' + gram20jt.toFixed(4) + 'g</span><br><small class="' + profitClass20 + '">' + profitSign20 + 'Rp ' + Math.abs(profit20jt).toLocaleString('id-ID') + '</small></td>' +
-          '<td ' + show30jt + '><span style="color:#e7e9ea;">' + gram30jt.toFixed(4) + 'g</span><br><small class="' + profitClass30 + '">' + profitSign30 + 'Rp ' + Math.abs(profit30jt).toLocaleString('id-ID') + '</small></td>' +
-          '<td ' + show40jt + '><span style="color:#e7e9ea;">' + gram40jt.toFixed(4) + 'g</span><br><small class="' + profitClass40 + '">' + profitSign40 + 'Rp ' + Math.abs(profit40jt).toLocaleString('id-ID') + '</small></td>' +
-          '<td ' + show50jt + '><span style="color:#e7e9ea;">' + gram50jt.toFixed(4) + 'g</span><br><small class="' + profitClass50 + '">' + profitSign50 + 'Rp ' + Math.abs(profit50jt).toLocaleString('id-ID') + '</small></td>' +
+          nominalCols +
           '<td class="' + changeClass + '">' + changeSign + formatChangeShort(buyChange) + '</td>' +
           '</tr>';
       });
@@ -11231,47 +11161,41 @@ app.get('/monitoring', async (_req, res) => {
         .catch(e => console.error('Error loading nominal settings:', e));
     }
 
-    function applyNominalVisibility() {
-      // Get all nominal IDs from admin settings
-      const adminNominalIds = loadedNominals.map(n => n.id);
+    function renderInvestStats() {
+      const container = document.getElementById('investStatsList');
+      if (!container) return;
+      container.innerHTML = loadedNominals.map(n => {
+        const hidden = userNominalPrefs[n.id] === false;
+        const display = hidden ? ' style="display:none"' : '';
+        const hiddenClass = hidden ? ' user-hidden' : '';
+        return '<div class="stat-item invest' + hiddenClass + '" data-invest="' + n.id + '"' + display + '>' +
+          '<span class="stat-label">' + n.label + '</span>' +
+          '<span class="stat-value" id="gram_' + n.id + '">-</span>' +
+          '<span class="stat-change up" id="profit_' + n.id + '">-</span>' +
+          '</div>';
+      }).join('');
+    }
 
-      // Hide all invest items that are NOT in admin settings
-      document.querySelectorAll('.stat-item.invest').forEach(el => {
-        const investId = el.getAttribute('data-invest');
-        if (!adminNominalIds.includes(investId)) {
-          // This nominal was removed from admin, hide it
-          el.style.display = 'none';
-          el.classList.add('admin-hidden');
-        }
-      });
-
-      // Hide table headers for nominals NOT in admin settings
-      document.querySelectorAll('.th-nominal').forEach(th => {
-        const nominalId = th.getAttribute('data-nominal');
-        if (!adminNominalIds.includes(nominalId)) {
-          th.style.display = 'none';
-        } else {
-          th.style.display = '';
-        }
-      });
-
-      // Show/hide based on user preferences for nominals that ARE in admin settings
+    function renderHistoryHeaders() {
+      const row = document.getElementById('historyHeaderRow');
+      if (!row) return;
+      row.querySelectorAll('.th-nominal').forEach(th => th.remove());
+      const lastTh = row.lastElementChild;
       loadedNominals.forEach(n => {
-        const el = document.querySelector('.stat-item.invest[data-invest="' + n.id + '"]');
-        if (el) {
-          el.classList.remove('admin-hidden');
-          if (userNominalPrefs[n.id] !== false) {
-            el.style.display = '';
-            el.classList.remove('user-hidden');
-          } else {
-            el.style.display = 'none';
-            el.classList.add('user-hidden');
-          }
-        }
+        const th = document.createElement('th');
+        th.className = 'th-nominal';
+        th.setAttribute('data-nominal', n.id);
+        th.textContent = n.label;
+        row.insertBefore(th, lastTh);
       });
+    }
 
-      // Store admin nominal IDs for table row rendering
-      window.adminNominalIds = adminNominalIds;
+    function applyNominalVisibility() {
+      renderInvestStats();
+      renderHistoryHeaders();
+      window.adminNominalIds = loadedNominals.map(n => n.id);
+      window.loadedNominalsMap = {};
+      loadedNominals.forEach(n => { window.loadedNominalsMap[n.id] = n; });
     }
 
     function openNominalSettings() {
@@ -11371,7 +11295,9 @@ app.get('/monitoring', async (_req, res) => {
         // Handle nominal settings update from admin
         if (data.type === 'nominal_update') {
           loadedNominals = data.nominals || [];
+          applyNominalVisibility();
           updateMobileSelector();
+          updateHistory();
           console.log('Nominal settings updated');
           return;
         }
@@ -11561,31 +11487,9 @@ app.get('/monitoring', async (_req, res) => {
           if (data.buy && data.sell) {
             document.getElementById('spreadPercent').textContent = ((data.sell - data.buy) / data.buy * 100).toFixed(2) + '%';
 
-            // Diskon: ≤10rb: 49.99%, ≤10jt: 3.31%, >10jt: 3.35%
-            const gram10rb = 10000 / data.buy;
-            const gram10jt = 10000000 / data.buy;
-            const gram20 = 20000000 / data.buy;
-            const gram30 = 30000000 / data.buy;
-            const gram40 = 40000000 / data.buy;
-            const gram50 = 50000000 / data.buy;
-
-            const profit10rb = (gram10rb * data.sell) - (10000 - 10000 * 0.4999);
-            const profit10jt = (gram10jt * data.sell) - (10000000 - 10000000 * 0.0331);
-            const profit20 = (gram20 * data.sell) - (20000000 - 20000000 * 0.0335);
-            const profit30 = (gram30 * data.sell) - (30000000 - 30000000 * 0.0335);
-            const profit40 = (gram40 * data.sell) - (40000000 - 40000000 * 0.0335);
-            const profit50 = (gram50 * data.sell) - (50000000 - 50000000 * 0.0335);
-
-            document.getElementById('gram10rb').textContent = gram10rb.toFixed(4) + ' gr';
-            document.getElementById('gram10jt').textContent = gram10jt.toFixed(4) + ' gr';
-            document.getElementById('gram20').textContent = gram20.toFixed(4) + ' gr';
-            document.getElementById('gram30').textContent = gram30.toFixed(4) + ' gr';
-            document.getElementById('gram40').textContent = gram40.toFixed(4) + ' gr';
-            document.getElementById('gram50').textContent = gram50.toFixed(4) + ' gr';
-
-            // Helper function to format profit with proper sign and color
             function updateProfit(elementId, profitValue) {
               const el = document.getElementById(elementId);
+              if (!el) return;
               const rounded = Math.round(profitValue);
               const isPositive = rounded >= 0;
               const sign = isPositive ? '+' : '-';
@@ -11594,12 +11498,13 @@ app.get('/monitoring', async (_req, res) => {
               el.classList.add(isPositive ? 'up' : 'down');
             }
 
-            updateProfit('profit10rb', profit10rb);
-            updateProfit('profit10jt', profit10jt);
-            updateProfit('profit20', profit20);
-            updateProfit('profit30', profit30);
-            updateProfit('profit40', profit40);
-            updateProfit('profit50', profit50);
+            loadedNominals.forEach(n => {
+              const gram = n.amount / data.buy;
+              const profit = (gram * data.sell) - (n.amount - n.amount * n.discountRate);
+              const gramEl = document.getElementById('gram_' + n.id);
+              if (gramEl) gramEl.textContent = gram.toFixed(4) + ' gr';
+              updateProfit('profit_' + n.id, profit);
+            });
           }
         }
       } catch (e) {}
