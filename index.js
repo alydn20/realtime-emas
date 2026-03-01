@@ -494,10 +494,8 @@ function getPriceHistory(page = 1, perPage = 10) {
   const total = priceHistoryCache.length
   const totalPages = Math.ceil(total / perPage)
 
-  // Ambil dari akhir (terbaru) dengan pagination
-  const start = Math.max(0, total - (page * perPage))
-  const end = total
-
+  const end = total - ((page - 1) * perPage)
+  const start = Math.max(0, end - perPage)
   const items = priceHistoryCache.slice(start, end).reverse()
 
   return {
@@ -10441,42 +10439,17 @@ app.get('/monitoring', async (_req, res) => {
     let totalRecords = 0;
     let currentUsdIdr = 0;
 
-    // Local history storage
-    const LOCAL_HISTORY_KEY = 'gold_price_history';
-    const MAX_LOCAL_HISTORY = 1440;
-
-    function getLocalHistory() {
-      try {
-        const data = localStorage.getItem(LOCAL_HISTORY_KEY);
-        return data ? JSON.parse(data) : [];
-      } catch (e) {
-        return [];
-      }
-    }
-
-    function saveLocalHistory(history) {
-      try {
-        const trimmed = history.slice(-MAX_LOCAL_HISTORY);
-        localStorage.setItem(LOCAL_HISTORY_KEY, JSON.stringify(trimmed));
-      } catch (e) {}
-    }
-
-    function addToLocalHistory(entry) {
-      const history = getLocalHistory();
-      if (history.some(h => h.time === entry.time)) return;
-      history.push(entry);
-      saveLocalHistory(history);
-    }
-
-    // Load history dari localStorage
+    // Load history dari server (sama untuk semua user)
     function loadHistory() {
-      const history = getLocalHistory();
-      totalRecords = history.length;
-      totalPages = Math.ceil(totalRecords / PER_PAGE) || 1;
-      const start = Math.max(0, history.length - (currentPage * PER_PAGE));
-      const end = history.length - ((currentPage - 1) * PER_PAGE);
-      const items = history.slice(start, end).reverse();
-      renderServerHistory(items);
+      fetch('/price-history?page=' + currentPage + '&perPage=' + PER_PAGE)
+        .then(r => r.json())
+        .then(data => {
+          totalRecords = data.total || 0;
+          totalPages = data.totalPages || 1;
+          if (data.currentUsdIdr) currentUsdIdr = data.currentUsdIdr;
+          renderServerHistory(data.items || []);
+        })
+        .catch(() => renderServerHistory([]));
     }
 
     function renderServerHistory(items) {
@@ -11441,16 +11414,6 @@ app.get('/monitoring', async (_req, res) => {
                 });
               }, 5000);
 
-              // Save ke localStorage
-              addToLocalHistory({
-                time: data.updatedAt,
-                buy: data.buy,
-                sell: data.sell,
-                buyChange: change,
-                sellChange: data.sell - (data.prevSell || data.sell),
-                spread: ((data.sell - data.buy) / data.buy * 100).toFixed(2),
-                usdIdr: data.usdIdr || 0
-              });
               updateHistory();
             }
             lastBuy = data.buy;
