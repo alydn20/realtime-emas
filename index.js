@@ -11488,21 +11488,18 @@ app.get('/monitoring', async (_req, res) => {
       const badge = document.querySelector('.live-badge');
       if (badge) { badge.textContent = 'Live'; badge.style.background = 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)'; }
       lastDataTime = Date.now();
-      sseReconnectCount = 0; // Reset reconnect count on successful connection
+      sseReconnectCount = 0;
     };
 
     evtSource.onerror = function() {
       const badge = document.querySelector('.live-badge');
       if (badge) { badge.textContent = 'Reconnecting...'; badge.style.background = '#f59e0b'; }
+      if (sseReconnectTimer) clearTimeout(sseReconnectTimer);
+      const delay = Math.min(3000 * Math.pow(2, sseReconnectCount), 30000);
       sseReconnectCount++;
-      // Auto reload setelah 5 detik reconnect untuk fresh connection
-      if (sseReconnectCount >= 2) {
-        badge.textContent = 'Reloading...';
-        badge.style.background = '#ef4444';
-        setTimeout(function() {
-          window.location.reload();
-        }, 5000);
-      }
+      sseReconnectTimer = setTimeout(function() {
+        connectSSE();
+      }, delay);
     };
     } // end setupSSEHandlers
 
