@@ -1551,12 +1551,23 @@ async function doPromoBroadcast() {
       return
     }
 
-    // Cek apakah ada promo 20jt aktif (promotion_amount = 19315000 atau default_amount = 20000000)
-    const has20jt = nominalData.data.some(n =>
-      n.status === true &&
-      (n.promotion_amount === 19315000 || n.default_amount === 20000000)
+    // Ambil nominal promoRef dari admin settings
+    let promoRefAmount = 20000000 // fallback default 20jt
+    try {
+      const nomSettings = await redis.get(REDIS_KEYS.NOMINAL_SETTINGS)
+      if (nomSettings) {
+        let nomConfig = typeof nomSettings === 'string' ? JSON.parse(nomSettings) : nomSettings
+        if (Array.isArray(nomConfig)) nomConfig = { nominals: nomConfig }
+        const promoRefNom = (nomConfig.nominals || []).find(n => n.promoRef === true && n.active !== false)
+        if (promoRefNom) promoRefAmount = promoRefNom.amount
+      }
+    } catch (_) {}
+
+    // Cek apakah nominal promoRef aktif di Treasury API
+    const hasPromo = nominalData.data.some(n =>
+      n.status === true && n.default_amount === promoRefAmount
     )
-    const currentStatus = has20jt ? 'ON' : 'OFF'
+    const currentStatus = hasPromo ? 'ON' : 'OFF'
 
     // Detect status change
     const isFirstCheck = lastPromoStatus === null
