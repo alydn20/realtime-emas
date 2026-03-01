@@ -7298,7 +7298,7 @@ ${authScript}
           '<td><input type="text" value="' + nom.id + '" onchange="updateNominal(' + idx + ', &apos;id&apos;, this.value)" style="width:60px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
           '<td><input type="text" value="' + nom.label + '" onchange="updateNominal(' + idx + ', &apos;label&apos;, this.value)" style="width:60px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
           '<td><input type="number" value="' + nom.amount + '" onchange="updateNominal(' + idx + ', &apos;amount&apos;, parseFloat(this.value))" style="width:120px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
-          '<td><input type="number" value="' + (nom.discountRate * 100).toFixed(2) + '" onchange="updateNominal(' + idx + ', &apos;discountRate&apos;, parseFloat(this.value) / 100)" step="0.01" style="width:80px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
+          '<td><input type="number" value="' + parseFloat((nom.discountRate * 100).toFixed(3)) + '" onchange="updateNominal(' + idx + ', &apos;discountRate&apos;, parseFloat(this.value) / 100)" step="0.001" style="width:80px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:4px 8px;border-radius:4px;color:#e7e9ea;"></td>' +
           '<td><span class="badge ' + statusClass + '">' + statusText + '</span></td>' +
           '<td>' +
             '<button class="action-btn" style="background:' + toggleColor + ';" onclick="toggleNominal(' + idx + ')">' + toggleText + '</button> ' +
@@ -11280,7 +11280,7 @@ app.get('/monitoring', async (_req, res) => {
 
       list.innerHTML = loadedNominals.map(n => {
         const checked = userNominalPrefs[n.id] !== false ? 'checked' : '';
-        const discountPercent = (n.discountRate * 100).toFixed(2);
+        const discountPercent = parseFloat((n.discountRate * 100).toFixed(3));
         return '<div class="nominal-modal-item" onclick="toggleNominalCheckbox(&apos;' + n.id + '&apos;)">' +
           '<input type="checkbox" id="nom_' + n.id + '" ' + checked + ' onclick="event.stopPropagation()">' +
           '<label for="nom_' + n.id + '">' + n.label + '</label>' +
