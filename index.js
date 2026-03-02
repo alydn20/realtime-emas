@@ -7926,7 +7926,7 @@ ${authScript}
               '<td>' + expDate + '</td>' +
               '<td>' +
                 '<div class="action-btns">' +
-                  '<button class="action-btn edit" onclick="editUser(&apos;' + u.phone + '&apos;,&apos;' + (u.name||'') + '&apos;)">Edit</button>' +
+                  '<button class="action-btn edit" onclick="editUser(&apos;' + u.phone + '&apos;,&apos;' + (u.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'") + '&apos;)">Edit</button>' +
                   '<button class="action-btn push" onclick="openPushModal(&apos;' + u.phone + '&apos;)">Push</button>' +
                   '<button class="action-btn pin" onclick="resetPin(&apos;' + u.phone + '&apos;)">Reset PIN</button>' +
                   blockBtn +
@@ -9002,6 +9002,57 @@ app.get('/monitoring', async (_req, res) => {
     }
     .tradingview-widget-container iframe {
       touch-action: none !important;
+    }
+    .chart-mobile-overlay {
+      display: none;
+    }
+    .chart-exit-btn {
+      display: none;
+    }
+    @media (max-width: 768px) {
+      .chart-mobile-overlay {
+        display: flex;
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        z-index: 20;
+        align-items: center;
+        justify-content: center;
+        background: rgba(26, 31, 38, 0.55);
+        cursor: pointer;
+        border-radius: 12px;
+      }
+      .chart-mobile-overlay.chart-unlocked {
+        pointer-events: none;
+        background: transparent;
+      }
+      .chart-overlay-msg {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        color: #e7e9ea;
+        font-size: 0.9em;
+        font-weight: 600;
+        background: rgba(26, 31, 38, 0.85);
+        padding: 14px 24px;
+        border-radius: 12px;
+        border: 1px solid rgba(255,255,255,0.1);
+      }
+      .chart-exit-btn {
+        display: block;
+        position: absolute;
+        bottom: 12px;
+        right: 12px;
+        z-index: 25;
+        background: rgba(239,68,68,0.85);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        padding: 6px 14px;
+        font-size: 0.82em;
+        font-weight: 600;
+        cursor: pointer;
+      }
     }
 
     /* Chart Bottom Row - Clock & Buttons */
@@ -10190,6 +10241,14 @@ app.get('/monitoring', async (_req, res) => {
         </div>
       </div>
       <div class="tradingview-widget-container">
+        <!-- Overlay mobile: tap to enable chart interaction -->
+        <div class="chart-mobile-overlay" id="chartMobileOverlay" onclick="enableChartInteraction()">
+          <div class="chart-overlay-msg">
+            <span style="font-size:1.4em;">👆</span>
+            <span>Ketuk untuk geser chart</span>
+          </div>
+        </div>
+        <button class="chart-exit-btn" id="chartExitBtn" onclick="exitChartInteraction()" style="display:none;">✕ Selesai</button>
         <!-- TradingView Widget - Dynamic Loading -->
         <div class="tradingview-widget-container__widget" id="tradingview-widget"></div>
         <script type="text/javascript">
@@ -10294,7 +10353,6 @@ app.get('/monitoring', async (_req, res) => {
             <th>Jual</th>
             <th>Spread</th>
             <th>USD/IDR</th>
-            <th>+/-</th>
           </tr>
         </thead>
         <tbody id="historyBody">
@@ -10553,6 +10611,20 @@ app.get('/monitoring', async (_req, res) => {
     }
 
     // Temporary state for settings modal
+    // Chart mobile overlay functions
+    function enableChartInteraction() {
+      const overlay = document.getElementById('chartMobileOverlay');
+      const exitBtn = document.getElementById('chartExitBtn');
+      if (overlay) overlay.classList.add('chart-unlocked');
+      if (exitBtn) exitBtn.style.display = '';
+    }
+    function exitChartInteraction() {
+      const overlay = document.getElementById('chartMobileOverlay');
+      const exitBtn = document.getElementById('chartExitBtn');
+      if (overlay) overlay.classList.remove('chart-unlocked');
+      if (exitBtn) exitBtn.style.display = 'none';
+    }
+
     let tempIndicatorState = {};
 
     // Open Indicator Settings Modal
@@ -10839,14 +10911,15 @@ app.get('/monitoring', async (_req, res) => {
           return '<td><span style="color:#e7e9ea;">' + gram.toFixed(4) + 'g</span><br><small class="' + profitClass + '">' + profitSign + 'Rp ' + Math.abs(profit).toLocaleString('id-ID') + '</small></td>';
         }).join('');
 
+        const arrowIcon = buyChange > 0 ? '▲' : buyChange < 0 ? '▼' : '';
+        const arrowHtml = arrowIcon ? ' <span class="' + changeClass + '" style="font-size:0.75em;">' + arrowIcon + '</span>' : '';
         html += '<tr>' +
           '<td class="time-col">' + timeStr + '</td>' +
-          '<td>' + formatRupiahShort(item.buy) + '</td>' +
+          '<td>' + formatRupiahShort(item.buy) + arrowHtml + '</td>' +
           '<td>' + formatRupiahShort(item.sell) + '</td>' +
           '<td class="' + spreadClass + '">' + spread + '%</td>' +
           '<td>' + usdIdr + (usdIdrChange !== 0 ? '<br><small class="' + usdIdrChangeClass + '">' + usdIdrChangeSign + Math.abs(usdIdrChange).toLocaleString('id-ID') + '</small>' : '') + '</td>' +
           nominalCols +
-          '<td class="' + changeClass + '">' + changeSign + formatChangeShort(buyChange) + '</td>' +
           '</tr>';
       });
       tbody.innerHTML = html;
@@ -11505,13 +11578,12 @@ app.get('/monitoring', async (_req, res) => {
       const row = document.getElementById('historyHeaderRow');
       if (!row) return;
       row.querySelectorAll('.th-nominal').forEach(th => th.remove());
-      const lastTh = row.lastElementChild;
       loadedNominals.forEach(n => {
         const th = document.createElement('th');
         th.className = 'th-nominal';
         th.setAttribute('data-nominal', n.id);
         th.textContent = n.label;
-        row.insertBefore(th, lastTh);
+        row.appendChild(th);
       });
     }
 
