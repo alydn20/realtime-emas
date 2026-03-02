@@ -8308,7 +8308,7 @@ ${authScript}
               '<div style="font-size:0.82em;color:#8b949e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + n.message + '</div>' +
               '<div style="font-size:0.75em;color:#6b7280;margin-top:4px;">Terkirim: ' + (n.sent || 0) + ' user' + (n.failed ? ' · Gagal: ' + n.failed : '') + '</div>' +
             '</div>' +
-            '<button onclick="deleteNotifHistory(\'' + n.id + '\')" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.78em;white-space:nowrap;flex-shrink:0;">Hapus</button>' +
+            '<button onclick="deleteNotifHistory(&apos;' + n.id + '&apos;)" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.78em;white-space:nowrap;flex-shrink:0;">Hapus</button>' +
           '</div>' +
         '</div>';
       }).join('');
@@ -8398,6 +8398,13 @@ app.get('/monitoring', async (_req, res) => {
       font-size: 0.85em;
       color: #8b949e;
       font-weight: 400;
+    }
+    .chart-title-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      flex-wrap: wrap;
     }
 
     /* Sound Toggle in Header */
@@ -10114,6 +10121,16 @@ app.get('/monitoring', async (_req, res) => {
           </div>
         </h1>
         <div class="subtitle">Real-time Treasury Gold Rates</div>
+        <div class="chart-title-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.6;"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-3 3"/></svg>
+          <span style="font-size:0.85em;color:#9ca3af;">XAU/USD Chart</span>
+          <span id="trendIcon" style="margin-left:4px;font-size:0.9em;"></span>
+          <span class="live-badge" style="font-size:0.7em;padding:3px 8px;">Live</span>
+          <button class="calc-btn-header" onclick="openGoldCalc()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10h8M8 14h8"/></svg>
+            Hitung Emas
+          </button>
+        </div>
       </div>
       <div class="header-right">
         <button class="install-btn" id="installBtn" onclick="installApp()">
@@ -10131,14 +10148,6 @@ app.get('/monitoring', async (_req, res) => {
 
     <div class="chart-section">
       <div class="chart-header">
-        <div class="chart-title">
-          <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-3 3"/></svg>XAU/USD Chart <span id="trendIcon" style="margin-left:8px;"></span></h2>
-          <span class="live-badge">Live</span>
-          <button class="calc-btn-header" onclick="openGoldCalc()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10h8M8 14h8"/></svg>
-            Hitung Emas
-          </button>
-        </div>
         <div class="chart-stats">
           <div class="stat-item" id="buyCard">
             <span class="stat-label">Beli</span>
