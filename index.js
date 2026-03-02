@@ -183,7 +183,8 @@ const REDIS_KEYS = {
   SOUND_SETTINGS: 'gold:sound_settings', // JSON: custom sound settings (soundUp, soundDown URLs)
   NOMINAL_SETTINGS: 'gold:nominal_settings', // JSON: nominal investment settings
   NOTIF_HISTORY: 'gold:notif_history', // JSON array: broadcast notification history
-  PROMO_LIMIT: 'gold:promo_limit'     // Number: monthly promo buy limit (set by admin)
+  PROMO_LIMIT: 'gold:promo_limit',     // Number: monthly promo buy limit (set by admin)
+  LOWEST_ON_PRICE: 'gold:lowest_on_price' // Number: lowest buy price recorded at OFF→ON transitions
 }
 
 // Admin password untuk akses admin panel
@@ -1575,6 +1576,18 @@ async function doPromoBroadcast() {
 
     if (statusChanged) {
       pushLog(`🎁 Status berubah: ${lastPromoStatus} → ${currentStatus}`)
+    }
+
+    // Track lowest buy price at OFF→ON transition
+    if (statusChanged && currentStatus === 'ON' && lastKnownPrice?.buy) {
+      const currentBuy = lastKnownPrice.buy
+      const storedVal = await redis.get(REDIS_KEYS.LOWEST_ON_PRICE)
+      const lowestSoFar = storedVal !== null ? parseInt(storedVal, 10) : null
+      if (lowestSoFar === null || currentBuy < lowestSoFar) {
+        await redis.set(REDIS_KEYS.LOWEST_ON_PRICE, String(currentBuy))
+        broadcastSSE({ type: 'lowest_on_price', price: currentBuy })
+        pushLog(`🏷️ Titik ON terendah baru: ${formatRupiah(currentBuy)}`)
+      }
     }
 
     let shouldBroadcast = false
@@ -4571,6 +4584,17 @@ app.post('/api/admin/promo-limit', express.json(), async (req, res) => {
     await redis.set(REDIS_KEYS.PROMO_LIMIT, String(numLimit))
     broadcastSSE({ type: 'promo_limit_update', limit: numLimit })
     res.json({ success: true, limit: numLimit })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
+// Get lowest ON price
+app.get('/api/lowest-on-price', async (_req, res) => {
+  try {
+    const val = await redis.get(REDIS_KEYS.LOWEST_ON_PRICE)
+    const price = val !== null ? parseInt(val, 10) : null
+    res.json({ success: true, price })
   } catch (e) {
     res.json({ success: false, error: e.message })
   }
@@ -8538,7 +8562,7 @@ app.get('/monitoring', async (_req, res) => {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
-      padding: 0 16px 12px 16px;
+      padding: 0 16px 6px 16px;
       justify-content: center;
     }
     .invest-stats .stat-item {
@@ -8711,7 +8735,7 @@ app.get('/monitoring', async (_req, res) => {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 14px;
+      gap: 8px;
     }
     .chart-title {
       display: flex;
@@ -9021,7 +9045,7 @@ app.get('/monitoring', async (_req, res) => {
       display: flex;
       justify-content: center;
       align-items: center;
-      margin-top: 12px;
+      margin-top: 4px;
       width: 100%;
     }
     .chart-bottom-row .chart-info-row {
@@ -9764,7 +9788,7 @@ app.get('/monitoring', async (_req, res) => {
       .header-right { text-align: center; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 10px; }
       .sound-toggle-header { margin-left: 0; }
       .chart-section { margin-bottom: 16px; border-radius: 16px; }
-      .chart-header { padding: 14px 16px; gap: 12px; }
+      .chart-header { padding: 14px 16px; gap: 8px; }
       .chart-header h2 { font-size: 1em; }
       .chart-stats { gap: 8px; }
       .stat-item { padding: 10px 14px; gap: 8px; border-radius: 10px; }
@@ -9802,7 +9826,7 @@ app.get('/monitoring', async (_req, res) => {
         margin-bottom: 12px;
         border-radius: 14px;
       }
-      .chart-header { padding: 12px 14px; gap: 10px; }
+      .chart-header { padding: 12px 14px; gap: 6px; }
       .chart-title { gap: 8px; }
       .chart-header h2 { font-size: 0.95em; }
       .chart-header h2 svg { width: 14px; height: 14px; }
@@ -9826,11 +9850,13 @@ app.get('/monitoring', async (_req, res) => {
       .chart-stats > .stat-item:not(.invest) .stat-label { font-size: 0.5em; }
       .chart-stats > .stat-item:not(.invest) .stat-value { font-size: 0.6em; }
       .chart-stats > .stat-item:not(.invest) .stat-change { font-size: 0.45em; padding: 1px 4px; border-radius: 3px; }
+      /* Center badge when alone in last row of 2-col grid (set via JS) */
+      .chart-stats > .stat-item.stat-alone { grid-column: 1 / -1; justify-self: center; }
       .tradingview-widget-container { height: 350px; }
 
       /* Mobile: Show all enabled invest items */
       .invest-stats {
-        padding: 8px 10px;
+        padding: 4px 10px;
         gap: 4px;
         flex-wrap: wrap;
         justify-content: center;
@@ -9849,6 +9875,7 @@ app.get('/monitoring', async (_req, res) => {
       .chart-bottom-row {
         flex-direction: column;
         gap: 10px;
+        margin-top: 2px;
       }
       .indicator-buttons-row {
         position: static;
@@ -10172,6 +10199,11 @@ app.get('/monitoring', async (_req, res) => {
             <span class="stat-label">Limit</span>
             <span class="stat-value" id="promoLimitValue" style="color:#f7931a;">-</span>
             <span class="stat-change" style="font-size:0.7em;color:#6b7280;">beli/bln</span>
+          </div>
+          <div class="stat-item" id="lowestOnCard" style="display:none;">
+            <span class="stat-label">Titik ON &#9660;</span>
+            <span class="stat-value" id="lowestOnValue" style="color:#22c55e;">-</span>
+            <span class="stat-change" style="font-size:0.7em;color:#6b7280;">harga beli</span>
           </div>
         </div>
         <div class="invest-stats">
@@ -11581,6 +11613,15 @@ app.get('/monitoring', async (_req, res) => {
     loadNominalSettings();
 
     // Load promo limit on page load
+    function updateStatCentering() {
+      const statsEl = document.querySelector('.chart-stats');
+      if (!statsEl) return;
+      const items = Array.from(statsEl.children);
+      items.forEach(el => el.classList.remove('stat-alone'));
+      const visible = items.filter(el => el.style.display !== 'none');
+      if (visible.length % 2 === 1) visible[visible.length - 1].classList.add('stat-alone');
+    }
+
     function loadAndShowPromoLimit() {
       fetch('/api/promo-limit')
         .then(r => r.json())
@@ -11593,10 +11634,29 @@ app.get('/monitoring', async (_req, res) => {
           } else {
             if (card) card.style.display = 'none';
           }
+          updateStatCentering();
         })
         .catch(() => {});
     }
     loadAndShowPromoLimit();
+
+    function loadLowestOnPrice() {
+      fetch('/api/lowest-on-price')
+        .then(r => r.json())
+        .then(data => {
+          const card = document.getElementById('lowestOnCard');
+          const val = document.getElementById('lowestOnValue');
+          if (data.price !== null && data.price !== undefined) {
+            if (val) val.textContent = formatRupiahShort(data.price);
+            if (card) card.style.display = '';
+          } else {
+            if (card) card.style.display = 'none';
+          }
+          updateStatCentering();
+        })
+        .catch(() => {});
+    }
+    loadLowestOnPrice();
 
     // 🚀 SSE (Server-Sent Events) untuk real-time INSTANT update
     let evtSource = null;
@@ -11678,6 +11738,19 @@ app.get('/monitoring', async (_req, res) => {
             if (card) card.style.display = '';
           } else {
             if (card) card.style.display = 'none';
+          }
+          updateStatCentering();
+          return;
+        }
+
+        // Handle lowest ON price update
+        if (data.type === 'lowest_on_price') {
+          const card = document.getElementById('lowestOnCard');
+          const val = document.getElementById('lowestOnValue');
+          if (data.price !== null && data.price !== undefined) {
+            if (val) val.textContent = formatRupiahShort(data.price);
+            if (card) card.style.display = '';
+            updateStatCentering();
           }
           return;
         }
