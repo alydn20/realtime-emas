@@ -1579,8 +1579,8 @@ async function doPromoBroadcast() {
       pushLog(`🎁 Status berubah: ${lastPromoStatus} → ${currentStatus}`)
     }
 
-    // Seed lowest ON price on first check if already ON (price update hook handles ongoing tracking)
-    if (currentStatus === 'ON' && lastKnownPrice?.buy && isFirstCheck) {
+    // Seed lowest ON price on first check or every OFF→ON transition
+    if (currentStatus === 'ON' && lastKnownPrice?.buy && (isFirstCheck || statusChanged)) {
       const currentBuy = lastKnownPrice.buy
       if (lowestOnPriceCache === undefined) {
         const storedVal = await redis.get(REDIS_KEYS.LOWEST_ON_PRICE)
@@ -1590,7 +1590,7 @@ async function doPromoBroadcast() {
         lowestOnPriceCache = currentBuy
         await redis.set(REDIS_KEYS.LOWEST_ON_PRICE, String(currentBuy))
         broadcastSSE({ type: 'lowest_on_price', price: currentBuy })
-        pushLog(`🏷️ Titik ON terendah (init): ${formatRupiah(currentBuy)}`)
+        pushLog(`🏷️ Titik ON terendah (ON): ${formatRupiah(currentBuy)}`)
       }
     }
 
