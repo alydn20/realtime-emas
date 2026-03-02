@@ -10226,6 +10226,7 @@ app.get('/monitoring', async (_req, res) => {
 
           // Check if volume is active to show/hide
           const hideVolume = !activeIndicators.includes('vol');
+          const isMobile = window.innerWidth <= 768;
 
           // Create widget config
           const config = {
@@ -10245,7 +10246,7 @@ app.get('/monitoring', async (_req, res) => {
             save_image: true,
             calendar: true,
             hide_volume: hideVolume,
-            hide_side_toolbar: false,
+            hide_side_toolbar: isMobile,
             withdateranges: true,
             details: false,
             hotlist: false,
