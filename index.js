@@ -182,7 +182,8 @@ const REDIS_KEYS = {
   USER_PINS: 'gold:user_pins',    // Hash: phone -> { pin (hashed), pinChanged (boolean) }
   SOUND_SETTINGS: 'gold:sound_settings', // JSON: custom sound settings (soundUp, soundDown URLs)
   NOMINAL_SETTINGS: 'gold:nominal_settings', // JSON: nominal investment settings
-  NOTIF_HISTORY: 'gold:notif_history' // JSON array: broadcast notification history
+  NOTIF_HISTORY: 'gold:notif_history', // JSON array: broadcast notification history
+  PROMO_LIMIT: 'gold:promo_limit'     // Number: monthly promo buy limit (set by admin)
 }
 
 // Admin password untuk akses admin panel
@@ -4549,6 +4550,32 @@ app.post('/api/admin/nominal-settings', express.json(), async (req, res) => {
   }
 })
 
+// Public: Get promo limit
+app.get('/api/promo-limit', async (_req, res) => {
+  try {
+    const val = await redis.get(REDIS_KEYS.PROMO_LIMIT)
+    const limit = val !== null ? parseInt(val, 10) : null
+    res.json({ success: true, limit })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
+// Admin: Set promo limit
+app.post('/api/admin/promo-limit', express.json(), async (req, res) => {
+  const { password, limit } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+  try {
+    const numLimit = parseInt(limit, 10)
+    if (isNaN(numLimit) || numLimit < 0) return res.json({ success: false, error: 'Nilai tidak valid' })
+    await redis.set(REDIS_KEYS.PROMO_LIMIT, String(numLimit))
+    broadcastSSE({ type: 'promo_limit_update', limit: numLimit })
+    res.json({ success: true, limit: numLimit })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
 // ==================== WHATSAPP GROUP MANAGEMENT ====================
 
 // Admin: Get list of WhatsApp groups
@@ -6818,6 +6845,26 @@ ${authScript}
           </div>
         </div>
 
+        <!-- Limit Beli Promo -->
+        <div class="card">
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            Limit Beli Promo Bulanan
+          </h2>
+          <p style="color:#6b7280;font-size:0.82em;margin-bottom:14px;">Angka yang ditampilkan sebagai badge Limit di halaman user (batas beli promo bulan ini). Bisa diisi bebas.</p>
+          <div class="result-msg" id="promoLimitResult"></div>
+          <div class="form-group" style="display:flex;gap:10px;align-items:flex-end;">
+            <div style="flex:1;">
+              <label>Nilai Limit</label>
+              <input type="number" id="promoLimitInput" min="0" step="1" placeholder="Contoh: 50" style="width:100%;">
+            </div>
+            <button class="btn btn-primary" style="white-space:nowrap;" onclick="savePromoLimit()">Simpan</button>
+          </div>
+          <p style="color:#6b7280;font-size:0.78em;margin-top:8px;">Nilai saat ini: <strong id="promoLimitCurrent">-</strong></p>
+        </div>
+
         <!-- Admin Phones -->
         <div class="card">
           <h2>
@@ -7031,6 +7078,7 @@ ${authScript}
       loadWaGroups();
       loadAdminPhones();
       loadSoundSettings();
+      loadPromoLimit();
       loadBroadcastHistory();
       connectAdminSSE();
 
@@ -7388,6 +7436,46 @@ ${authScript}
           result.className = 'result-msg error';
           result.textContent = data.message || 'Gagal menyimpan';
         }
+      });
+    }
+
+    // ==================== Promo Limit Functions ====================
+    function loadPromoLimit() {
+      fetch('/api/promo-limit')
+        .then(r => r.json())
+        .then(data => {
+          const cur = document.getElementById('promoLimitCurrent');
+          if (cur) cur.textContent = data.limit !== null ? data.limit : '(belum diset)';
+          const inp = document.getElementById('promoLimitInput');
+          if (inp && data.limit !== null) inp.value = data.limit;
+        });
+    }
+
+    function savePromoLimit() {
+      const inp = document.getElementById('promoLimitInput');
+      const result = document.getElementById('promoLimitResult');
+      const val = inp ? inp.value.trim() : '';
+      if (val === '' || isNaN(parseInt(val, 10))) {
+        result.className = 'result-msg error';
+        result.textContent = 'Masukkan angka yang valid';
+        return;
+      }
+      fetch('/api/admin/promo-limit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass, limit: parseInt(val, 10) })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          result.className = 'result-msg success';
+          result.textContent = 'Limit berhasil disimpan: ' + data.limit;
+          loadPromoLimit();
+        } else {
+          result.className = 'result-msg error';
+          result.textContent = data.error || 'Gagal menyimpan';
+        }
+        setTimeout(() => { result.textContent = ''; result.className = 'result-msg'; }, 3000);
       });
     }
 
@@ -10064,6 +10152,11 @@ app.get('/monitoring', async (_req, res) => {
             <span class="stat-value blue" id="usdIdr">-</span>
             <span class="stat-change" id="usdIdrChange"></span>
           </div>
+          <div class="stat-item" id="promoLimitCard" style="display:none;">
+            <span class="stat-label">Limit</span>
+            <span class="stat-value" id="promoLimitValue" style="color:#f7931a;">-</span>
+            <span class="stat-change" style="font-size:0.7em;color:#6b7280;">beli/bln</span>
+          </div>
         </div>
         <div class="invest-stats">
           <button class="nominal-settings-btn" onclick="openNominalSettings()" title="Pilih Nominal">
@@ -11461,6 +11554,24 @@ app.get('/monitoring', async (_req, res) => {
     // Load nominal settings on page load
     loadNominalSettings();
 
+    // Load promo limit on page load
+    function loadAndShowPromoLimit() {
+      fetch('/api/promo-limit')
+        .then(r => r.json())
+        .then(data => {
+          const card = document.getElementById('promoLimitCard');
+          const val = document.getElementById('promoLimitValue');
+          if (data.limit !== null && data.limit !== undefined) {
+            if (val) val.textContent = data.limit;
+            if (card) card.style.display = '';
+          } else {
+            if (card) card.style.display = 'none';
+          }
+        })
+        .catch(() => {});
+    }
+    loadAndShowPromoLimit();
+
     // 🚀 SSE (Server-Sent Events) untuk real-time INSTANT update
     let evtSource = null;
     let sseReconnectTimer = null;
@@ -11529,6 +11640,19 @@ app.get('/monitoring', async (_req, res) => {
           updateMobileSelector();
           updateHistory();
           console.log('Nominal settings updated');
+          return;
+        }
+
+        // Handle promo limit update from admin
+        if (data.type === 'promo_limit_update') {
+          const card = document.getElementById('promoLimitCard');
+          const val = document.getElementById('promoLimitValue');
+          if (data.limit !== null && data.limit !== undefined) {
+            if (val) val.textContent = data.limit;
+            if (card) card.style.display = '';
+          } else {
+            if (card) card.style.display = 'none';
+          }
           return;
         }
 
