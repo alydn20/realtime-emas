@@ -8906,9 +8906,11 @@ app.get('/monitoring', async (_req, res) => {
     .tradingview-widget-container {
       height: 600px;
       position: relative;
+      touch-action: none;
     }
     .tradingview-widget-container__widget {
       height: 100% !important;
+      touch-action: none;
     }
 
     /* Chart Bottom Row - Clock & Buttons */
