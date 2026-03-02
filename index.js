@@ -1063,7 +1063,7 @@ async function fetchXAUUSDFromTradingView() {
       },
       body: JSON.stringify({
         symbols: {
-          tickers: ['OANDA:XAUUSD'],
+          tickers: ['TVC:GOLD'],
           query: { types: [] }
         },
         columns: ['close']
@@ -10133,7 +10133,7 @@ app.get('/monitoring', async (_req, res) => {
           const config = {
             autosize: true,
             height: "600",
-            symbol: "OANDA:XAUUSD",
+            symbol: "TVC:GOLD",
             interval: "1",
             timezone: "Asia/Jakarta",
             theme: "dark",
@@ -11489,6 +11489,18 @@ app.get('/monitoring', async (_req, res) => {
 
         // Skip heartbeat silently
         if (data.type === 'heartbeat') {
+          return;
+        }
+
+        // Update harga XAU/USD di title tab browser
+        if (data.type === 'xau') {
+          const price = parseFloat(data.price);
+          if (!isNaN(price)) {
+            const change = parseFloat(data.change) || 0;
+            const sign = change >= 0 ? '+' : '';
+            const pctChange = data.prevPrice ? ((change / data.prevPrice) * 100).toFixed(2) : '0.00';
+            document.title = 'GOLD ' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + sign + pctChange + '% | Gold Price Monitor';
+          }
           return;
         }
 
