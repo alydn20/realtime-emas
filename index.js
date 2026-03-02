@@ -181,7 +181,8 @@ const REDIS_KEYS = {
   PENDING_REGISTRATIONS: 'gold:pending_reg_v2', // Hash: phone -> { name, phone, timestamp }
   USER_PINS: 'gold:user_pins',    // Hash: phone -> { pin (hashed), pinChanged (boolean) }
   SOUND_SETTINGS: 'gold:sound_settings', // JSON: custom sound settings (soundUp, soundDown URLs)
-  NOMINAL_SETTINGS: 'gold:nominal_settings' // JSON: nominal investment settings
+  NOMINAL_SETTINGS: 'gold:nominal_settings', // JSON: nominal investment settings
+  NOTIF_HISTORY: 'gold:notif_history' // JSON array: broadcast notification history
 }
 
 // Admin password untuk akses admin panel
@@ -4382,7 +4383,54 @@ app.post('/api/admin/push', express.json(), async (req, res) => {
     // Also broadcast via SSE
     broadcastSSE({ type: 'notification', notifType: type, title, message, time: new Date().toISOString() })
 
+    // Simpan ke riwayat notifikasi di Redis
+    const notifEntry = { id: Date.now().toString(), type, title, message, sent, failed, sentAt: new Date().toISOString() }
+    try {
+      const existing = await redis.get(REDIS_KEYS.NOTIF_HISTORY)
+      const history = existing ? JSON.parse(existing) : []
+      history.unshift(notifEntry)
+      await redis.set(REDIS_KEYS.NOTIF_HISTORY, JSON.stringify(history))
+    } catch (_) {}
+
     res.json({ success: true, sent, failed })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
+// Admin: Get notification history
+app.get('/api/admin/notif-history', async (req, res) => {
+  const { password } = req.query
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+  try {
+    const data = await redis.get(REDIS_KEYS.NOTIF_HISTORY)
+    res.json({ success: true, history: data ? JSON.parse(data) : [] })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
+// Admin: Delete one notification from history
+app.delete('/api/admin/notif-history/:id', async (req, res) => {
+  const { password } = req.query
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+  try {
+    const data = await redis.get(REDIS_KEYS.NOTIF_HISTORY)
+    const history = (data ? JSON.parse(data) : []).filter(n => n.id !== req.params.id)
+    await redis.set(REDIS_KEYS.NOTIF_HISTORY, JSON.stringify(history))
+    res.json({ success: true })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
+// Admin: Clear all notification history
+app.delete('/api/admin/notif-history', async (req, res) => {
+  const { password } = req.query
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+  try {
+    await redis.set(REDIS_KEYS.NOTIF_HISTORY, JSON.stringify([]))
+    res.json({ success: true })
   } catch (e) {
     res.json({ success: false, error: e.message })
   }
@@ -6433,6 +6481,7 @@ ${authScript}
         <div class="section-tab" data-section="pending">Pending <span id="pendingBadge" style="background:#f7931a;color:#000;padding:1px 6px;border-radius:8px;font-size:0.75em;margin-left:4px;">0</span></div>
         <div class="section-tab" data-section="whatsapp">WhatsApp</div>
         <div class="section-tab" data-section="nominal">Nominal</div>
+        <div class="section-tab" data-section="broadcast">Broadcast</div>
         <div class="section-tab" data-section="settings">Pengaturan</div>
       </div>
 
@@ -6790,6 +6839,67 @@ ${authScript}
           <button class="btn btn-primary" onclick="saveAdminPhones()">Simpan Nomor Admin</button>
         </div>
       </div>
+
+      <!-- Section: Broadcast Notifications -->
+      <div class="section-content" id="section-broadcast">
+        <div class="card">
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+              <path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2"/>
+            </svg>
+            Broadcast Notifikasi
+          </h2>
+
+          <!-- Stats Bar -->
+          <div style="display:flex;gap:12px;margin-bottom:20px;">
+            <div style="flex:1;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:14px;text-align:center;">
+              <div style="font-size:1.6em;font-weight:700;color:#22c55e;" id="bcastOnline">0</div>
+              <div style="font-size:0.78em;color:#6b7280;margin-top:2px;">User Online</div>
+            </div>
+            <div style="flex:1;background:rgba(247,147,26,0.08);border:1px solid rgba(247,147,26,0.2);border-radius:10px;padding:14px;text-align:center;">
+              <div style="font-size:1.6em;font-weight:700;color:#f7931a;" id="bcastSentToday">0</div>
+              <div style="font-size:0.78em;color:#6b7280;margin-top:2px;">Terkirim Hari Ini</div>
+            </div>
+          </div>
+
+          <!-- Tipe Notifikasi -->
+          <div class="form-group">
+            <label>Tipe Notifikasi</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;" id="bcastTypeBtns">
+              <button class="action-btn bcast-type-btn active-type" data-type="info" onclick="selectBcastType(this)" style="background:rgba(59,130,246,0.2);border:1px solid rgba(96,165,250,0.5);color:#60a5fa;padding:6px 14px;font-size:0.85em;">📢 Info</button>
+              <button class="action-btn bcast-type-btn" data-type="promo" onclick="selectBcastType(this)" style="background:rgba(34,197,94,0.12);border:1px solid rgba(74,222,128,0.3);color:#4ade80;padding:6px 14px;font-size:0.85em;">🎁 Promo</button>
+              <button class="action-btn bcast-type-btn" data-type="warning" onclick="selectBcastType(this)" style="background:rgba(234,179,8,0.12);border:1px solid rgba(250,204,21,0.3);color:#facc15;padding:6px 14px;font-size:0.85em;">⚠️ Warning</button>
+              <button class="action-btn bcast-type-btn" data-type="urgent" onclick="selectBcastType(this)" style="background:rgba(239,68,68,0.12);border:1px solid rgba(248,113,113,0.3);color:#f87171;padding:6px 14px;font-size:0.85em;">🚨 Urgent</button>
+            </div>
+          </div>
+
+          <!-- Judul -->
+          <div class="form-group">
+            <label>Judul</label>
+            <input type="text" id="bcastTitle" placeholder="Contoh: Promo Spesial!" style="width:100%;">
+          </div>
+
+          <!-- Pesan -->
+          <div class="form-group">
+            <label>Pesan</label>
+            <textarea id="bcastMessage" placeholder="Contoh: Dapatkan diskon 10% untuk pembelian emas hari ini!" style="width:100%;min-height:80px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px;color:#e7e9ea;resize:vertical;font-family:inherit;font-size:0.9em;outline:none;"></textarea>
+          </div>
+
+          <button class="btn btn-primary" style="width:100%;" onclick="sendBroadcast()">Kirim Notifikasi</button>
+          <div class="result-msg" id="bcastResult" style="margin-top:10px;"></div>
+        </div>
+
+        <!-- Riwayat -->
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <h2 style="margin-bottom:0;">Riwayat Notifikasi</h2>
+            <button class="btn btn-danger btn-sm" onclick="clearAllNotifHistory()" style="font-size:0.78em;padding:4px 10px;">Hapus Semua</button>
+          </div>
+          <div id="bcastHistory">
+            <div style="text-align:center;color:#6b7280;padding:20px;">Memuat...</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -6921,7 +7031,13 @@ ${authScript}
       loadWaGroups();
       loadAdminPhones();
       loadSoundSettings();
+      loadBroadcastHistory();
       connectAdminSSE();
+
+      // Refresh broadcast stats saat tab broadcast diklik
+      document.querySelectorAll('.section-tab[data-section="broadcast"]').forEach(tab => {
+        tab.addEventListener('click', loadBroadcastHistory);
+      });
     });
 
     // ==================== Online Users SSE ====================
@@ -8004,6 +8120,121 @@ ${authScript}
           showAlert(data.error, 'danger');
         }
       });
+    }
+
+    // ==================== Broadcast Section ====================
+    let currentBcastType = 'info';
+
+    function selectBcastType(btn) {
+      document.querySelectorAll('.bcast-type-btn').forEach(b => b.classList.remove('active-type'));
+      btn.classList.add('active-type');
+      currentBcastType = btn.getAttribute('data-type');
+    }
+
+    function sendBroadcast() {
+      const title = document.getElementById('bcastTitle').value.trim();
+      const message = document.getElementById('bcastMessage').value.trim();
+      const result = document.getElementById('bcastResult');
+
+      if (!title || !message) { showAlert('Judul dan pesan wajib diisi', 'warning'); return; }
+
+      result.className = 'result-msg success';
+      result.textContent = 'Mengirim...';
+
+      fetch('/api/admin/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass, type: currentBcastType, title, message })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          result.className = 'result-msg success';
+          result.textContent = 'Terkirim ke ' + data.sent + ' user!';
+          document.getElementById('bcastTitle').value = '';
+          document.getElementById('bcastMessage').value = '';
+          loadBroadcastHistory();
+        } else {
+          result.className = 'result-msg error';
+          result.textContent = 'Error: ' + data.error;
+        }
+        setTimeout(() => { result.className = 'result-msg'; }, 5000);
+      });
+    }
+
+    function loadBroadcastHistory() {
+      fetch('/api/admin/notif-history?password=' + encodeURIComponent(adminPass))
+        .then(r => r.json())
+        .then(data => {
+          if (!data.success) return;
+          const history = data.history || [];
+
+          // Update stats
+          const onlineEl = document.getElementById('bcastOnline');
+          if (onlineEl) {
+            fetch('/api/admin/online-users?password=' + encodeURIComponent(adminPass))
+              .then(r => r.json()).then(d => { if (onlineEl) onlineEl.textContent = d.count || 0; }).catch(() => {});
+          }
+
+          const today = new Date().toDateString();
+          const sentToday = history.filter(n => new Date(n.sentAt).toDateString() === today).length;
+          const sentEl = document.getElementById('bcastSentToday');
+          if (sentEl) sentEl.textContent = sentToday;
+
+          renderBcastHistory(history);
+        })
+        .catch(() => {});
+    }
+
+    function renderBcastHistory(history) {
+      const container = document.getElementById('bcastHistory');
+      if (!container) return;
+
+      if (!history || history.length === 0) {
+        container.innerHTML = '<div style="text-align:center;color:#6b7280;padding:20px;">Belum ada notifikasi dikirim</div>';
+        return;
+      }
+
+      const typeIcons = { info: '📢', promo: '🎁', warning: '⚠️', urgent: '🚨' };
+      const typeColors = { info: '#60a5fa', promo: '#4ade80', warning: '#facc15', urgent: '#f87171' };
+
+      container.innerHTML = history.map(n => {
+        const d = new Date(n.sentAt);
+        const dateStr = d.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
+        const timeStr = d.toTimeString().substring(0, 5);
+        const color = typeColors[n.type] || '#60a5fa';
+        const icon = typeIcons[n.type] || '📢';
+        return '<div style="border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:rgba(255,255,255,0.03);">' +
+          '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">' +
+            '<div style="flex:1;min-width:0;">' +
+              '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
+                '<span style="font-size:0.78em;background:rgba(255,255,255,0.07);color:' + color + ';padding:2px 8px;border-radius:6px;">' + icon + ' ' + n.type.toUpperCase() + '</span>' +
+                '<span style="font-size:0.75em;color:#6b7280;">' + dateStr + ' ' + timeStr + '</span>' +
+              '</div>' +
+              '<div style="font-weight:600;color:#e7e9ea;font-size:0.9em;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + n.title + '</div>' +
+              '<div style="font-size:0.82em;color:#8b949e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + n.message + '</div>' +
+              '<div style="font-size:0.75em;color:#6b7280;margin-top:4px;">Terkirim: ' + (n.sent || 0) + ' user' + (n.failed ? ' · Gagal: ' + n.failed : '') + '</div>' +
+            '</div>' +
+            '<button onclick="deleteNotifHistory(\'' + n.id + '\')" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#f87171;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.78em;white-space:nowrap;flex-shrink:0;">Hapus</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    async function deleteNotifHistory(id) {
+      const ok = await showConfirm('Hapus notifikasi ini dari riwayat?', { title: 'Hapus Riwayat', type: 'danger' });
+      if (!ok) return;
+      fetch('/api/admin/notif-history/' + id + '?password=' + encodeURIComponent(adminPass), { method: 'DELETE' })
+        .then(r => r.json())
+        .then(data => { if (data.success) loadBroadcastHistory(); });
+    }
+
+    async function clearAllNotifHistory() {
+      const ok = await showConfirm('Hapus semua riwayat notifikasi?', { title: 'Hapus Semua', type: 'danger' });
+      if (!ok) return;
+      fetch('/api/admin/notif-history?password=' + encodeURIComponent(adminPass), { method: 'DELETE' })
+        .then(r => r.json())
+        .then(data => { if (data.success) loadBroadcastHistory(); });
     }
   </script>
 </body>
