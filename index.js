@@ -7071,6 +7071,8 @@ ${authScript}
       // Update badge
       document.getElementById('onlineBadge').textContent = count;
       document.getElementById('onlineCount').textContent = count;
+      const bcastOnlineEl = document.getElementById('bcastOnline');
+      if (bcastOnlineEl) bcastOnlineEl.textContent = count;
 
       // Update table
       const tbody = document.getElementById('onlineUsersList');
@@ -8169,17 +8171,16 @@ ${authScript}
           if (!data.success) return;
           const history = data.history || [];
 
-          // Update stats
-          const onlineEl = document.getElementById('bcastOnline');
-          if (onlineEl) {
-            fetch('/api/admin/online-users?password=' + encodeURIComponent(adminPass))
-              .then(r => r.json()).then(d => { if (onlineEl) onlineEl.textContent = d.count || 0; }).catch(() => {});
-          }
-
+          // Sent today - hitung dari history
           const today = new Date().toDateString();
           const sentToday = history.filter(n => new Date(n.sentAt).toDateString() === today).length;
           const sentEl = document.getElementById('bcastSentToday');
           if (sentEl) sentEl.textContent = sentToday;
+
+          // Online count - sinkronkan dari onlineBadge yang sudah diupdate SSE
+          const bcastOnlineEl = document.getElementById('bcastOnline');
+          const badgeEl = document.getElementById('onlineBadge');
+          if (bcastOnlineEl && badgeEl) bcastOnlineEl.textContent = badgeEl.textContent;
 
           renderBcastHistory(history);
         })
