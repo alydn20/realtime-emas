@@ -9000,6 +9000,9 @@ app.get('/monitoring', async (_req, res) => {
       height: 100% !important;
       touch-action: none;
     }
+    .tradingview-widget-container iframe {
+      touch-action: none !important;
+    }
 
     /* Chart Bottom Row - Clock & Buttons */
     .chart-bottom-row {
@@ -10260,6 +10263,16 @@ app.get('/monitoring', async (_req, res) => {
           script.async = true;
           script.innerHTML = JSON.stringify(config);
           container.appendChild(script);
+
+          // Apply touch-action:none to iframe once TradingView creates it (mobile fix)
+          const tvObserver = new MutationObserver(function() {
+            const iframes = document.querySelectorAll('.tradingview-widget-container iframe');
+            iframes.forEach(function(iframe) {
+              iframe.style.touchAction = 'none';
+            });
+            if (iframes.length > 0) tvObserver.disconnect();
+          });
+          tvObserver.observe(document.querySelector('.tradingview-widget-container'), { childList: true, subtree: true });
         })();
         </script>
         <!-- TradingView Widget END -->
