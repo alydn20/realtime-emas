@@ -1616,6 +1616,13 @@ async function doPromoBroadcast() {
           lastPromoBroadcastMinute = currentMinute
           offBroadcastCount++
           pushLog(`🎁 OFF count: ${offBroadcastCount}/5`)
+          // Reset titik ON terendah setelah 2x OFF (harga ON berikutnya biasanya lebih tinggi)
+          if (offBroadcastCount === 2) {
+            await redis.del(REDIS_KEYS.LOWEST_ON_PRICE)
+            lowestOnPriceCache = null
+            broadcastSSE({ type: 'lowest_on_price', price: null })
+            pushLog(`🏷️ Titik ON terendah direset (OFF 2x)`)
+          }
         } else {
           // Sudah 5x, tidak broadcast tapi tetap update lastPromoBroadcastMinute
           lastPromoBroadcastMinute = currentMinute
@@ -11769,8 +11776,10 @@ app.get('/monitoring', async (_req, res) => {
           if (data.price !== null && data.price !== undefined) {
             if (val) val.textContent = formatRupiahShort(data.price);
             if (card) card.style.display = '';
-            updateStatCentering();
+          } else {
+            if (card) card.style.display = 'none';
           }
+          updateStatCentering();
           return;
         }
 
