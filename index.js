@@ -1578,8 +1578,8 @@ async function doPromoBroadcast() {
       pushLog(`🎁 Status berubah: ${lastPromoStatus} → ${currentStatus}`)
     }
 
-    // Track lowest buy price at OFF→ON transition
-    if (statusChanged && currentStatus === 'ON' && lastKnownPrice?.buy) {
+    // Track lowest buy price at OFF→ON transition, or seed on first check if already ON
+    if (currentStatus === 'ON' && lastKnownPrice?.buy && (statusChanged || isFirstCheck)) {
       const currentBuy = lastKnownPrice.buy
       const storedVal = await redis.get(REDIS_KEYS.LOWEST_ON_PRICE)
       const lowestSoFar = storedVal !== null ? parseInt(storedVal, 10) : null
