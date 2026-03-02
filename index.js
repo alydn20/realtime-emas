@@ -139,6 +139,7 @@ const subscriptions = new Set()
 // Token awal dari Treasury (akan di-refresh otomatis jika expired)
 let treasuryToken = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzY29wZXMiOlsiKiJdLCJhdWQiOiIzIiwiZXhwIjoxNzY3NzA3ODcwLCJqdGkiOiJyWmc2RTdLeU16YUtVZzB0Q3dPeUc5dGQxMlNROHh3YUxLT2IyZGZiMElCZjM0anJYMW5PSXVZZDNMOUxTUHR0eXd3eVRYN1RXN0RJbFpUdDdkbUhjRVJiWnJWbmVUSjJZWkl0IiwiaWF0IjoxNzY2NDExODcwLCJuYmYiOjE3NjY0MTE4NzAsInN1YiI6IjE2ODg3Nzk0In0.FDb_1WLhjE4pJ5zfhuAkAX4-mhIylcXAZmNbyWA2o-E9N8bzxrKqkiL0RRPaISggDOBz2m31eYtM_3-hNwsDIkhejhBnDDDYmD8xurKe1275zYE3OJE2XGw8QhXwlop1K_IA0PzVzXqnPJm5DQyKCU6Ya_QRVMmidVpOji3Q4bbR-aHL9U0l1CsubwvI7laj66qCjw2XT7ftKf0bFW1mm5yDz-l0zuJVzpNlvsFBqroI_RR6nVHeu4wG3QYhvoATKUyRntjWMLuPRB9wu2WA7-DJuQtACvfMPdqoNhfT-sgSYxR1WXuI4micZe3_tOKbabiK2FJUoLHkHtPnPwEuAxnxDwzlvqOoQrTpbtBRUbRprjjdJ6CD0J2TR7qkkhX284BJHBVub8kYTNYpYIhim9Zzvgh_1TdBnX-nBFNvK0fFiaA4VbqAnl5jcFTs2HEglj_Vh3RT0XHa7b8DSjHfRlnsWxr6jJexT7-6svnXHQFUBnRG-qa5RXYyp9mDxqIWsURcS19OuxSSwlHVTRsLq_4AMfupWwKLSRFIERHwYgrbYozDlROb-x8FDLuOlON8wiMSSlSaVCXW0ZboV7h6ROte_mrRoTjRsn2QVA1pyGZbSn6NfEudvqcLcHXBz1cc9rdJMJ6lvRBInUHg2JjZxzTJRGiVa69ICmm0D4bQK3Y'
 let lastPromoStatus = null // 'ON' atau 'OFF'
+let lowestOnPriceCache = undefined // undefined = belum diload, null = belum ada nilai
 let promoTriggerTimeout = null // Timeout 5 detik setelah harga berubah
 let promoCheckInterval = null // Interval cek promo setiap 1 detik
 let isPromoIntervalRunning = false
@@ -1578,15 +1579,18 @@ async function doPromoBroadcast() {
       pushLog(`🎁 Status berubah: ${lastPromoStatus} → ${currentStatus}`)
     }
 
-    // Track lowest buy price at OFF→ON transition, or seed on first check if already ON
-    if (currentStatus === 'ON' && lastKnownPrice?.buy && (statusChanged || isFirstCheck)) {
+    // Seed lowest ON price on first check if already ON (price update hook handles ongoing tracking)
+    if (currentStatus === 'ON' && lastKnownPrice?.buy && isFirstCheck) {
       const currentBuy = lastKnownPrice.buy
-      const storedVal = await redis.get(REDIS_KEYS.LOWEST_ON_PRICE)
-      const lowestSoFar = storedVal !== null ? parseInt(storedVal, 10) : null
-      if (lowestSoFar === null || currentBuy < lowestSoFar) {
+      if (lowestOnPriceCache === undefined) {
+        const storedVal = await redis.get(REDIS_KEYS.LOWEST_ON_PRICE)
+        lowestOnPriceCache = storedVal !== null ? parseInt(storedVal, 10) : null
+      }
+      if (lowestOnPriceCache === null || currentBuy < lowestOnPriceCache) {
+        lowestOnPriceCache = currentBuy
         await redis.set(REDIS_KEYS.LOWEST_ON_PRICE, String(currentBuy))
         broadcastSSE({ type: 'lowest_on_price', price: currentBuy })
-        pushLog(`🏷️ Titik ON terendah baru: ${formatRupiah(currentBuy)}`)
+        pushLog(`🏷️ Titik ON terendah (init): ${formatRupiah(currentBuy)}`)
       }
     }
 
@@ -1916,6 +1920,21 @@ async function checkPriceUpdate() {
     // Update daily stats only (history handled by fastPoll)
     if (buyChanged) {
       await updateDailyStats(currentPrice.buy)
+    }
+
+    // Update lowest ON price whenever buy changes and status is ON
+    if (buyChanged && lastPromoStatus === 'ON') {
+      const newBuy = currentPrice.buy
+      if (lowestOnPriceCache === undefined) {
+        const stored = await redis.get(REDIS_KEYS.LOWEST_ON_PRICE)
+        lowestOnPriceCache = stored !== null ? parseInt(stored, 10) : null
+      }
+      if (lowestOnPriceCache === null || newBuy < lowestOnPriceCache) {
+        lowestOnPriceCache = newBuy
+        await redis.set(REDIS_KEYS.LOWEST_ON_PRICE, String(newBuy))
+        broadcastSSE({ type: 'lowest_on_price', price: newBuy })
+        pushLog(`🏷️ Titik ON terendah: ${formatRupiah(newBuy)}`)
+      }
     }
 
     // INSTANT SSE PUSH ke frontend monitoring
