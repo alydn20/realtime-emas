@@ -9486,6 +9486,9 @@ app.get('/monitoring', async (_req, res) => {
     .news-card.impact-high { border-left: 3px solid #ef4444; }
     .news-card.impact-medium { border-left: 3px solid #f7931a; }
     .news-card.impact-low { border-left: 3px solid #6b7280; }
+    .news-card.past { background: rgba(255,255,255,0.02); opacity: 0.5; }
+    .news-card.past .news-title { color: #9ca3af; }
+    .news-card.upcoming { background: rgba(14,203,129,0.07); border-color: rgba(14,203,129,0.2); }
     .news-bulls { font-size: 1em; min-width: 44px; text-align: center; line-height: 1; padding-top: 2px; }
     .news-body { flex: 1; }
     .news-title { font-size: 0.82em; font-weight: 700; color: #fff; margin-bottom: 3px; }
@@ -11255,12 +11258,14 @@ app.get('/monitoring', async (_req, res) => {
     };
     const _impactClass = (impact) => ({ 'High':'impact-high','Medium':'impact-medium','Low':'impact-low' })[impact] || 'impact-low';
 
-    function _renderNewsCard(ev) {
+    function _renderNewsCard(ev, nowMs) {
+      const isPast = ev._wib && ev._wib.getTime() < nowMs;
       const vals = [];
       if (ev.forecast) vals.push('<span>Forecast: '+ev.forecast+'</span>');
       if (ev.previous) vals.push('<span>Prev: '+ev.previous+'</span>');
       if (ev.actual) vals.push('<span class="actual">Actual: '+ev.actual+'</span>');
-      return '<div class="news-card '+_impactClass(ev.impact)+'">'+
+      const stateClass = isPast ? ' past' : ' upcoming';
+      return '<div class="news-card '+_impactClass(ev.impact)+stateClass+'">'+
         '<div class="news-bulls">'+_impactBars(ev.impact)+'</div>'+
         '<div class="news-body">'+
           '<div class="news-title">'+ev.title+'</div>'+
@@ -11277,14 +11282,15 @@ app.get('/monitoring', async (_req, res) => {
         : _newsEventsCache.filter(ev => _newsActiveFilters.has(ev.impact));
       if (filtered.length === 0) { body.innerHTML = '<div class="news-empty">Tidak ada event dengan filter ini</div>'; return; }
       const nowWIB = _toWIB(new Date().toISOString());
+      const nowMs = nowWIB ? nowWIB.getTime() : Date.now();
       const todayStr = _fmtDate(nowWIB);
       const today = [], upcoming = [];
       filtered.forEach(ev => { if (_fmtDate(ev._wib) === todayStr) today.push(ev); else upcoming.push(ev); });
       const upcomingByDay = {};
       upcoming.forEach(ev => { const k = _fmtDayDate(ev._wib)||'Unknown'; if (!upcomingByDay[k]) upcomingByDay[k]=[]; upcomingByDay[k].push(ev); });
       let html = '';
-      if (today.length > 0) { html += '<div class="news-section-label">'+_svgPin+'Hari Ini — '+_fmtDayDate(nowWIB)+' ('+today.length+')</div>'+today.map(_renderNewsCard).join(''); }
-      Object.entries(upcomingByDay).forEach(([d,evs]) => { html += '<div class="news-section-label">'+_svgCalDays+d+' ('+evs.length+')</div>'+evs.map(_renderNewsCard).join(''); });
+      if (today.length > 0) { html += '<div class="news-section-label">'+_svgPin+'Hari Ini — '+_fmtDayDate(nowWIB)+' ('+today.length+')</div>'+today.map(ev=>_renderNewsCard(ev,nowMs)).join(''); }
+      Object.entries(upcomingByDay).forEach(([d,evs]) => { html += '<div class="news-section-label">'+_svgCalDays+d+' ('+evs.length+')</div>'+evs.map(ev=>_renderNewsCard(ev,nowMs)).join(''); });
       body.innerHTML = html || '<div class="news-empty">Tidak ada event minggu ini</div>';
     }
 
