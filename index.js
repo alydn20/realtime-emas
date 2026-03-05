@@ -10044,12 +10044,11 @@ app.get('/monitoring', async (_req, res) => {
     .history-table {
       width: 100%;
       border-collapse: collapse;
-      min-width: 600px;
     }
     .history-table th {
       text-align: left;
-      padding: 12px 10px;
-      font-size: 0.75em;
+      padding: 8px 8px;
+      font-size: 0.72em;
       color: #8b949e;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -10058,8 +10057,8 @@ app.get('/monitoring', async (_req, res) => {
       white-space: nowrap;
     }
     .history-table td {
-      padding: 14px 10px;
-      font-size: 0.9em;
+      padding: 9px 8px;
+      font-size: 0.85em;
       border-bottom: 1px solid rgba(255,255,255,0.04);
       color: #e7e9ea;
       white-space: nowrap;
