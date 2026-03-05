@@ -8806,6 +8806,7 @@ app.get('/monitoring', async (_req, res) => {
       gap: 6px;
       padding: 0 16px 6px 16px;
       justify-content: center;
+      align-items: center;
     }
     .invest-stats .stat-item {
       padding: 6px 8px;
@@ -9354,6 +9355,11 @@ app.get('/monitoring', async (_req, res) => {
       left: 0;
       display: flex;
       gap: 8px;
+    }
+    /* History table: hide non-essential cols on mobile */
+    .col-spread, .col-usdidr { }
+    @media (max-width: 600px) {
+      .col-spread, .col-usdidr { display: none !important; }
     }
 
     /* Promo Suggestions Modal */
@@ -10228,45 +10234,56 @@ app.get('/monitoring', async (_req, res) => {
 
       /* Mobile: Show all enabled invest items */
       .invest-stats {
-        padding: 4px 10px;
+        padding: 4px 8px 6px;
         gap: 4px;
         flex-wrap: wrap;
         justify-content: center;
+        align-items: center;
       }
       .invest-stats .stat-item.invest {
         flex: none;
         width: auto;
         max-width: none;
-        padding: 6px 10px;
+        padding: 5px 8px;
       }
-      .invest-stats .stat-item.invest .stat-label { font-size: 0.6em; }
-      .invest-stats .stat-item.invest .stat-value { font-size: 0.75em; }
-      .invest-stats .stat-item.invest .stat-change { font-size: 0.6em; }
+      .invest-stats .stat-item.invest .stat-label { font-size: 0.58em; }
+      .invest-stats .stat-item.invest .stat-value { font-size: 0.72em; }
+      .invest-stats .stat-item.invest .stat-change { font-size: 0.58em; }
+      .nominal-settings-btn { width: 26px; height: 26px; border-radius: 6px; }
+      .nominal-settings-btn svg { width: 12px; height: 12px; }
 
       /* Responsive buttons */
       .chart-bottom-row {
         flex-direction: column;
-        gap: 10px;
-        margin-top: 2px;
+        gap: 8px;
+        margin-top: 4px;
+        align-items: center;
+      }
+      .promo-btn-row {
+        position: static;
+        justify-content: center;
       }
       .indicator-buttons-row {
         position: static;
         justify-content: center;
       }
       .indicator-btn {
-        padding: 4px 8px;
-        font-size: 0.65em;
+        padding: 5px 10px;
+        font-size: 0.68em;
       }
 
       .history-section { border-radius: 14px; }
-      .history-header { padding: 12px 16px; }
-      .history-header h2 { font-size: 0.95em; }
-      .history-header h2 svg { width: 14px; height: 14px; }
-      .history-table th { padding: 10px 8px; font-size: 0.65em; }
-      .history-table td { padding: 10px 8px; font-size: 0.8em; }
-      .history-pagination { padding: 12px; gap: 10px; flex-wrap: wrap; }
-      .page-btn { padding: 8px 14px; font-size: 0.8em; }
-      .page-info { font-size: 0.8em; }
+      .history-header { padding: 10px 14px; flex-wrap: wrap; gap: 6px; }
+      .history-header h2 { font-size: 0.9em; }
+      .history-header h2 svg { width: 13px; height: 13px; }
+      .history-header > div { gap: 6px; }
+      .history-table { font-size: 0.82em; }
+      .history-table th { padding: 8px 6px; font-size: 0.68em; white-space: nowrap; }
+      .history-table td { padding: 9px 6px; font-size: 0.82em; }
+      .history-table .time-col { white-space: nowrap; font-size: 0.78em; }
+      .history-pagination { padding: 10px 12px; gap: 8px; flex-wrap: wrap; }
+      .page-btn { padding: 7px 12px; font-size: 0.8em; }
+      .page-info { font-size: 0.78em; }
     }
 
     /* Extra small screens */
@@ -10812,8 +10829,8 @@ app.get('/monitoring', async (_req, res) => {
             <th>Waktu</th>
             <th>Beli</th>
             <th>Jual</th>
-            <th>Spread</th>
-            <th>USD/IDR</th>
+            <th class="col-spread">Spread</th>
+            <th class="col-usdidr">USD/IDR</th>
           </tr>
         </thead>
         <tbody id="historyBody">
@@ -11473,8 +11490,8 @@ app.get('/monitoring', async (_req, res) => {
           '<td class="time-col">' + timeStr + '</td>' +
           '<td>' + formatRupiahShort(item.buy) + arrowHtml + '</td>' +
           '<td>' + formatRupiahShort(item.sell) + '</td>' +
-          '<td class="' + spreadClass + '">' + spread + '%</td>' +
-          '<td>' + usdIdr + (usdIdrChange !== 0 ? '<br><small class="' + usdIdrChangeClass + '">' + usdIdrChangeSign + Math.abs(usdIdrChange).toLocaleString('id-ID') + '</small>' : '') + '</td>' +
+          '<td class="col-spread ' + spreadClass + '">' + spread + '%</td>' +
+          '<td class="col-usdidr">' + usdIdr + (usdIdrChange !== 0 ? '<br><small class="' + usdIdrChangeClass + '">' + usdIdrChangeSign + Math.abs(usdIdrChange).toLocaleString('id-ID') + '</small>' : '') + '</td>' +
           nominalCols +
           '</tr>';
       });
