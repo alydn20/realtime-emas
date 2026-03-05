@@ -8794,29 +8794,34 @@ app.get('/monitoring', async (_req, res) => {
     .stat-item.price-down .stat-value { color: #f87171; }
     .stat-item.invest .stat-label { color: #f7931a; }
 
-    /* Invest Stats Row - Baris kedua untuk nominal investasi */
+    /* Invest Stats Row - horizontal pill per nominal */
     .invest-stats {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
-      padding: 0 16px 6px 16px;
+      padding: 0 16px 8px 16px;
       justify-content: center;
       align-items: center;
     }
     .invest-stats .stat-item {
-      padding: 6px 8px;
-      min-width: 80px;
-      flex: 1 1 auto;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      flex: 0 0 auto;
+      text-align: left;
     }
     .invest-stats .stat-item .stat-label {
       font-size: 0.65em;
+      min-width: 28px;
     }
     .invest-stats .stat-item .stat-value {
       font-size: 0.75em;
     }
     .invest-stats .stat-item .stat-change {
-      font-size: 0.55em;
-      padding: 2px 5px;
+      font-size: 0.7em;
+      padding: 2px 6px;
     }
 
     /* Nominal Settings Button - tampil di semua mode */
@@ -10230,23 +10235,26 @@ app.get('/monitoring', async (_req, res) => {
       .chart-stats > .stat-item.stat-alone { grid-column: 1 / -1; justify-self: center; }
       .tradingview-widget-container { height: 350px; }
 
-      /* Mobile: Show all enabled invest items */
+      /* Mobile: invest stats horizontal scroll */
       .invest-stats {
-        padding: 4px 8px 6px;
-        gap: 4px;
-        flex-wrap: wrap;
-        justify-content: center;
-        align-items: center;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        overflow-y: hidden;
+        justify-content: flex-start;
+        padding: 4px 12px 8px;
+        gap: 6px;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
       }
+      .invest-stats::-webkit-scrollbar { display: none; }
       .invest-stats .stat-item.invest {
-        flex: none;
-        width: auto;
-        max-width: none;
-        padding: 5px 8px;
+        flex: 0 0 auto;
+        padding: 4px 8px;
+        white-space: nowrap;
       }
-      .invest-stats .stat-item.invest .stat-label { font-size: 0.58em; }
-      .invest-stats .stat-item.invest .stat-value { font-size: 0.72em; }
-      .invest-stats .stat-item.invest .stat-change { font-size: 0.58em; }
+      .invest-stats .stat-item.invest .stat-label { font-size: 0.6em; }
+      .invest-stats .stat-item.invest .stat-value { font-size: 0.7em; }
+      .invest-stats .stat-item.invest .stat-change { font-size: 0.65em; padding: 1px 5px; }
       .nominal-settings-btn { width: 26px; height: 26px; border-radius: 6px; }
       .nominal-settings-btn svg { width: 12px; height: 12px; }
 
