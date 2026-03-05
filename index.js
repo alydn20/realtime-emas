@@ -148,6 +148,7 @@ let isPromoIntervalRunning = false
 let isPromoChecking = false // Guard untuk mencegah concurrent fetch
 let promoCheckCount = 0 // Counter untuk logging
 let offBroadcastCount = 0 // Counter OFF broadcast (max 5)
+let offStartTime = null // Timestamp kapan status pertama kali OFF
 let lastPromoBroadcastMinute = -1 // Track menit terakhir broadcast
 
 // CACHE GLOBAL untuk market data (pre-fetched)
@@ -1604,6 +1605,7 @@ async function doPromoBroadcast() {
       if (offBroadcastCount > 0 || lastPromoStatus === 'OFF') {
         pushLog(`🎁 Status ON kembali! Reset OFF counter (was ${offBroadcastCount})`)
         offBroadcastCount = 0
+        offStartTime = null
       }
       // ON: Kirim 1x per menit
       if (currentMinute !== lastPromoBroadcastMinute || isFirstCheck || statusChanged) {
@@ -1617,14 +1619,16 @@ async function doPromoBroadcast() {
           // Masih boleh broadcast OFF
           shouldBroadcast = true
           lastPromoBroadcastMinute = currentMinute
+          if (!offStartTime) offStartTime = Date.now()
           offBroadcastCount++
           pushLog(`🎁 OFF count: ${offBroadcastCount}/5`)
-          // Reset titik ON terendah setelah 2x OFF (harga ON berikutnya biasanya lebih tinggi)
-          if (offBroadcastCount === 2) {
+          // Reset titik ON terendah setelah 3 jam OFF
+          const offDurationMs = Date.now() - offStartTime
+          if (lowestOnPriceCache !== null && offDurationMs >= 3 * 60 * 60 * 1000) {
             await redis.del(REDIS_KEYS.LOWEST_ON_PRICE)
             lowestOnPriceCache = null
             broadcastSSE({ type: 'lowest_on_price', price: null })
-            pushLog(`🏷️ Titik ON terendah direset (OFF 2x)`)
+            pushLog(`🏷️ Titik ON terendah direset (OFF 3 jam)`)
           }
         } else {
           // Sudah 5x, tidak broadcast tapi tetap update lastPromoBroadcastMinute
@@ -1632,6 +1636,13 @@ async function doPromoBroadcast() {
           // Log sesekali saja (setiap 5 menit)
           if (currentMinute % 5 === 0) {
             pushLog(`🎁 OFF sudah 5x, menunggu ON... (tetap cek)`)
+          }
+          // Tetap cek 3 jam reset meski sudah lewat 5x broadcast
+          if (offStartTime && lowestOnPriceCache !== null && Date.now() - offStartTime >= 3 * 60 * 60 * 1000) {
+            await redis.del(REDIS_KEYS.LOWEST_ON_PRICE)
+            lowestOnPriceCache = null
+            broadcastSSE({ type: 'lowest_on_price', price: null })
+            pushLog(`🏷️ Titik ON terendah direset (OFF 3 jam)`)
           }
         }
       }
