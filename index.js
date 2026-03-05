@@ -11188,7 +11188,8 @@ app.get('/monitoring', async (_req, res) => {
         }).join('');
 
         const arrowIcon = buyChange > 0 ? '▲' : buyChange < 0 ? '▼' : '';
-        const arrowHtml = arrowIcon ? ' <span class="' + changeClass + '" style="font-size:0.75em;">' + arrowIcon + '</span>' : '';
+        const arrowColor = buyChange > 0 ? '#22c55e' : '#ef4444';
+        const arrowHtml = arrowIcon ? ' <span style="font-size:1em;font-weight:700;color:' + arrowColor + ';">' + arrowIcon + '</span>' : '';
         html += '<tr>' +
           '<td class="time-col">' + timeStr + '</td>' +
           '<td>' + formatRupiahShort(item.buy) + arrowHtml + '</td>' +
