@@ -10277,10 +10277,33 @@ app.get('/monitoring', async (_req, res) => {
       .history-header h2 { font-size: 0.9em; }
       .history-header h2 svg { width: 13px; height: 13px; }
       .history-header > div { gap: 6px; }
-      .history-table { font-size: 0.82em; }
-      .history-table th { padding: 8px 6px; font-size: 0.68em; white-space: nowrap; }
-      .history-table td { padding: 9px 6px; font-size: 0.82em; }
-      .history-table .time-col { white-space: nowrap; font-size: 0.78em; }
+      /* Card layout: sembunyikan thead, ubah tr jadi card */
+      .history-table, .history-table tbody { display: block; width: 100%; }
+      .history-table thead { display: none; }
+      .history-table tr {
+        display: grid;
+        grid-template-columns: 60px 1fr 1fr;
+        grid-template-rows: auto auto;
+        gap: 0 8px;
+        padding: 9px 14px;
+        border-bottom: 1px solid rgba(255,255,255,0.07);
+        align-items: center;
+      }
+      .history-table td { display: block; border: none; padding: 1px 0; font-size: 0.82em; }
+      .history-table td.time-col {
+        grid-row: 1 / 3; grid-column: 1;
+        font-size: 0.72em; color: #9ca3af;
+        align-self: center; white-space: nowrap;
+      }
+      .history-table td:nth-child(2) { grid-row: 1; grid-column: 2; font-weight: 600; }
+      .history-table td:nth-child(3) { grid-row: 1; grid-column: 3; font-size: 0.8em; color: #9ca3af; }
+      .history-table td.td-nominal {
+        grid-row: 2; grid-column: 2 / 4;
+        font-size: 0.76em;
+      }
+      .history-table td.td-nominal .nom-gram { color: #d1d4dc; }
+      .history-table td.col-spread,
+      .history-table td.col-usdidr { display: none; }
       .history-pagination { padding: 10px 12px; gap: 8px; flex-wrap: wrap; }
       .page-btn { padding: 7px 12px; font-size: 0.8em; }
       .page-info { font-size: 0.78em; }
@@ -11480,7 +11503,7 @@ app.get('/monitoring', async (_req, res) => {
           const profit = Math.round((gram * item.sell) - (n.amount - n.amount * n.discountRate));
           const profitClass = profit >= 0 ? 'price-up' : 'price-down';
           const profitSign = profit >= 0 ? '+' : '-';
-          return '<td><span style="color:#e7e9ea;">' + gram.toFixed(4) + 'g</span><br><small class="' + profitClass + '">' + profitSign + 'Rp ' + Math.abs(profit).toLocaleString('id-ID') + '</small></td>';
+          return '<td class="td-nominal"><span class="nom-gram">' + gram.toFixed(4) + 'g</span><br><small class="' + profitClass + '">' + profitSign + 'Rp ' + Math.abs(profit).toLocaleString('id-ID') + '</small></td>';
         }).join('');
 
         const arrowIcon = buyChange > 0 ? '▲' : buyChange < 0 ? '▼' : '';
