@@ -10277,31 +10277,26 @@ app.get('/monitoring', async (_req, res) => {
       .history-header h2 { font-size: 0.9em; }
       .history-header h2 svg { width: 13px; height: 13px; }
       .history-header > div { gap: 6px; }
-      /* Card layout: sembunyikan thead, ubah tr jadi card */
+      /* 1-baris layout mobile */
       .history-table, .history-table tbody { display: block; width: 100%; }
       .history-table thead { display: none; }
       .history-table tr {
-        display: grid;
-        grid-template-columns: 60px 1fr 1fr;
-        grid-template-rows: auto auto;
-        gap: 0 8px;
-        padding: 9px 14px;
-        border-bottom: 1px solid rgba(255,255,255,0.07);
+        display: flex;
+        flex-direction: row;
         align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        border-bottom: 1px solid rgba(255,255,255,0.07);
+        white-space: nowrap;
+        overflow: hidden;
       }
-      .history-table td { display: block; border: none; padding: 1px 0; font-size: 0.82em; }
-      .history-table td.time-col {
-        grid-row: 1 / 3; grid-column: 1;
-        font-size: 0.72em; color: #9ca3af;
-        align-self: center; white-space: nowrap;
-      }
-      .history-table td:nth-child(2) { grid-row: 1; grid-column: 2; font-weight: 600; }
-      .history-table td:nth-child(3) { grid-row: 1; grid-column: 3; font-size: 0.8em; color: #9ca3af; }
-      .history-table td.td-nominal {
-        grid-row: 2; grid-column: 2 / 4;
-        font-size: 0.76em;
-      }
-      .history-table td.td-nominal .nom-gram { color: #d1d4dc; }
+      .history-table td { display: block; border: none; padding: 0; font-size: 0.78em; flex-shrink: 0; }
+      .history-table td.time-col { color: #9ca3af; font-size: 0.7em; width: 54px; }
+      .history-table td:nth-child(2) { font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+      .history-table td:nth-child(3) { color: #9ca3af; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+      .history-table td.td-nominal { font-size: 0.74em; flex: 1; min-width: 0; text-align: right; }
+      .history-table td.td-nominal .nom-gram { display: none; }
+      .history-table td.td-nominal br { display: none; }
       .history-table td.col-spread,
       .history-table td.col-usdidr { display: none; }
       .history-pagination { padding: 10px 12px; gap: 8px; flex-wrap: wrap; }
