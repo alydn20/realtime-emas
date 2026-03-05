@@ -10324,42 +10324,68 @@ app.get('/monitoring', async (_req, res) => {
     body.light-mode .header { background: var(--bg-header); border-color: var(--border-color); }
     body.light-mode .header-left h1 { color: var(--text-heading); }
     body.light-mode .header-left .subtitle { color: var(--text-secondary); }
-    body.light-mode .chart-card,
-    body.light-mode .history-section { background: var(--bg-card); border-color: var(--border-color); box-shadow: var(--shadow); }
-    body.light-mode .chart-header { border-color: var(--border-color); }
+
+    /* Chart section & semua sub-bagiannya */
+    body.light-mode .chart-section { background: #ffffff; border-color: var(--border-color); box-shadow: var(--shadow); }
+    body.light-mode .chart-header { background: #ffffff; border-color: var(--border-color); }
     body.light-mode .chart-header h2 { color: var(--text-heading); }
-    body.light-mode .stat-item { background: #f5f7fd; border-color: var(--border-color); }
-    body.light-mode .stat-item:hover { background: #eef1fa; border-color: var(--border-hover); }
-    body.light-mode .stat-item .stat-label { color: var(--text-secondary); }
-    body.light-mode .stat-item .stat-value { color: var(--text-heading); }
-    body.light-mode .invest-stats .stat-item { background: #f0f3fa; }
-    body.light-mode .history-header { background: var(--bg-card); border-color: var(--border-color); }
+    body.light-mode .chart-info-row { background: rgba(247,147,26,0.06); border-color: rgba(247,147,26,0.2); }
+    body.light-mode .info-time { color: #c2700f; }
+    body.light-mode .invest-stats { background: #fafbff; }
+
+    /* Stat items */
+    body.light-mode .stat-item { background: #f5f7fd; border-color: rgba(0,0,0,0.08); }
+    body.light-mode .stat-item:hover { background: #eef1fa; border-color: rgba(0,0,0,0.15); }
+    body.light-mode .stat-item .stat-label { color: #787b86; }
+    body.light-mode .stat-item .stat-value { color: #131722; }
+    body.light-mode .stat-item .stat-value.green { color: #1a7a5e; }
+    body.light-mode .stat-item .stat-value.blue { color: #1d5fa8; }
+    body.light-mode .invest-stats .stat-item { background: #eef1fa; }
+    body.light-mode .stat-item.invest .stat-label { color: #c2700f; }
+    body.light-mode .stat-item.price-up { border-color: rgba(26,122,94,0.4); }
+    body.light-mode .stat-item.price-up .stat-value { color: #1a7a5e; }
+    body.light-mode .stat-item.price-down { border-color: rgba(200,50,50,0.4); }
+    body.light-mode .stat-item.price-down .stat-value { color: #c23232; }
+    body.light-mode .stat-item .stat-change.up { color: #1a7a5e; background: rgba(26,122,94,0.1); }
+    body.light-mode .stat-item .stat-change.down { color: #c23232; background: rgba(194,50,50,0.1); }
+
+    /* Buttons */
+    body.light-mode .indicator-btn { background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.12); color: #131722; }
+    body.light-mode .indicator-btn.promo { background: rgba(34,197,94,0.15); color: #15803d; border-color: rgba(34,197,94,0.3); }
+    body.light-mode .indicator-btn.news { background: rgba(217,119,6,0.15); color: #92400e; border-color: rgba(217,119,6,0.3); }
+    body.light-mode .nominal-settings-btn { background: rgba(247,147,26,0.1); border-color: rgba(247,147,26,0.25); color: #c2700f; }
+    body.light-mode .sound-toggle-header { background: rgba(26,122,94,0.1); border-color: rgba(26,122,94,0.3); }
+    body.light-mode .sound-toggle-header svg { color: #1a7a5e; }
+    body.light-mode .theme-toggle-btn { background: #f0f3fa; border-color: rgba(0,0,0,0.1); color: #787b86; }
+    body.light-mode .live-badge { background: rgba(26,122,94,0.12); color: #1a7a5e; border-color: rgba(26,122,94,0.3); }
+    body.light-mode .calc-btn-header { background: rgba(247,147,26,0.1); border-color: rgba(247,147,26,0.3); color: #c2700f; }
+
+    /* History section */
+    body.light-mode .history-section { background: #ffffff; border-color: var(--border-color); box-shadow: var(--shadow); }
+    body.light-mode .history-header { border-color: var(--border-color); }
     body.light-mode .history-header h2 { color: var(--text-heading); }
-    body.light-mode .history-table thead th { background: #f0f3fa; color: var(--text-secondary); border-color: var(--border-color); }
-    body.light-mode .history-table tbody tr { border-color: var(--border-color); }
+    body.light-mode .history-table thead th { background: #f5f7fd; color: #787b86; border-color: var(--border-color); }
+    body.light-mode .history-table tbody tr { border-color: rgba(0,0,0,0.06); }
     body.light-mode .history-table tbody tr:hover { background: #f5f7fd; }
     body.light-mode .history-table td { color: var(--text-primary); }
     body.light-mode .page-btn { background: #f0f3fa; border-color: var(--border-color); color: var(--text-primary); }
     body.light-mode .page-btn:hover { background: #e5e9f5; }
     body.light-mode .page-info { color: var(--text-secondary); }
-    body.light-mode .clock { color: var(--text-heading); }
-    body.light-mode .clock-row { background: rgba(240,243,250,0.9); border-color: var(--border-color); }
-    body.light-mode .chart-bottom-row { background: transparent; }
-    body.light-mode .indicator-btn { background: rgba(0,0,0,0.05); border-color: var(--border-color); color: var(--text-primary); }
-    body.light-mode .indicator-btn.promo { background: rgba(34,197,94,0.15); color: #15803d; }
-    body.light-mode .indicator-btn.news { background: rgba(251,191,36,0.2); color: #92400e; }
-    body.light-mode .nominal-modal-overlay .nominal-modal { background: #ffffff; border-color: var(--border-color); }
+    body.light-mode .count { color: #787b86; }
+
+    /* Modals */
+    body.light-mode .nominal-modal { background: #ffffff; border-color: var(--border-color); }
+    body.light-mode .nominal-modal h3 { color: var(--text-heading); }
+    body.light-mode .nominal-modal-item { background: #f5f7fd; border-color: var(--border-color); color: var(--text-heading); }
+    body.light-mode .nominal-modal-item label { color: var(--text-heading); }
     body.light-mode .promo-suggestions-modal { background: #ffffff; border-color: var(--border-color); }
     body.light-mode .promo-suggestions-modal h3 { color: var(--text-heading); }
     body.light-mode .promo-card { background: #f5f7fd; border-color: var(--border-color); }
     body.light-mode .promo-card-name { color: var(--text-heading); }
+    body.light-mode .promo-card-desc { color: #787b86; }
     body.light-mode .news-card { background: #f5f7fd; border-color: var(--border-color); }
     body.light-mode .news-title { color: var(--text-heading); }
-    body.light-mode .nominal-modal-item { background: #f5f7fd; border-color: var(--border-color); color: var(--text-heading); }
-    body.light-mode .live-badge { background: rgba(34,197,94,0.15); color: #15803d; border-color: rgba(34,197,94,0.3); }
-    body.light-mode .sound-toggle-header { background: rgba(74,222,128,0.1); }
-    body.light-mode .count { color: var(--text-secondary); background: #f0f3fa; border-color: var(--border-color); }
-    body.light-mode .invest-stats .stat-item.invest .stat-label { color: #c2700f; }
+    body.light-mode .news-meta { color: #787b86; }
     /* ===== END LIGHT MODE ===== */
 
     /* Professional Toast System */
