@@ -11166,16 +11166,44 @@ app.get('/monitoring', async (_req, res) => {
             body.innerHTML = '<div class="news-empty">Tidak ada event USD minggu ini</div>';
             return;
           }
-          // Split today vs upcoming
-          const now = new Date();
-          const todayStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const HARI = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+          // Parse ISO date → WIB (UTC+7)
+          const toWIB = (isoStr) => {
+            const d = new Date(isoStr);
+            if (isNaN(d)) return null;
+            // shift to WIB
+            return new Date(d.getTime() + 7 * 3600 * 1000);
+          };
+          const fmtDate = (d) => {
+            if (!d) return '';
+            const dd = String(d.getUTCDate()).padStart(2,'0');
+            const mm = String(d.getUTCMonth()+1).padStart(2,'0');
+            const yyyy = d.getUTCFullYear();
+            return dd + '/' + mm + '/' + yyyy;
+          };
+          const fmtTime = (d) => {
+            if (!d) return 'All Day';
+            const hh = String(d.getUTCHours()).padStart(2,'0');
+            const mn = String(d.getUTCMinutes()).padStart(2,'0');
+            return hh + ':' + mn + ' WIB';
+          };
+          const fmtDayDate = (d) => {
+            if (!d) return '';
+            return HARI[d.getUTCDay()] + ', ' + fmtDate(d);
+          };
+          // Today in WIB
+          const nowWIB = toWIB(new Date().toISOString());
+          const todayDateStr = fmtDate(nowWIB);
           const today = [], upcoming = [];
           data.events.forEach(ev => {
-            const evDate = new Date(ev.date + ' ' + (ev.time || '00:00am'));
-            const evDateStr = new Date(ev.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-            if (evDateStr === todayStr) today.push(ev);
+            const wib = toWIB(ev.date);
+            ev._wib = wib;
+            if (wib && fmtDate(wib) === todayDateStr) today.push(ev);
             else upcoming.push(ev);
           });
+          // Sort by datetime
+          today.sort((a,b) => (a._wib||0) - (b._wib||0));
+          upcoming.sort((a,b) => (a._wib||0) - (b._wib||0));
           const impactBulls = (impact) => {
             const map = { 'High': '🐂🐂🐂', 'Medium': '🐂🐂', 'Low': '🐂', 'Non-Economic': '—' };
             return map[impact] || '—';
@@ -11194,22 +11222,29 @@ app.get('/monitoring', async (_req, res) => {
               '<div class="news-body">' +
                 '<div class="news-title">' + ev.title + '</div>' +
                 '<div class="news-meta">' +
-                  '<span>🕐 ' + (ev.time || 'All Day') + '</span>' +
-                  '<span>📅 ' + ev.date + '</span>' +
+                  '<span>🕐 ' + fmtTime(ev._wib) + '</span>' +
+                  '<span>📅 ' + fmtDayDate(ev._wib) + '</span>' +
                 '</div>' +
                 (vals.length ? '<div class="news-values">' + vals.join('') + '</div>' : '') +
               '</div>' +
             '</div>';
           };
+          // Group upcoming by date
+          const upcomingByDay = {};
+          upcoming.forEach(ev => {
+            const key = fmtDayDate(ev._wib) || 'Unknown';
+            if (!upcomingByDay[key]) upcomingByDay[key] = [];
+            upcomingByDay[key].push(ev);
+          });
           let html = '';
           if (today.length > 0) {
-            html += '<div class="news-section-label">📌 Hari Ini (' + today.length + ')</div>';
+            html += '<div class="news-section-label">📌 Hari Ini — ' + fmtDayDate(nowWIB) + ' (' + today.length + ')</div>';
             html += today.map(renderCard).join('');
           }
-          if (upcoming.length > 0) {
-            html += '<div class="news-section-label">📆 Akan Datang (' + upcoming.length + ')</div>';
-            html += upcoming.map(renderCard).join('');
-          }
+          Object.entries(upcomingByDay).forEach(([dayLabel, evs]) => {
+            html += '<div class="news-section-label">📆 ' + dayLabel + ' (' + evs.length + ')</div>';
+            html += evs.map(renderCard).join('');
+          });
           body.innerHTML = html || '<div class="news-empty">Tidak ada event minggu ini</div>';
         })
         .catch(() => {
