@@ -9464,6 +9464,10 @@ app.get('/monitoring', async (_req, res) => {
     .news-values .actual { color: #22c55e; font-weight: 700; }
     .news-section-label { font-size: 0.7em; font-weight: 700; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.08em; margin: 12px 0 6px; }
     .news-empty { text-align: center; color: #6b7280; font-size: 0.85em; padding: 20px; }
+    .news-filter-row { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+    .news-filter-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #9ca3af; border-radius: 6px; padding: 4px 10px; font-size: 0.72em; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; transition: all 0.15s; }
+    .news-filter-btn:hover { background: rgba(255,255,255,0.1); color: #d1d4dc; }
+    .news-filter-btn.active { background: rgba(247,147,26,0.15); border-color: rgba(247,147,26,0.4); color: #f7931a; }
 
     /* Indicator Settings Modal */
     .indicator-settings-overlay {
@@ -10530,6 +10534,33 @@ app.get('/monitoring', async (_req, res) => {
         News XAU/USD (Forex Factory)
         <button class="promo-modal-close" onclick="closeNewsModal()">Tutup</button>
       </h3>
+      <div class="news-filter-row" id="newsFilterRow">
+        <button class="news-filter-btn active" data-min="0" onclick="setNewsFilter(0,this)">Semua</button>
+        <button class="news-filter-btn" data-min="1" onclick="setNewsFilter(1,this)">
+          <span style="display:inline-flex;gap:2px;vertical-align:middle;">
+            <span style="display:inline-block;width:4px;height:12px;border-radius:2px;background:#ffd600;"></span>
+            <span style="display:inline-block;width:4px;height:12px;border-radius:2px;background:rgba(255,255,255,0.15);"></span>
+            <span style="display:inline-block;width:4px;height:12px;border-radius:2px;background:rgba(255,255,255,0.15);"></span>
+          </span>
+          Low
+        </button>
+        <button class="news-filter-btn" data-min="2" onclick="setNewsFilter(2,this)">
+          <span style="display:inline-flex;gap:2px;vertical-align:middle;">
+            <span style="display:inline-block;width:4px;height:12px;border-radius:2px;background:#ff9800;"></span>
+            <span style="display:inline-block;width:4px;height:12px;border-radius:2px;background:#ff9800;"></span>
+            <span style="display:inline-block;width:4px;height:12px;border-radius:2px;background:rgba(255,255,255,0.15);"></span>
+          </span>
+          Medium+
+        </button>
+        <button class="news-filter-btn" data-min="3" onclick="setNewsFilter(3,this)">
+          <span style="display:inline-flex;gap:2px;vertical-align:middle;">
+            <span style="display:inline-block;width:4px;height:12px;border-radius:2px;background:#ef5350;"></span>
+            <span style="display:inline-block;width:4px;height:12px;border-radius:2px;background:#ef5350;"></span>
+            <span style="display:inline-block;width:4px;height:12px;border-radius:2px;background:#ef5350;"></span>
+          </span>
+          High
+        </button>
+      </div>
       <div id="newsModalBody"><div class="news-empty">Memuat...</div></div>
       <div class="promo-last-update" id="newsLastUpdate"></div>
     </div>
@@ -11158,10 +11189,70 @@ app.get('/monitoring', async (_req, res) => {
       if (modal) modal.classList.remove('active');
     }
 
+    let _newsEventsCache = [];
+    let _newsMinBars = 0;
+
+    const _HARI = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+    const _toWIB = (isoStr) => { const d = new Date(isoStr); if (isNaN(d)) return null; return new Date(d.getTime() + 7*3600*1000); };
+    const _fmtDate = (d) => { if (!d) return ''; return String(d.getUTCDate()).padStart(2,'0')+'/'+String(d.getUTCMonth()+1).padStart(2,'0')+'/'+d.getUTCFullYear(); };
+    const _fmtTime = (d) => { if (!d) return 'All Day'; return String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0')+' WIB'; };
+    const _fmtDayDate = (d) => { if (!d) return ''; return _HARI[d.getUTCDay()]+', '+_fmtDate(d); };
+    const _svgClock = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px;opacity:0.6;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+    const _svgCal = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px;opacity:0.6;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+    const _svgPin = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f7931a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:5px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>';
+    const _svgCalDays = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:5px;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+    const _impactNum = { 'High': 3, 'Medium': 2, 'Low': 1 };
+    const _impactBars = (impact) => {
+      const cfg = { 'High': { n:3, color:'#ef5350' }, 'Medium': { n:2, color:'#ff9800' }, 'Low': { n:1, color:'#ffd600' } };
+      const c = cfg[impact];
+      if (!c) return '<span style="color:#555;font-size:0.8em;font-weight:600;">—</span>';
+      return Array(3).fill(0).map((_,i) => '<span style="display:inline-block;width:5px;height:14px;border-radius:2px;margin-right:2px;background:'+(i<c.n?c.color:'rgba(255,255,255,0.12)')+'"></span>').join('');
+    };
+    const _impactClass = (impact) => ({ 'High':'impact-high','Medium':'impact-medium','Low':'impact-low' })[impact] || 'impact-low';
+
+    function _renderNewsCard(ev) {
+      const vals = [];
+      if (ev.forecast) vals.push('<span>Forecast: '+ev.forecast+'</span>');
+      if (ev.previous) vals.push('<span>Prev: '+ev.previous+'</span>');
+      if (ev.actual) vals.push('<span class="actual">Actual: '+ev.actual+'</span>');
+      return '<div class="news-card '+_impactClass(ev.impact)+'">'+
+        '<div class="news-bulls">'+_impactBars(ev.impact)+'</div>'+
+        '<div class="news-body">'+
+          '<div class="news-title">'+ev.title+'</div>'+
+          '<div class="news-meta"><span>'+_svgClock+_fmtTime(ev._wib)+'</span><span>'+_svgCal+_fmtDayDate(ev._wib)+'</span></div>'+
+          (vals.length?'<div class="news-values">'+vals.join('')+'</div>':'')+
+        '</div></div>';
+    }
+
+    function _renderNewsBody(minBars) {
+      const body = document.getElementById('newsModalBody');
+      if (!body) return;
+      const filtered = minBars === 0 ? _newsEventsCache : _newsEventsCache.filter(ev => (_impactNum[ev.impact]||0) >= minBars);
+      if (filtered.length === 0) { body.innerHTML = '<div class="news-empty">Tidak ada event dengan filter ini</div>'; return; }
+      const nowWIB = _toWIB(new Date().toISOString());
+      const todayStr = _fmtDate(nowWIB);
+      const today = [], upcoming = [];
+      filtered.forEach(ev => { if (_fmtDate(ev._wib) === todayStr) today.push(ev); else upcoming.push(ev); });
+      const upcomingByDay = {};
+      upcoming.forEach(ev => { const k = _fmtDayDate(ev._wib)||'Unknown'; if (!upcomingByDay[k]) upcomingByDay[k]=[]; upcomingByDay[k].push(ev); });
+      let html = '';
+      if (today.length > 0) { html += '<div class="news-section-label">'+_svgPin+'Hari Ini — '+_fmtDayDate(nowWIB)+' ('+today.length+')</div>'+today.map(_renderNewsCard).join(''); }
+      Object.entries(upcomingByDay).forEach(([d,evs]) => { html += '<div class="news-section-label">'+_svgCalDays+d+' ('+evs.length+')</div>'+evs.map(_renderNewsCard).join(''); });
+      body.innerHTML = html || '<div class="news-empty">Tidak ada event minggu ini</div>';
+    }
+
+    function setNewsFilter(minBars, btn) {
+      _newsMinBars = minBars;
+      document.querySelectorAll('.news-filter-btn').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      _renderNewsBody(minBars);
+    }
+
     function openNewsModal() {
       const modal = document.getElementById('newsModal');
       if (modal) modal.classList.add('active');
       const body = document.getElementById('newsModalBody');
+      if (_newsEventsCache.length > 0) { _renderNewsBody(_newsMinBars); return; }
       body.innerHTML = '<div class="news-empty">Memuat kalender Forex Factory...</div>';
       fetch('/api/ff-calendar')
         .then(r => r.json())
@@ -11171,94 +11262,10 @@ app.get('/monitoring', async (_req, res) => {
             body.innerHTML = '<div class="news-empty">Tidak ada event USD minggu ini</div>';
             return;
           }
-          const HARI = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
-          // Parse ISO date → WIB (UTC+7)
-          const toWIB = (isoStr) => {
-            const d = new Date(isoStr);
-            if (isNaN(d)) return null;
-            // shift to WIB
-            return new Date(d.getTime() + 7 * 3600 * 1000);
-          };
-          const fmtDate = (d) => {
-            if (!d) return '';
-            const dd = String(d.getUTCDate()).padStart(2,'0');
-            const mm = String(d.getUTCMonth()+1).padStart(2,'0');
-            const yyyy = d.getUTCFullYear();
-            return dd + '/' + mm + '/' + yyyy;
-          };
-          const fmtTime = (d) => {
-            if (!d) return 'All Day';
-            const hh = String(d.getUTCHours()).padStart(2,'0');
-            const mn = String(d.getUTCMinutes()).padStart(2,'0');
-            return hh + ':' + mn + ' WIB';
-          };
-          const fmtDayDate = (d) => {
-            if (!d) return '';
-            return HARI[d.getUTCDay()] + ', ' + fmtDate(d);
-          };
-          // Today in WIB
-          const nowWIB = toWIB(new Date().toISOString());
-          const todayDateStr = fmtDate(nowWIB);
-          const today = [], upcoming = [];
-          data.events.forEach(ev => {
-            const wib = toWIB(ev.date);
-            ev._wib = wib;
-            if (wib && fmtDate(wib) === todayDateStr) today.push(ev);
-            else upcoming.push(ev);
-          });
-          // Sort by datetime
-          today.sort((a,b) => (a._wib||0) - (b._wib||0));
-          upcoming.sort((a,b) => (a._wib||0) - (b._wib||0));
-          const svgClock = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px;opacity:0.6;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
-          const svgCal = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px;opacity:0.6;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
-          const svgPin = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:5px;color:#f7931a;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>';
-          const svgCalDays = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:5px;color:#60a5fa;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
-          const impactBars = (impact) => {
-            const cfg = { 'High': { n:3, color:'#ef5350' }, 'Medium': { n:2, color:'#ff9800' }, 'Low': { n:1, color:'#ffd600' } };
-            const c = cfg[impact];
-            if (!c) return '<span style="color:#555;font-size:0.8em;font-weight:600;">—</span>';
-            return Array(3).fill(0).map((_,i) =>
-              '<span style="display:inline-block;width:5px;height:14px;border-radius:2px;margin-right:2px;background:' + (i < c.n ? c.color : 'rgba(255,255,255,0.12)') + ';"></span>'
-            ).join('');
-          };
-          const impactClass = (impact) => {
-            const map = { 'High': 'impact-high', 'Medium': 'impact-medium', 'Low': 'impact-low' };
-            return map[impact] || 'impact-low';
-          };
-          const renderCard = (ev) => {
-            const vals = [];
-            if (ev.forecast) vals.push('<span>Forecast: ' + ev.forecast + '</span>');
-            if (ev.previous) vals.push('<span>Prev: ' + ev.previous + '</span>');
-            if (ev.actual) vals.push('<span class="actual">Actual: ' + ev.actual + '</span>');
-            return '<div class="news-card ' + impactClass(ev.impact) + '">' +
-              '<div class="news-bulls">' + impactBars(ev.impact) + '</div>' +
-              '<div class="news-body">' +
-                '<div class="news-title">' + ev.title + '</div>' +
-                '<div class="news-meta">' +
-                  '<span>' + svgClock + fmtTime(ev._wib) + '</span>' +
-                  '<span>' + svgCal + fmtDayDate(ev._wib) + '</span>' +
-                '</div>' +
-                (vals.length ? '<div class="news-values">' + vals.join('') + '</div>' : '') +
-              '</div>' +
-            '</div>';
-          };
-          // Group upcoming by date
-          const upcomingByDay = {};
-          upcoming.forEach(ev => {
-            const key = fmtDayDate(ev._wib) || 'Unknown';
-            if (!upcomingByDay[key]) upcomingByDay[key] = [];
-            upcomingByDay[key].push(ev);
-          });
-          let html = '';
-          if (today.length > 0) {
-            html += '<div class="news-section-label">' + svgPin + 'Hari Ini — ' + fmtDayDate(nowWIB) + ' (' + today.length + ')</div>';
-            html += today.map(renderCard).join('');
-          }
-          Object.entries(upcomingByDay).forEach(([dayLabel, evs]) => {
-            html += '<div class="news-section-label">' + svgCalDays + dayLabel + ' (' + evs.length + ')</div>';
-            html += evs.map(renderCard).join('');
-          });
-          body.innerHTML = html || '<div class="news-empty">Tidak ada event minggu ini</div>';
+          data.events.forEach(ev => { ev._wib = _toWIB(ev.date); });
+          data.events.sort((a,b) => (a._wib||0) - (b._wib||0));
+          _newsEventsCache = data.events;
+          _renderNewsBody(_newsMinBars);
         })
         .catch(() => {
           body.innerHTML = '<div class="news-empty">Gagal memuat data Forex Factory</div>';
