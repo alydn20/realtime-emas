@@ -10017,6 +10017,7 @@ app.get('/monitoring', async (_req, res) => {
     }
 
     /* History Table */
+    .history-table-wrap { overflow-x: auto; }
     .history-section {
       background: rgba(20, 26, 34, 0.8);
       backdrop-filter: blur(20px);
@@ -10281,6 +10282,7 @@ app.get('/monitoring', async (_req, res) => {
       .history-header h2 svg { width: 13px; height: 13px; }
       .history-header > div { gap: 6px; }
       /* 1-baris layout mobile */
+      .history-table-wrap { overflow-x: hidden; }
       .history-table, .history-table tbody { display: block; width: 100%; }
       .history-table thead { display: none; }
       .history-table tr {
@@ -10866,7 +10868,7 @@ app.get('/monitoring', async (_req, res) => {
           </button>
         </div>
       </div>
-      <div style="overflow-x:auto;">
+      <div class="history-table-wrap">
       <table class="history-table">
         <thead>
           <tr id="historyHeaderRow">
