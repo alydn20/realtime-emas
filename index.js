@@ -1736,10 +1736,11 @@ async function pollPromoSuggestions() {
   const prevIds = cachedPromoSuggestions.map(p => p.code).sort().join(',')
   const newIds = active.map(p => p.code).sort().join(',')
   if (prevIds !== newIds) {
-    cachedPromoSuggestions = active
-    broadcastSSE({ type: 'promo_suggestions', promos: active })
     pushLog(`🎟️ Promo suggestions updated: ${active.length} active`)
   }
+  cachedPromoSuggestions = active
+  // Selalu broadcast setiap menit agar timestamp di client terupdate
+  broadcastSSE({ type: 'promo_suggestions', promos: active })
 }
 
 // Start polling setiap 1 menit
