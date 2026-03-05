@@ -2711,7 +2711,7 @@ app.get('/qr-reset', async (req, res) => {
       <div style="text-align:center;padding:40px;font-family:sans-serif;background:#0f1419;color:#e7e9ea;min-height:100vh;">
         <h2 style="color:#ff4444;">Reset WhatsApp Session</h2>
         <p style="margin:20px 0;color:#71767b;">Ini akan menghapus sesi WhatsApp dan memerlukan scan QR ulang.</p>
-        <p style="margin:20px 0;color:#ffaa00;">⚠️ WhatsApp akan logout dari device ini!</p>
+        <p style="margin:20px 0;color:#ffaa00;display:flex;align-items:center;justify-content:center;gap:8px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffaa00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> WhatsApp akan logout dari device ini!</p>
         <a href="/qr-reset?confirm=yes" style="display:inline-block;margin:10px;padding:15px 30px;background:#ff4444;color:white;text-decoration:none;border-radius:10px;font-weight:bold;">Ya, Reset Sekarang</a>
         <a href="/qr" style="display:inline-block;margin:10px;padding:15px 30px;background:#2f3640;color:white;text-decoration:none;border-radius:10px;">Batal</a>
       </div>
@@ -3479,19 +3479,19 @@ ${authScript}
           <label>Tipe Notifikasi</label>
           <div class="type-buttons">
             <div class="type-btn active" data-type="info">
-              <span class="icon">📢</span>
+              <span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg></span>
               <span class="label">Info</span>
             </div>
             <div class="type-btn" data-type="promo">
-              <span class="icon">🎁</span>
+              <span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
               <span class="label">Promo</span>
             </div>
             <div class="type-btn" data-type="warning">
-              <span class="icon">⚠️</span>
+              <span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
               <span class="label">Warning</span>
             </div>
             <div class="type-btn" data-type="urgent">
-              <span class="icon">🚨</span>
+              <span class="icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>
               <span class="label">Urgent</span>
             </div>
           </div>
@@ -6078,7 +6078,7 @@ app.get('/auth/:token', async (req, res) => {
 '</head>' +
 '<body>' +
 '  <div class="card">' +
-'    <div class="success-icon">✅</div>' +
+'    <div class="success-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#26a69a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>' +
 '    <h1>Login Berhasil!</h1>' +
 '    <p>Selamat datang, ' + userName + '</p>' +
 '    <p style="margin-top:10px;">Mengalihkan ke monitoring...</p>' +
@@ -6144,7 +6144,7 @@ function getLoginErrorPage(message) {
 '</head>' +
 '<body>' +
 '  <div class="card">' +
-'    <div class="error-icon">❌</div>' +
+'    <div class="error-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ef5350" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>' +
 '    <h1>Login Gagal</h1>' +
 '    <p>' + message + '</p>' +
 '    <a href="/login">Coba Lagi</a>' +
@@ -7080,10 +7080,10 @@ ${authScript}
           <div class="form-group">
             <label>Tipe Notifikasi</label>
             <div style="display:flex;gap:8px;flex-wrap:wrap;" id="bcastTypeBtns">
-              <button class="action-btn bcast-type-btn active-type" data-type="info" onclick="selectBcastType(this)" style="background:rgba(59,130,246,0.2);border:1px solid rgba(96,165,250,0.5);color:#60a5fa;padding:6px 14px;font-size:0.85em;">📢 Info</button>
-              <button class="action-btn bcast-type-btn" data-type="promo" onclick="selectBcastType(this)" style="background:rgba(34,197,94,0.12);border:1px solid rgba(74,222,128,0.3);color:#4ade80;padding:6px 14px;font-size:0.85em;">🎁 Promo</button>
-              <button class="action-btn bcast-type-btn" data-type="warning" onclick="selectBcastType(this)" style="background:rgba(234,179,8,0.12);border:1px solid rgba(250,204,21,0.3);color:#facc15;padding:6px 14px;font-size:0.85em;">⚠️ Warning</button>
-              <button class="action-btn bcast-type-btn" data-type="urgent" onclick="selectBcastType(this)" style="background:rgba(239,68,68,0.12);border:1px solid rgba(248,113,113,0.3);color:#f87171;padding:6px 14px;font-size:0.85em;">🚨 Urgent</button>
+              <button class="action-btn bcast-type-btn active-type" data-type="info" onclick="selectBcastType(this)" style="background:rgba(59,130,246,0.2);border:1px solid rgba(96,165,250,0.5);color:#60a5fa;padding:6px 14px;font-size:0.85em;display:inline-flex;align-items:center;gap:5px;"><i data-lucide="send" style="width:13px;height:13px;"></i> Info</button>
+              <button class="action-btn bcast-type-btn" data-type="promo" onclick="selectBcastType(this)" style="background:rgba(34,197,94,0.12);border:1px solid rgba(74,222,128,0.3);color:#4ade80;padding:6px 14px;font-size:0.85em;display:inline-flex;align-items:center;gap:5px;"><i data-lucide="tag" style="width:13px;height:13px;"></i> Promo</button>
+              <button class="action-btn bcast-type-btn" data-type="warning" onclick="selectBcastType(this)" style="background:rgba(234,179,8,0.12);border:1px solid rgba(250,204,21,0.3);color:#facc15;padding:6px 14px;font-size:0.85em;display:inline-flex;align-items:center;gap:5px;"><i data-lucide="alert-triangle" style="width:13px;height:13px;"></i> Warning</button>
+              <button class="action-btn bcast-type-btn" data-type="urgent" onclick="selectBcastType(this)" style="background:rgba(239,68,68,0.12);border:1px solid rgba(248,113,113,0.3);color:#f87171;padding:6px 14px;font-size:0.85em;display:inline-flex;align-items:center;gap:5px;"><i data-lucide="alert-circle" style="width:13px;height:13px;"></i> Urgent</button>
             </div>
           </div>
 
@@ -8222,10 +8222,10 @@ ${authScript}
           let count;
           if (waMatches && waMatches.length > 0) {
             count = waMatches.filter(p => p.replace(/[\s\-]/g, '').length >= 10).length;
-            preview.textContent = '✅ Terdeteksi ' + count + ' nomor dari format WhatsApp';
+            preview.textContent = 'Terdeteksi ' + count + ' nomor dari format WhatsApp';
           } else {
             count = text.split(/[\n,]+/).filter(p => p.trim().length >= 8).length;
-            preview.textContent = '✅ Terdeteksi ' + count + ' nomor';
+            preview.textContent = 'Terdeteksi ' + count + ' nomor';
           }
           preview.style.display = count > 0 ? 'block' : 'none';
         });
@@ -8485,7 +8485,12 @@ ${authScript}
         return;
       }
 
-      const typeIcons = { info: '📢', promo: '🎁', warning: '⚠️', urgent: '🚨' };
+      const typeIcons = {
+        info: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+        promo: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
+        warning: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+        urgent: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+      };
       const typeColors = { info: '#60a5fa', promo: '#4ade80', warning: '#facc15', urgent: '#f87171' };
 
       container.innerHTML = history.map(n => {
@@ -8493,12 +8498,12 @@ ${authScript}
         const dateStr = d.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
         const timeStr = d.toTimeString().substring(0, 5);
         const color = typeColors[n.type] || '#60a5fa';
-        const icon = typeIcons[n.type] || '📢';
+        const icon = typeIcons[n.type] || typeIcons.info;
         return '<div style="border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:rgba(255,255,255,0.03);">' +
           '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">' +
             '<div style="flex:1;min-width:0;">' +
               '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
-                '<span style="font-size:0.78em;background:rgba(255,255,255,0.07);color:' + color + ';padding:2px 8px;border-radius:6px;">' + icon + ' ' + n.type.toUpperCase() + '</span>' +
+                '<span style="font-size:0.78em;background:rgba(255,255,255,0.07);color:' + color + ';padding:2px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:4px;">' + icon + ' ' + n.type.toUpperCase() + '</span>' +
                 '<span style="font-size:0.75em;color:#6b7280;">' + dateStr + ' ' + timeStr + '</span>' +
               '</div>' +
               '<div style="font-weight:600;color:#e7e9ea;font-size:0.9em;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + n.title + '</div>' +
@@ -11204,9 +11209,17 @@ app.get('/monitoring', async (_req, res) => {
           // Sort by datetime
           today.sort((a,b) => (a._wib||0) - (b._wib||0));
           upcoming.sort((a,b) => (a._wib||0) - (b._wib||0));
-          const impactBulls = (impact) => {
-            const map = { 'High': '🐂🐂🐂', 'Medium': '🐂🐂', 'Low': '🐂', 'Non-Economic': '—' };
-            return map[impact] || '—';
+          const svgClock = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px;opacity:0.6;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+          const svgCal = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:3px;opacity:0.6;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+          const svgPin = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:5px;color:#f7931a;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>';
+          const svgCalDays = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:5px;color:#60a5fa;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+          const impactBars = (impact) => {
+            const cfg = { 'High': { n:3, color:'#ef5350' }, 'Medium': { n:2, color:'#ff9800' }, 'Low': { n:1, color:'#ffd600' } };
+            const c = cfg[impact];
+            if (!c) return '<span style="color:#555;font-size:0.8em;font-weight:600;">—</span>';
+            return Array(3).fill(0).map((_,i) =>
+              '<span style="display:inline-block;width:5px;height:14px;border-radius:2px;margin-right:2px;background:' + (i < c.n ? c.color : 'rgba(255,255,255,0.12)') + ';"></span>'
+            ).join('');
           };
           const impactClass = (impact) => {
             const map = { 'High': 'impact-high', 'Medium': 'impact-medium', 'Low': 'impact-low' };
@@ -11218,12 +11231,12 @@ app.get('/monitoring', async (_req, res) => {
             if (ev.previous) vals.push('<span>Prev: ' + ev.previous + '</span>');
             if (ev.actual) vals.push('<span class="actual">Actual: ' + ev.actual + '</span>');
             return '<div class="news-card ' + impactClass(ev.impact) + '">' +
-              '<div class="news-bulls">' + impactBulls(ev.impact) + '</div>' +
+              '<div class="news-bulls">' + impactBars(ev.impact) + '</div>' +
               '<div class="news-body">' +
                 '<div class="news-title">' + ev.title + '</div>' +
                 '<div class="news-meta">' +
-                  '<span>🕐 ' + fmtTime(ev._wib) + '</span>' +
-                  '<span>📅 ' + fmtDayDate(ev._wib) + '</span>' +
+                  '<span>' + svgClock + fmtTime(ev._wib) + '</span>' +
+                  '<span>' + svgCal + fmtDayDate(ev._wib) + '</span>' +
                 '</div>' +
                 (vals.length ? '<div class="news-values">' + vals.join('') + '</div>' : '') +
               '</div>' +
@@ -11238,11 +11251,11 @@ app.get('/monitoring', async (_req, res) => {
           });
           let html = '';
           if (today.length > 0) {
-            html += '<div class="news-section-label">📌 Hari Ini — ' + fmtDayDate(nowWIB) + ' (' + today.length + ')</div>';
+            html += '<div class="news-section-label">' + svgPin + 'Hari Ini — ' + fmtDayDate(nowWIB) + ' (' + today.length + ')</div>';
             html += today.map(renderCard).join('');
           }
           Object.entries(upcomingByDay).forEach(([dayLabel, evs]) => {
-            html += '<div class="news-section-label">📆 ' + dayLabel + ' (' + evs.length + ')</div>';
+            html += '<div class="news-section-label">' + svgCalDays + dayLabel + ' (' + evs.length + ')</div>';
             html += evs.map(renderCard).join('');
           });
           body.innerHTML = html || '<div class="news-empty">Tidak ada event minggu ini</div>';
