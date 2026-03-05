@@ -10269,24 +10269,30 @@ app.get('/monitoring', async (_req, res) => {
       .history-header > div { gap: 6px; }
       /* Mobile card layout */
       .history-table-wrap { overflow-x: hidden; }
-      .history-table, .history-table tbody { display: block; width: 100%; }
-      .history-table thead { display: none; }
+      .history-table, .history-table thead, .history-table tbody { display: block; width: 100%; }
+      .history-table thead tr { background: rgba(0,0,0,0.2); border-bottom: 1px solid rgba(255,255,255,0.07); }
       .history-table tr {
         display: flex;
         flex-direction: row;
-        flex-wrap: wrap;
         align-items: center;
-        gap: 4px 6px;
-        padding: 7px 12px;
-        border-bottom: 1px solid rgba(255,255,255,0.07);
+        gap: 0 4px;
+        padding: 5px 10px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
       }
-      .history-table td { display: block; border: none; padding: 0; font-size: 0.78em; }
-      .history-table td.time-col { color: #9ca3af; font-size: 0.7em; width: 54px; flex-shrink: 0; }
-      .history-table td:nth-child(2) { font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .history-table td:nth-child(3) { color: #9ca3af; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-      .history-table td.td-nominal { font-size: 0.72em; flex: 1; min-width: 80px; text-align: right; padding-left: 4px; }
-      .history-table td.td-nominal .nom-gram { display: none; }
+      .history-table th { display: block; border: none; padding: 0; font-size: 0.6em; color: #8b949e; text-transform: uppercase; letter-spacing: 0.3px; font-weight: 600; white-space: nowrap; }
+      .history-table th:first-child { width: 52px; flex-shrink: 0; }
+      .history-table th:nth-child(2) { flex: 1; }
+      .history-table th:nth-child(3) { flex: 1; }
+      .history-table th.th-nominal { flex: 1; text-align: right; }
+      .history-table th.col-spread, .history-table th.col-usdidr { display: none; }
+      .history-table td { display: block; border: none; padding: 0; font-size: 0.72em; white-space: nowrap; }
+      .history-table td.time-col { color: #9ca3af; font-size: 0.68em; width: 52px; flex-shrink: 0; }
+      .history-table td:nth-child(2) { font-weight: 700; flex: 1; min-width: 0; }
+      .history-table td:nth-child(3) { color: #9ca3af; flex: 1; min-width: 0; }
+      .history-table td.td-nominal { font-size: 0.68em; flex: 1; min-width: 0; text-align: right; line-height: 1.3; }
+      .history-table td.td-nominal .nom-gram { display: inline; font-size: 0.9em; color: #9ca3af; }
       .history-table td.td-nominal br { display: none; }
+      .history-table td.td-nominal small { display: block; }
       .history-table td.col-spread,
       .history-table td.col-usdidr { display: none; }
       .history-pagination { padding: 10px 12px; gap: 8px; flex-wrap: wrap; }
