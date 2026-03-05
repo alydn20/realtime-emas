@@ -9297,11 +9297,11 @@ app.get('/monitoring', async (_req, res) => {
     .chart-bottom-row .chart-info-row {
       margin-top: 0;
     }
-    .indicator-buttons-row {
-      position: absolute;
-      right: 0;
+    .all-btns-row {
       display: flex;
       gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
     }
     .indicator-btn {
       background: rgba(30, 40, 50, 0.9);
@@ -9353,12 +9353,6 @@ app.get('/monitoring', async (_req, res) => {
       color: #000;
     }
     .indicator-btn.news:hover { background: rgba(251, 191, 36, 1); }
-    .promo-btn-row {
-      position: absolute;
-      left: 0;
-      display: flex;
-      gap: 8px;
-    }
     /* History table: hide non-essential cols on mobile */
     .col-spread, .col-usdidr { }
     @media (max-width: 600px) {
@@ -10263,14 +10257,6 @@ app.get('/monitoring', async (_req, res) => {
         margin-top: 4px;
         align-items: center;
       }
-      .promo-btn-row {
-        position: static;
-        justify-content: center;
-      }
-      .indicator-buttons-row {
-        position: static;
-        justify-content: center;
-      }
       .indicator-btn {
         padding: 5px 10px;
         font-size: 0.68em;
@@ -10744,7 +10730,7 @@ app.get('/monitoring', async (_req, res) => {
               <span id="promoStatusText">-</span>
             </div>
           </div>
-          <div class="promo-btn-row">
+          <div class="all-btns-row">
             <button class="indicator-btn promo" onclick="openPromoSuggestions()">
               <i data-lucide="tag" style="width:11px;height:11px;"></i>
               Cek Promo
@@ -10753,8 +10739,6 @@ app.get('/monitoring', async (_req, res) => {
               <i data-lucide="newspaper" style="width:11px;height:11px;"></i>
               Cek News
             </button>
-          </div>
-          <div class="indicator-buttons-row">
             <button class="indicator-btn settings" onclick="openIndicatorSettings()">
               <i data-lucide="settings-2" style="width:11px;height:11px;"></i>
               Indikator
