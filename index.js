@@ -6742,9 +6742,10 @@ ${authScript}
           </h2>
           <div class="result-msg" id="bulkResult"></div>
           <div class="form-group">
-            <label>Daftar Nomor (satu per baris atau pisahkan dengan koma)</label>
-            <textarea id="bulkPhones" placeholder="08123456789&#10;08234567890&#10;08345678901"></textarea>
+            <label>Paste dari WhatsApp (inspect element) atau satu nomor per baris</label>
+            <textarea id="bulkPhones" placeholder="Paste langsung dari inspect WhatsApp: I, Ma, +62 851-5633-8205, +62 822-1980-1013, ... Anda&#10;&#10;Atau format biasa:&#10;08123456789&#10;08234567890"></textarea>
           </div>
+          <div id="bulkPreview" style="font-size:0.8em;color:#6b7280;margin-bottom:8px;display:none;"></div>
           <button class="btn btn-primary" onclick="bulkImport()">Import Semua</button>
         </div>
       </div>
@@ -8124,8 +8125,16 @@ ${authScript}
 
       if (!text) { showAlert('Masukkan daftar nomor', 'warning'); return; }
 
-      // Parse phones - support newline, comma, or space separated
-      const phones = text.split(/[\\n,\\s]+/).map(p => p.trim()).filter(p => p.length > 0);
+      // Coba ekstrak nomor format WhatsApp (+62 XXX-XXXX-XXXX)
+      const waMatches = text.match(/\+62[\d\s\-]+/g);
+      let phones;
+      if (waMatches && waMatches.length > 0) {
+        // Format WhatsApp: strip spasi dan tanda hubung
+        phones = waMatches.map(p => p.replace(/[\s\-]/g, '').trim()).filter(p => p.length >= 10);
+      } else {
+        // Format biasa: satu per baris atau pisah koma
+        phones = text.split(/[\n,]+/).map(p => p.trim()).filter(p => p.length >= 8);
+      }
 
       if (phones.length === 0) { showAlert('Tidak ada nomor valid', 'warning'); return; }
 
@@ -8151,6 +8160,28 @@ ${authScript}
         setTimeout(() => result.className = 'result-msg', 5000);
       });
     }
+
+    // Preview jumlah nomor saat paste/input
+    document.addEventListener('DOMContentLoaded', () => {
+      const ta = document.getElementById('bulkPhones');
+      const preview = document.getElementById('bulkPreview');
+      if (ta && preview) {
+        ta.addEventListener('input', () => {
+          const text = ta.value.trim();
+          if (!text) { preview.style.display = 'none'; return; }
+          const waMatches = text.match(/\+62[\d\s\-]+/g);
+          let count;
+          if (waMatches && waMatches.length > 0) {
+            count = waMatches.filter(p => p.replace(/[\s\-]/g, '').length >= 10).length;
+            preview.textContent = '✅ Terdeteksi ' + count + ' nomor dari format WhatsApp';
+          } else {
+            count = text.split(/[\n,]+/).filter(p => p.trim().length >= 8).length;
+            preview.textContent = '✅ Terdeteksi ' + count + ' nomor';
+          }
+          preview.style.display = count > 0 ? 'block' : 'none';
+        });
+      }
+    });
 
     function editUserBtn(btn) {
       editUser(btn.getAttribute('data-phone'), btn.getAttribute('data-name'));
