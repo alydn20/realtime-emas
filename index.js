@@ -10069,6 +10069,10 @@ app.get('/monitoring', async (_req, res) => {
     .history-table .price-up { color: #4ade80; font-weight: 600; }
     .history-table .price-down { color: #f87171; font-weight: 600; }
     .history-table .time-col { color: #8b949e; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; }
+    .history-table td.td-nominal { text-align: right; vertical-align: middle; }
+    .history-table td.td-nominal .nom-gram { display: block; color: #8b949e; font-size: 0.8em; }
+    .history-table td.td-nominal br { display: none; }
+    .history-table td.td-nominal small { display: block; }
     .history-table .no-data {
       text-align: center;
       color: #8b949e;
@@ -10285,12 +10289,20 @@ app.get('/monitoring', async (_req, res) => {
       .history-table td.time-col { color: #9ca3af; font-size: 0.68em; width: 52px; flex-shrink: 0; }
       .history-table td:nth-child(2) { font-weight: 700; flex: 1; min-width: 0; }
       .history-table td:nth-child(3) { color: #9ca3af; flex: 1; min-width: 0; }
-      .history-table td.td-nominal { font-size: 0.68em; flex: 1; min-width: 0; text-align: right; line-height: 1.3; }
-      .history-table td.td-nominal .nom-gram { display: inline; font-size: 0.9em; color: #9ca3af; }
+      .history-table td.td-nominal { font-size: 0.68em; flex-shrink: 0; text-align: right; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.4; }
+      .history-table td.td-nominal .nom-gram { color: #9ca3af; font-size: 0.9em; }
       .history-table td.td-nominal br { display: none; }
       .history-table td.td-nominal small { display: block; }
       .history-table td.col-spread,
       .history-table td.col-usdidr { display: none; }
+      .history-table td.td-nom-1,
+      .history-table td.td-nom-2,
+      .history-table td.td-nom-3,
+      .history-table td.td-nom-4,
+      .history-table th.th-nom-1,
+      .history-table th.th-nom-2,
+      .history-table th.th-nom-3,
+      .history-table th.th-nom-4 { display: none; }
       .history-pagination { padding: 10px 12px; gap: 8px; flex-wrap: wrap; }
       .page-btn { padding: 7px 12px; font-size: 0.8em; }
       .page-info { font-size: 0.78em; }
@@ -11552,12 +11564,12 @@ app.get('/monitoring', async (_req, res) => {
         const usdIdrChangeClass = usdIdrChange >= 0 ? 'price-up' : 'price-down';
 
         // Calculate gram & profit dynamically for selected history nominals
-        const nominalCols = getHistoryNominals().map(n => {
+        const nominalCols = getHistoryNominals().map((n, idx) => {
           const gram = n.amount / item.buy;
           const profit = Math.round((gram * item.sell) - (n.amount - n.amount * n.discountRate));
           const profitClass = profit >= 0 ? 'price-up' : 'price-down';
           const profitSign = profit >= 0 ? '+' : '-';
-          return '<td class="td-nominal"><span class="nom-gram">' + gram.toFixed(4) + 'g</span><br><small class="' + profitClass + '">' + profitSign + 'Rp ' + Math.abs(profit).toLocaleString('id-ID') + '</small></td>';
+          return '<td class="td-nominal td-nom-' + idx + '"><span class="nom-gram">' + gram.toFixed(4) + 'g</span><br><small class="' + profitClass + '">' + profitSign + 'Rp ' + Math.abs(profit).toLocaleString('id-ID') + '</small></td>';
         }).join('');
 
         const arrowIcon = buyChange > 0 ? '▲' : buyChange < 0 ? '▼' : '';
@@ -12277,9 +12289,9 @@ app.get('/monitoring', async (_req, res) => {
       const row = document.getElementById('historyHeaderRow');
       if (!row) return;
       row.querySelectorAll('.th-nominal').forEach(th => th.remove());
-      getHistoryNominals().forEach(n => {
+      getHistoryNominals().forEach((n, idx) => {
         const th = document.createElement('th');
-        th.className = 'th-nominal';
+        th.className = 'th-nominal th-nom-' + idx;
         th.setAttribute('data-nominal', n.id);
         th.textContent = n.label;
         row.appendChild(th);
