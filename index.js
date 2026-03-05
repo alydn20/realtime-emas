@@ -4693,6 +4693,68 @@ app.get('/api/promo-suggestions', async (_req, res) => {
   }
 })
 
+// ==================== FOREX FACTORY CALENDAR (XAU/USD NEWS) ====================
+
+let cachedFFCalendar = []
+let lastFFCalendarFetch = 0
+const FF_CALENDAR_TTL = 5 * 60 * 1000 // cache 5 menit
+
+app.get('/api/ff-calendar', async (_req, res) => {
+  try {
+    const now = Date.now()
+    if (cachedFFCalendar.length > 0 && now - lastFFCalendarFetch < FF_CALENDAR_TTL) {
+      return res.json({ success: true, events: cachedFFCalendar, cached: true })
+    }
+
+    // Fetch Forex Factory community XML feed (this week + next week)
+    const https = require('https')
+    const fetchXml = (url) => new Promise((resolve, reject) => {
+      https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (r) => {
+        let data = ''
+        r.on('data', chunk => data += chunk)
+        r.on('end', () => resolve(data))
+        r.on('error', reject)
+      }).on('error', reject)
+    })
+
+    const parseEvents = (xml) => {
+      const events = []
+      const eventMatches = xml.match(/<event>([\s\S]*?)<\/event>/g) || []
+      for (const block of eventMatches) {
+        const get = (tag) => { const m = block.match(new RegExp('<' + tag + '>([\\s\\S]*?)<\\/' + tag + '>')); return m ? m[1].trim() : '' }
+        const country = get('country')
+        const impact = get('impact')
+        if (country !== 'USD' && country !== 'XAU') continue
+        events.push({
+          title: get('title'),
+          country,
+          date: get('date'),
+          time: get('time'),
+          impact,
+          forecast: get('forecast'),
+          previous: get('previous'),
+          actual: get('actual')
+        })
+      }
+      return events
+    }
+
+    const [xml1, xml2] = await Promise.all([
+      fetchXml('https://nfs.faireconomy.media/ff_calendar_thisweek.xml').catch(() => ''),
+      fetchXml('https://nfs.faireconomy.media/ff_calendar_nextweek.xml').catch(() => '')
+    ])
+
+    const events = [...parseEvents(xml1), ...parseEvents(xml2)]
+    cachedFFCalendar = events
+    lastFFCalendarFetch = now
+    pushLog(`📰 FF Calendar: ${events.length} USD events loaded`)
+    res.json({ success: true, events })
+  } catch (e) {
+    pushLog(`❌ FF Calendar error: ${e.message}`)
+    res.json({ success: false, error: e.message, events: cachedFFCalendar })
+  }
+})
+
 // ==================== WHATSAPP GROUP MANAGEMENT ====================
 
 // Admin: Get list of WhatsApp groups
@@ -9225,6 +9287,12 @@ app.get('/monitoring', async (_req, res) => {
       border-color: rgba(34, 197, 94, 0.5);
     }
     .indicator-btn.promo:hover { background: rgba(34, 197, 94, 1); }
+    .indicator-btn.news {
+      background: rgba(251, 191, 36, 0.9);
+      border-color: rgba(251, 191, 36, 0.5);
+      color: #000;
+    }
+    .indicator-btn.news:hover { background: rgba(251, 191, 36, 1); }
     .promo-btn-row {
       position: absolute;
       left: 0;
@@ -9321,6 +9389,29 @@ app.get('/monitoring', async (_req, res) => {
       margin-top: 10px;
       text-align: center;
     }
+    /* News XAU/USD Modal */
+    .news-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .news-card.impact-high { border-left: 3px solid #ef4444; }
+    .news-card.impact-medium { border-left: 3px solid #f7931a; }
+    .news-card.impact-low { border-left: 3px solid #6b7280; }
+    .news-bulls { font-size: 1em; min-width: 44px; text-align: center; line-height: 1; padding-top: 2px; }
+    .news-body { flex: 1; }
+    .news-title { font-size: 0.82em; font-weight: 700; color: #fff; margin-bottom: 3px; }
+    .news-meta { font-size: 0.7em; color: #9ca3af; display: flex; gap: 8px; flex-wrap: wrap; }
+    .news-meta span { display: flex; align-items: center; gap: 3px; }
+    .news-values { font-size: 0.7em; color: #9ca3af; margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
+    .news-values .actual { color: #22c55e; font-weight: 700; }
+    .news-section-label { font-size: 0.7em; font-weight: 700; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.08em; margin: 12px 0 6px; }
+    .news-empty { text-align: center; color: #6b7280; font-size: 0.85em; padding: 20px; }
 
     /* Indicator Settings Modal */
     .indicator-settings-overlay {
@@ -10283,6 +10374,19 @@ app.get('/monitoring', async (_req, res) => {
     </div>
   </div>
 
+  <!-- News XAU/USD Modal -->
+  <div class="promo-suggestions-overlay" id="newsModal" onclick="if(event.target===this)closeNewsModal()">
+    <div class="promo-suggestions-modal">
+      <h3>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
+        News XAU/USD (Forex Factory)
+        <button class="promo-modal-close" onclick="closeNewsModal()">Tutup</button>
+      </h3>
+      <div id="newsModalBody"><div class="news-empty">Memuat...</div></div>
+      <div class="promo-last-update" id="newsLastUpdate"></div>
+    </div>
+  </div>
+
   <div class="indicator-settings-overlay" id="indicatorSettingsModal">
     <div class="indicator-settings-modal">
       <div class="indicator-settings-header">
@@ -10479,6 +10583,10 @@ app.get('/monitoring', async (_req, res) => {
             <button class="indicator-btn promo" onclick="openPromoSuggestions()">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
               Cek Promo
+            </button>
+            <button class="indicator-btn news" onclick="openNewsModal()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
+              Cek News
             </button>
           </div>
           <div class="indicator-buttons-row">
@@ -10901,6 +11009,75 @@ app.get('/monitoring', async (_req, res) => {
 
     function closePromoSuggestions() {
       const modal = document.getElementById('promoSuggestionsModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    function openNewsModal() {
+      const modal = document.getElementById('newsModal');
+      if (modal) modal.classList.add('active');
+      const body = document.getElementById('newsModalBody');
+      body.innerHTML = '<div class="news-empty">Memuat kalender Forex Factory...</div>';
+      fetch('/api/ff-calendar')
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById('newsLastUpdate').textContent = 'Update: ' + new Date().toLocaleTimeString('id-ID');
+          if (!data.success || !data.events || data.events.length === 0) {
+            body.innerHTML = '<div class="news-empty">Tidak ada event USD minggu ini</div>';
+            return;
+          }
+          // Split today vs upcoming
+          const now = new Date();
+          const todayStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+          const today = [], upcoming = [];
+          data.events.forEach(ev => {
+            const evDate = new Date(ev.date + ' ' + (ev.time || '00:00am'));
+            const evDateStr = new Date(ev.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            if (evDateStr === todayStr) today.push(ev);
+            else upcoming.push(ev);
+          });
+          const impactBulls = (impact) => {
+            const map = { 'High': '🐂🐂🐂', 'Medium': '🐂🐂', 'Low': '🐂', 'Non-Economic': '—' };
+            return map[impact] || '—';
+          };
+          const impactClass = (impact) => {
+            const map = { 'High': 'impact-high', 'Medium': 'impact-medium', 'Low': 'impact-low' };
+            return map[impact] || 'impact-low';
+          };
+          const renderCard = (ev) => {
+            const vals = [];
+            if (ev.forecast) vals.push('<span>Forecast: ' + ev.forecast + '</span>');
+            if (ev.previous) vals.push('<span>Prev: ' + ev.previous + '</span>');
+            if (ev.actual) vals.push('<span class="actual">Actual: ' + ev.actual + '</span>');
+            return '<div class="news-card ' + impactClass(ev.impact) + '">' +
+              '<div class="news-bulls">' + impactBulls(ev.impact) + '</div>' +
+              '<div class="news-body">' +
+                '<div class="news-title">' + ev.title + '</div>' +
+                '<div class="news-meta">' +
+                  '<span>🕐 ' + (ev.time || 'All Day') + '</span>' +
+                  '<span>📅 ' + ev.date + '</span>' +
+                '</div>' +
+                (vals.length ? '<div class="news-values">' + vals.join('') + '</div>' : '') +
+              '</div>' +
+            '</div>';
+          };
+          let html = '';
+          if (today.length > 0) {
+            html += '<div class="news-section-label">📌 Hari Ini (' + today.length + ')</div>';
+            html += today.map(renderCard).join('');
+          }
+          if (upcoming.length > 0) {
+            html += '<div class="news-section-label">📆 Akan Datang (' + upcoming.length + ')</div>';
+            html += upcoming.map(renderCard).join('');
+          }
+          body.innerHTML = html || '<div class="news-empty">Tidak ada event minggu ini</div>';
+        })
+        .catch(() => {
+          body.innerHTML = '<div class="news-empty">Gagal memuat data Forex Factory</div>';
+        });
+    }
+
+    function closeNewsModal() {
+      const modal = document.getElementById('newsModal');
       if (modal) modal.classList.remove('active');
     }
 
