@@ -4706,45 +4706,33 @@ app.get('/api/ff-calendar', async (_req, res) => {
       return res.json({ success: true, events: cachedFFCalendar, cached: true })
     }
 
-    // Fetch Forex Factory community XML feed (this week + next week)
+    // Fetch Forex Factory JSON feed (this week + next week)
     const https = require('https')
-    const fetchXml = (url) => new Promise((resolve, reject) => {
+    const fetchJson = (url) => new Promise((resolve, reject) => {
       https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (r) => {
         let data = ''
         r.on('data', chunk => data += chunk)
-        r.on('end', () => resolve(data))
-        r.on('error', reject)
-      }).on('error', reject)
+        r.on('end', () => { try { resolve(JSON.parse(data)) } catch(e) { resolve([]) } })
+        r.on('error', () => resolve([]))
+      }).on('error', () => resolve([]))
     })
 
-    const parseEvents = (xml) => {
-      const events = []
-      const eventMatches = xml.match(/<event>([\s\S]*?)<\/event>/g) || []
-      for (const block of eventMatches) {
-        const get = (tag) => { const m = block.match(new RegExp('<' + tag + '>([\\s\\S]*?)<\\/' + tag + '>')); return m ? m[1].trim() : '' }
-        const country = get('country')
-        const impact = get('impact')
-        if (country !== 'USD' && country !== 'XAU') continue
-        events.push({
-          title: get('title'),
-          country,
-          date: get('date'),
-          time: get('time'),
-          impact,
-          forecast: get('forecast'),
-          previous: get('previous'),
-          actual: get('actual')
-        })
-      }
-      return events
-    }
-
-    const [xml1, xml2] = await Promise.all([
-      fetchXml('https://nfs.faireconomy.media/ff_calendar_thisweek.xml').catch(() => ''),
-      fetchXml('https://nfs.faireconomy.media/ff_calendar_nextweek.xml').catch(() => '')
+    const [week1, week2] = await Promise.all([
+      fetchJson('https://nfs.faireconomy.media/ff_calendar_thisweek.json').catch(() => []),
+      fetchJson('https://nfs.faireconomy.media/ff_calendar_nextweek.json').catch(() => [])
     ])
 
-    const events = [...parseEvents(xml1), ...parseEvents(xml2)]
+    const allEvents = [...(Array.isArray(week1) ? week1 : []), ...(Array.isArray(week2) ? week2 : [])]
+    const events = allEvents.filter(ev => ev.country === 'USD').map(ev => ({
+      title: ev.title || '',
+      country: ev.country || '',
+      date: ev.date || '',
+      time: ev.time || '',
+      impact: ev.impact || '',
+      forecast: ev.forecast || '',
+      previous: ev.previous || '',
+      actual: ev.actual || ''
+    }))
     cachedFFCalendar = events
     lastFFCalendarFetch = now
     pushLog(`📰 FF Calendar: ${events.length} USD events loaded`)
