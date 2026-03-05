@@ -11284,13 +11284,30 @@ app.get('/monitoring', async (_req, res) => {
       const nowWIB = _toWIB(new Date().toISOString());
       const nowMs = nowWIB ? nowWIB.getTime() : Date.now();
       const todayStr = _fmtDate(nowWIB);
-      const today = [], upcoming = [];
-      filtered.forEach(ev => { if (_fmtDate(ev._wib) === todayStr) today.push(ev); else upcoming.push(ev); });
-      const upcomingByDay = {};
-      upcoming.forEach(ev => { const k = _fmtDayDate(ev._wib)||'Unknown'; if (!upcomingByDay[k]) upcomingByDay[k]=[]; upcomingByDay[k].push(ev); });
+      const todayMs = nowWIB ? new Date(nowWIB.getUTCFullYear(), nowWIB.getUTCMonth(), nowWIB.getUTCDate()).getTime() : 0;
+      const today = [], future = [], past = [];
+      filtered.forEach(ev => {
+        const evDateStr = _fmtDate(ev._wib);
+        if (evDateStr === todayStr) { today.push(ev); }
+        else {
+          const evMs = ev._wib ? new Date(ev._wib.getUTCFullYear(), ev._wib.getUTCMonth(), ev._wib.getUTCDate()).getTime() : 0;
+          if (evMs > todayMs) future.push(ev); else past.push(ev);
+        }
+      });
+      const groupByDay = (evs) => {
+        const map = {};
+        evs.forEach(ev => { const k = _fmtDayDate(ev._wib)||'Unknown'; if (!map[k]) map[k]=[]; map[k].push(ev); });
+        return map;
+      };
+      const futureByDay = groupByDay(future);
+      const pastByDay = groupByDay(past);
       let html = '';
       if (today.length > 0) { html += '<div class="news-section-label">'+_svgPin+'Hari Ini — '+_fmtDayDate(nowWIB)+' ('+today.length+')</div>'+today.map(ev=>_renderNewsCard(ev,nowMs)).join(''); }
-      Object.entries(upcomingByDay).forEach(([d,evs]) => { html += '<div class="news-section-label">'+_svgCalDays+d+' ('+evs.length+')</div>'+evs.map(ev=>_renderNewsCard(ev,nowMs)).join(''); });
+      Object.entries(futureByDay).forEach(([d,evs]) => { html += '<div class="news-section-label">'+_svgCalDays+d+' ('+evs.length+')</div>'+evs.map(ev=>_renderNewsCard(ev,nowMs)).join(''); });
+      if (Object.keys(pastByDay).length > 0) {
+        html += '<div class="news-section-label" style="opacity:0.5;margin-top:12px;">— Sudah Lewat —</div>';
+        Object.entries(pastByDay).forEach(([d,evs]) => { html += '<div class="news-section-label">'+_svgCalDays+d+' ('+evs.length+')</div>'+evs.map(ev=>_renderNewsCard(ev,nowMs)).join(''); });
+      }
       body.innerHTML = html || '<div class="news-empty">Tidak ada event minggu ini</div>';
     }
 
