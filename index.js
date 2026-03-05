@@ -10254,6 +10254,21 @@ app.get('/monitoring', async (_req, res) => {
     </div>
   </div>
 
+  <!-- History Nominal Settings Modal -->
+  <div class="nominal-modal-overlay" id="historyNominalModal">
+    <div class="nominal-modal">
+      <h3>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Nominal di Riwayat
+      </h3>
+      <div class="nominal-modal-list" id="historyNominalModalList"></div>
+      <div class="nominal-modal-actions">
+        <button class="btn-cancel" onclick="closeHistoryNominalSettings()">Batal</button>
+        <button class="btn-save" onclick="saveHistoryNominalSettings()">Simpan</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Indicator Settings Modal -->
   <!-- Promo Suggestions Modal -->
   <div class="promo-suggestions-overlay" id="promoSuggestionsModal" onclick="if(event.target===this)closePromoSuggestions()">
@@ -10574,8 +10589,8 @@ app.get('/monitoring', async (_req, res) => {
         <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Riwayat Perubahan Harga</h2>
         <div style="display:flex;align-items:center;gap:8px;">
           <span class="count" id="historyCount">0 records</span>
-          <button onclick="openNominalSettings()" title="Pilih Nominal" style="background:none;border:1px solid #374151;border-radius:6px;padding:3px 7px;cursor:pointer;color:#9ca3af;display:flex;align-items:center;gap:4px;font-size:0.75em;">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M8.46 8.46a5 5 0 0 0 0 7.07"/></svg>
+          <button onclick="openHistoryNominalSettings()" title="Pilih Nominal Riwayat" style="background:none;border:1px solid #374151;border-radius:6px;padding:3px 7px;cursor:pointer;color:#9ca3af;display:flex;align-items:center;gap:4px;font-size:0.75em;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             Nominal
           </button>
         </div>
@@ -11163,8 +11178,8 @@ app.get('/monitoring', async (_req, res) => {
         const usdIdrChangeSign = usdIdrChange >= 0 ? '+' : '';
         const usdIdrChangeClass = usdIdrChange >= 0 ? 'price-up' : 'price-down';
 
-        // Calculate gram & profit dynamically for all admin nominals
-        const nominalCols = loadedNominals.map(n => {
+        // Calculate gram & profit dynamically for selected history nominals
+        const nominalCols = getHistoryNominals().map(n => {
           const gram = n.amount / item.buy;
           const profit = Math.round((gram * item.sell) - (n.amount - n.amount * n.discountRate));
           const profitClass = profit >= 0 ? 'price-up' : 'price-down';
@@ -11795,6 +11810,46 @@ app.get('/monitoring', async (_req, res) => {
     // 💰 Nominal Settings from API
     let loadedNominals = [];
     let userNominalPrefs = {}; // { id: true/false }
+    let historyNominalPrefs = {}; // { id: true/false } — terpisah untuk riwayat
+
+    function getHistoryNominals() {
+      return loadedNominals.filter(n => historyNominalPrefs[n.id] !== false);
+    }
+
+    function openHistoryNominalSettings() {
+      const modal = document.getElementById('historyNominalModal');
+      const list = document.getElementById('historyNominalModalList');
+      list.innerHTML = loadedNominals.map(n => {
+        const checked = historyNominalPrefs[n.id] !== false ? 'checked' : '';
+        const discountPercent = parseFloat((n.discountRate * 100).toFixed(3));
+        return '<div class="nominal-modal-item" onclick="toggleHistoryNominalCb(&apos;' + n.id + '&apos;)">' +
+          '<input type="checkbox" id="hnom_' + n.id + '" ' + checked + ' onclick="event.stopPropagation()">' +
+          '<label for="hnom_' + n.id + '">' + n.label + '</label>' +
+          '<span class="nominal-discount">Disc ' + discountPercent + '%</span>' +
+        '</div>';
+      }).join('');
+      modal.classList.add('active');
+    }
+
+    function toggleHistoryNominalCb(id) {
+      const cb = document.getElementById('hnom_' + id);
+      if (cb) cb.checked = !cb.checked;
+    }
+
+    function closeHistoryNominalSettings() {
+      document.getElementById('historyNominalModal').classList.remove('active');
+    }
+
+    function saveHistoryNominalSettings() {
+      loadedNominals.forEach(n => {
+        const cb = document.getElementById('hnom_' + n.id);
+        historyNominalPrefs[n.id] = cb ? cb.checked : true;
+      });
+      localStorage.setItem('historyNominalPrefs', JSON.stringify(historyNominalPrefs));
+      renderHistoryHeaders();
+      loadHistory();
+      closeHistoryNominalSettings();
+    }
 
     // Load nominal settings from API
     function loadNominalSettings() {
@@ -11810,6 +11865,12 @@ app.get('/monitoring', async (_req, res) => {
             } else {
               // Default: semua nominal aktif
               loadedNominals.forEach(n => { userNominalPrefs[n.id] = true; });
+            }
+            const savedHistory = localStorage.getItem('historyNominalPrefs');
+            if (savedHistory) {
+              historyNominalPrefs = JSON.parse(savedHistory);
+            } else {
+              loadedNominals.forEach(n => { historyNominalPrefs[n.id] = true; });
             }
             applyNominalVisibility();
             updateMobileSelector();
@@ -11839,7 +11900,7 @@ app.get('/monitoring', async (_req, res) => {
       const row = document.getElementById('historyHeaderRow');
       if (!row) return;
       row.querySelectorAll('.th-nominal').forEach(th => th.remove());
-      loadedNominals.forEach(n => {
+      getHistoryNominals().forEach(n => {
         const th = document.createElement('th');
         th.className = 'th-nominal';
         th.setAttribute('data-nominal', n.id);
