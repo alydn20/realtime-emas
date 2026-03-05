@@ -8186,14 +8186,14 @@ ${authScript}
       if (!text) { showAlert('Masukkan daftar nomor', 'warning'); return; }
 
       // Coba ekstrak nomor format WhatsApp (+62 XXX-XXXX-XXXX)
-      const waMatches = text.match(/\+62[\d\s\-]+/g);
+      const waMatches = text.match(/\\+62[\\d\\s\\-]+/g);
       let phones;
       if (waMatches && waMatches.length > 0) {
         // Format WhatsApp: strip spasi dan tanda hubung
-        phones = waMatches.map(p => p.replace(/[\s\-]/g, '').trim()).filter(p => p.length >= 10);
+        phones = waMatches.map(p => p.replace(/[\\s\\-]/g, '').trim()).filter(p => p.length >= 10);
       } else {
         // Format biasa: satu per baris atau pisah koma
-        phones = text.split(/[\n,]+/).map(p => p.trim()).filter(p => p.length >= 8);
+        phones = text.split(/[\\n,]+/).map(p => p.trim()).filter(p => p.length >= 8);
       }
 
       if (phones.length === 0) { showAlert('Tidak ada nomor valid', 'warning'); return; }
@@ -8229,13 +8229,13 @@ ${authScript}
         ta.addEventListener('input', () => {
           const text = ta.value.trim();
           if (!text) { preview.style.display = 'none'; return; }
-          const waMatches = text.match(/\+62[\d\s\-]+/g);
+          const waMatches = text.match(/\\+62[\\d\\s\\-]+/g);
           let count;
           if (waMatches && waMatches.length > 0) {
-            count = waMatches.filter(p => p.replace(/[\s\-]/g, '').length >= 10).length;
+            count = waMatches.filter(p => p.replace(/[\\s\\-]/g, '').length >= 10).length;
             preview.textContent = 'Terdeteksi ' + count + ' nomor dari format WhatsApp';
           } else {
-            count = text.split(/[\n,]+/).filter(p => p.trim().length >= 8).length;
+            count = text.split(/[\\n,]+/).filter(p => p.trim().length >= 8).length;
             preview.textContent = 'Terdeteksi ' + count + ' nomor';
           }
           preview.style.display = count > 0 ? 'block' : 'none';
