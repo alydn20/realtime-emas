@@ -8566,48 +8566,104 @@ app.get('/monitoring', async (_req, res) => {
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <title>Gold Price Monitor</title>
   <style>
+    :root {
+      --bg-page: linear-gradient(180deg, #0f1117 0%, #131722 100%);
+      --bg-header: rgba(19,23,34,0.95);
+      --bg-card: #1e222d;
+      --bg-card-hover: #252a3a;
+      --bg-input: #2a2e39;
+      --text-primary: #d1d4dc;
+      --text-secondary: #787b86;
+      --text-heading: #ffffff;
+      --border-color: rgba(255,255,255,0.07);
+      --border-hover: rgba(255,255,255,0.15);
+      --shadow: 0 4px 24px rgba(0,0,0,0.35);
+      --gold: #f7931a;
+      --green: #26a69a;
+      --red: #ef5350;
+      --blue: #2196f3;
+      --theme-icon-dark: block;
+      --theme-icon-light: none;
+    }
+    body.light-mode {
+      --bg-page: linear-gradient(180deg, #f0f3fa 0%, #eaecf5 100%);
+      --bg-header: rgba(255,255,255,0.97);
+      --bg-card: #ffffff;
+      --bg-card-hover: #f5f7fd;
+      --bg-input: #f0f3fa;
+      --text-primary: #131722;
+      --text-secondary: #787b86;
+      --text-heading: #131722;
+      --border-color: rgba(0,0,0,0.08);
+      --border-hover: rgba(0,0,0,0.18);
+      --shadow: 0 4px 24px rgba(0,0,0,0.1);
+      --theme-icon-dark: none;
+      --theme-icon-light: block;
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: linear-gradient(180deg, #0a0e13 0%, #0f1419 100%);
+      background: var(--bg-page);
       min-height: 100vh;
       padding: 16px;
-      color: #e7e9ea;
+      color: var(--text-primary);
+      transition: background 0.3s ease, color 0.3s ease;
     }
     .container { max-width: 1400px; width: 100%; margin: 0 auto; }
 
-    /* Header - Modern */
+    /* Header - TradingView Style */
     .header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 20px;
-      padding: 16px 20px;
-      background: rgba(20, 26, 34, 0.8);
+      padding: 14px 20px;
+      background: var(--bg-header);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
       border-radius: 16px;
-      border: 1px solid rgba(255,255,255,0.06);
-      box-shadow: 0 4px 24px rgba(0,0,0,0.2);
-      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+      border: 1px solid var(--border-color);
+      box-shadow: var(--shadow);
+      transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
     }
     .header-left h1 {
-      font-size: 1.4em;
+      font-size: 1.3em;
       font-weight: 700;
-      color: #ffffff;
+      color: var(--text-heading);
       margin-bottom: 4px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       letter-spacing: -0.02em;
     }
-    .header-left h1 svg { color: #f7931a; flex-shrink: 0; }
+    .header-left h1 svg { color: var(--gold); flex-shrink: 0; }
     .header-left .subtitle {
-      font-size: 0.85em;
-      color: #8b949e;
+      font-size: 0.82em;
+      color: var(--text-secondary);
       font-weight: 400;
+    }
+    /* Theme Toggle Button */
+    .theme-toggle-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 7px 11px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-left: 6px;
+      color: var(--text-secondary);
+    }
+    .theme-toggle-btn:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-hover);
+      color: var(--text-primary);
+      transform: scale(1.05);
     }
     .chart-title-header {
       display: flex;
@@ -10229,6 +10285,48 @@ app.get('/monitoring', async (_req, res) => {
       .history-table th, .history-table td { padding: 6px 8px; font-size: 1.3em; }
     }
 
+    /* ===== LIGHT MODE OVERRIDES ===== */
+    body.light-mode .header { background: var(--bg-header); border-color: var(--border-color); }
+    body.light-mode .header-left h1 { color: var(--text-heading); }
+    body.light-mode .header-left .subtitle { color: var(--text-secondary); }
+    body.light-mode .chart-card,
+    body.light-mode .history-section { background: var(--bg-card); border-color: var(--border-color); box-shadow: var(--shadow); }
+    body.light-mode .chart-header { border-color: var(--border-color); }
+    body.light-mode .chart-header h2 { color: var(--text-heading); }
+    body.light-mode .stat-item { background: #f5f7fd; border-color: var(--border-color); }
+    body.light-mode .stat-item:hover { background: #eef1fa; border-color: var(--border-hover); }
+    body.light-mode .stat-item .stat-label { color: var(--text-secondary); }
+    body.light-mode .stat-item .stat-value { color: var(--text-heading); }
+    body.light-mode .invest-stats .stat-item { background: #f0f3fa; }
+    body.light-mode .history-header { background: var(--bg-card); border-color: var(--border-color); }
+    body.light-mode .history-header h2 { color: var(--text-heading); }
+    body.light-mode .history-table thead th { background: #f0f3fa; color: var(--text-secondary); border-color: var(--border-color); }
+    body.light-mode .history-table tbody tr { border-color: var(--border-color); }
+    body.light-mode .history-table tbody tr:hover { background: #f5f7fd; }
+    body.light-mode .history-table td { color: var(--text-primary); }
+    body.light-mode .page-btn { background: #f0f3fa; border-color: var(--border-color); color: var(--text-primary); }
+    body.light-mode .page-btn:hover { background: #e5e9f5; }
+    body.light-mode .page-info { color: var(--text-secondary); }
+    body.light-mode .clock { color: var(--text-heading); }
+    body.light-mode .clock-row { background: rgba(240,243,250,0.9); border-color: var(--border-color); }
+    body.light-mode .chart-bottom-row { background: transparent; }
+    body.light-mode .indicator-btn { background: rgba(0,0,0,0.05); border-color: var(--border-color); color: var(--text-primary); }
+    body.light-mode .indicator-btn.promo { background: rgba(34,197,94,0.15); color: #15803d; }
+    body.light-mode .indicator-btn.news { background: rgba(251,191,36,0.2); color: #92400e; }
+    body.light-mode .nominal-modal-overlay .nominal-modal { background: #ffffff; border-color: var(--border-color); }
+    body.light-mode .promo-suggestions-modal { background: #ffffff; border-color: var(--border-color); }
+    body.light-mode .promo-suggestions-modal h3 { color: var(--text-heading); }
+    body.light-mode .promo-card { background: #f5f7fd; border-color: var(--border-color); }
+    body.light-mode .promo-card-name { color: var(--text-heading); }
+    body.light-mode .news-card { background: #f5f7fd; border-color: var(--border-color); }
+    body.light-mode .news-title { color: var(--text-heading); }
+    body.light-mode .nominal-modal-item { background: #f5f7fd; border-color: var(--border-color); color: var(--text-heading); }
+    body.light-mode .live-badge { background: rgba(34,197,94,0.15); color: #15803d; border-color: rgba(34,197,94,0.3); }
+    body.light-mode .sound-toggle-header { background: rgba(74,222,128,0.1); }
+    body.light-mode .count { color: var(--text-secondary); background: #f0f3fa; border-color: var(--border-color); }
+    body.light-mode .invest-stats .stat-item.invest .stat-label { color: #c2700f; }
+    /* ===== END LIGHT MODE ===== */
+
     /* Professional Toast System */
     .toast-container {
       position: fixed;
@@ -10503,6 +10601,10 @@ app.get('/monitoring', async (_req, res) => {
             <svg id="soundIconOn" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
             <svg id="soundIconOff" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
           </div>
+          <button class="theme-toggle-btn" id="themeToggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">
+            <svg id="themeIconDark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            <svg id="themeIconLight" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
         </h1>
         <div class="subtitle">Real-time Treasury Gold Rates</div>
         <div class="chart-title-header">
@@ -11480,6 +11582,29 @@ app.get('/monitoring', async (_req, res) => {
       }
       return audioContext;
     }
+
+    // ===== THEME TOGGLE =====
+    let isDarkMode = localStorage.getItem('themeMode') !== 'light';
+
+    function applyTheme(dark) {
+      document.body.classList.toggle('light-mode', !dark);
+      const iconDark = document.getElementById('themeIconDark');
+      const iconLight = document.getElementById('themeIconLight');
+      if (iconDark) { iconDark.style.display = dark ? 'block' : 'none'; }
+      if (iconLight) { iconLight.style.display = dark ? 'none' : 'block'; }
+      // Update meta theme-color
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.content = dark ? '#0f1117' : '#f0f3fa';
+    }
+
+    function toggleTheme() {
+      isDarkMode = !isDarkMode;
+      localStorage.setItem('themeMode', isDarkMode ? 'dark' : 'light');
+      applyTheme(isDarkMode);
+    }
+
+    // Apply on load
+    applyTheme(isDarkMode);
 
     function toggleSound() {
       soundEnabled = !soundEnabled;
