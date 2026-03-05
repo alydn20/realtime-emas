@@ -1612,7 +1612,7 @@ async function doPromoBroadcast() {
       }
     } else {
       // OFF: Max 5x broadcast, tapi tetap cek terus
-      if (currentMinute !== lastPromoBroadcastMinute || isFirstCheck) {
+      if (currentMinute !== lastPromoBroadcastMinute || isFirstCheck || statusChanged) {
         if (offBroadcastCount < 5) {
           // Masih boleh broadcast OFF
           shouldBroadcast = true
