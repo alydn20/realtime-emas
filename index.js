@@ -9287,10 +9287,10 @@ app.get('/monitoring', async (_req, res) => {
 
     /* Chart Bottom Row - Clock & Buttons */
     .chart-bottom-row {
-      position: relative;
       display: flex;
-      justify-content: center;
+      flex-direction: column;
       align-items: center;
+      gap: 6px;
       margin-top: 4px;
       width: 100%;
     }
@@ -9302,6 +9302,7 @@ app.get('/monitoring', async (_req, res) => {
       gap: 8px;
       justify-content: center;
       flex-wrap: wrap;
+      width: 100%;
     }
     .indicator-btn {
       background: rgba(30, 40, 50, 0.9);
@@ -10267,25 +10268,24 @@ app.get('/monitoring', async (_req, res) => {
       .history-header h2 { font-size: 0.9em; }
       .history-header h2 svg { width: 13px; height: 13px; }
       .history-header > div { gap: 6px; }
-      /* 1-baris layout mobile */
+      /* Mobile card layout */
       .history-table-wrap { overflow-x: hidden; }
       .history-table, .history-table tbody { display: block; width: 100%; }
       .history-table thead { display: none; }
       .history-table tr {
         display: flex;
         flex-direction: row;
+        flex-wrap: wrap;
         align-items: center;
-        gap: 6px;
-        padding: 8px 12px;
+        gap: 4px 6px;
+        padding: 7px 12px;
         border-bottom: 1px solid rgba(255,255,255,0.07);
-        white-space: nowrap;
-        overflow: hidden;
       }
-      .history-table td { display: block; border: none; padding: 0; font-size: 0.78em; flex-shrink: 0; }
-      .history-table td.time-col { color: #9ca3af; font-size: 0.7em; width: 54px; }
-      .history-table td:nth-child(2) { font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-      .history-table td:nth-child(3) { color: #9ca3af; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-      .history-table td.td-nominal { font-size: 0.74em; flex: 1; min-width: 0; text-align: right; }
+      .history-table td { display: block; border: none; padding: 0; font-size: 0.78em; }
+      .history-table td.time-col { color: #9ca3af; font-size: 0.7em; width: 54px; flex-shrink: 0; }
+      .history-table td:nth-child(2) { font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .history-table td:nth-child(3) { color: #9ca3af; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .history-table td.td-nominal { font-size: 0.72em; flex: 1; min-width: 80px; text-align: right; padding-left: 4px; }
       .history-table td.td-nominal .nom-gram { display: none; }
       .history-table td.td-nominal br { display: none; }
       .history-table td.col-spread,
