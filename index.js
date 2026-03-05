@@ -10562,7 +10562,7 @@ app.get('/monitoring', async (_req, res) => {
             <span style="display:inline-block;width:4px;height:12px;border-radius:2px;background:#ff9800;"></span>
             <span style="display:inline-block;width:4px;height:12px;border-radius:2px;background:rgba(255,255,255,0.15);"></span>
           </span>
-          Medium+
+          Medium
         </button>
         <button class="news-filter-btn" data-min="3" onclick="setNewsFilter(3,this)">
           <span style="display:inline-flex;gap:2px;vertical-align:middle;">
@@ -11245,7 +11245,7 @@ app.get('/monitoring', async (_req, res) => {
           ? _newsEventsCache.filter(ev => (_impactNum[ev.impact]||0) === 1)   // Low only
           : minBars === 3
             ? _newsEventsCache.filter(ev => (_impactNum[ev.impact]||0) === 3) // High only
-            : _newsEventsCache.filter(ev => (_impactNum[ev.impact]||0) >= 2); // Medium+
+            : _newsEventsCache.filter(ev => (_impactNum[ev.impact]||0) === 2); // Medium only
       if (filtered.length === 0) { body.innerHTML = '<div class="news-empty">Tidak ada event dengan filter ini</div>'; return; }
       const nowWIB = _toWIB(new Date().toISOString());
       const todayStr = _fmtDate(nowWIB);
