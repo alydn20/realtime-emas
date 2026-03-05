@@ -11239,7 +11239,13 @@ app.get('/monitoring', async (_req, res) => {
     function _renderNewsBody(minBars) {
       const body = document.getElementById('newsModalBody');
       if (!body) return;
-      const filtered = minBars === 0 ? _newsEventsCache : _newsEventsCache.filter(ev => (_impactNum[ev.impact]||0) >= minBars);
+      const filtered = minBars === 0
+        ? _newsEventsCache
+        : minBars === 1
+          ? _newsEventsCache.filter(ev => (_impactNum[ev.impact]||0) === 1)   // Low only
+          : minBars === 3
+            ? _newsEventsCache.filter(ev => (_impactNum[ev.impact]||0) === 3) // High only
+            : _newsEventsCache.filter(ev => (_impactNum[ev.impact]||0) >= 2); // Medium+
       if (filtered.length === 0) { body.innerHTML = '<div class="news-empty">Tidak ada event dengan filter ini</div>'; return; }
       const nowWIB = _toWIB(new Date().toISOString());
       const todayStr = _fmtDate(nowWIB);
