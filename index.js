@@ -1686,9 +1686,16 @@ function startContinuousPromoCheck() {
   }, PROMO_CHECK_INTERVAL)
 }
 
-// Legacy function - sekarang tidak melakukan apa-apa karena sudah continuous
+// Trigger promo check segera setelah harga berubah (debounced 1 detik)
+let promoTriggerTimer = null
 function triggerPromoCheck() {
-  // Continuous check sudah berjalan, tidak perlu trigger manual
+  if (promoTriggerTimer) return // sudah ada yang dijadwalkan, skip
+  promoTriggerTimer = setTimeout(() => {
+    promoTriggerTimer = null
+    if (!isPromoChecking) {
+      doPromoBroadcast().catch(e => pushLog(`❌ Promo triggered: ${e.message}`))
+    }
+  }, 1000)
 }
 
 // 🎟️ PROMO SUGGESTIONS - Fetch & polling setiap 1 menit
