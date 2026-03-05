@@ -2177,6 +2177,21 @@ async function fastPoll() {
         serverTime: new Date().toISOString()
       })
 
+      // Update lowest ON price if buy changed and status is ON
+      if (currentPrice.buy !== prevPrice?.buy && lastPromoStatus === 'ON') {
+        const newBuy = currentPrice.buy
+        if (lowestOnPriceCache === undefined) {
+          const stored = await redis.get(REDIS_KEYS.LOWEST_ON_PRICE)
+          lowestOnPriceCache = stored !== null ? parseInt(stored, 10) : null
+        }
+        if (lowestOnPriceCache === null || newBuy < lowestOnPriceCache) {
+          lowestOnPriceCache = newBuy
+          await redis.set(REDIS_KEYS.LOWEST_ON_PRICE, String(newBuy))
+          broadcastSSE({ type: 'lowest_on_price', price: newBuy })
+          pushLog(`🏷️ Titik ON terendah: ${formatRupiah(newBuy)}`)
+        }
+      }
+
       // 🎁 Trigger promo check 5 detik setelah harga berubah
       triggerPromoCheck()
     } else {
