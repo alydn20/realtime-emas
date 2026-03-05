@@ -9489,6 +9489,7 @@ app.get('/monitoring', async (_req, res) => {
     .news-card.past { background: rgba(255,255,255,0.02); opacity: 0.5; }
     .news-card.past .news-title { color: #9ca3af; }
     .news-card.upcoming { background: rgba(14,203,129,0.07); border-color: rgba(14,203,129,0.2); }
+    .news-countdown { background: rgba(14,203,129,0.15); color: #0ecb81; border-radius: 4px; padding: 1px 6px; font-size: 0.85em; font-weight: 600; white-space: nowrap; }
     .news-bulls { font-size: 1em; min-width: 44px; text-align: center; line-height: 1; padding-top: 2px; }
     .news-body { flex: 1; }
     .news-title { font-size: 0.82em; font-weight: 700; color: #fff; margin-bottom: 3px; }
@@ -11258,18 +11259,32 @@ app.get('/monitoring', async (_req, res) => {
     };
     const _impactClass = (impact) => ({ 'High':'impact-high','Medium':'impact-medium','Low':'impact-low' })[impact] || 'impact-low';
 
-    function _renderNewsCard(ev, nowMs) {
+    function _fmtCountdown(evMs, nowMs) {
+      const diffMs = evMs - nowMs;
+      if (diffMs <= 0) return null;
+      const totalMin = Math.floor(diffMs / 60000);
+      const h = Math.floor(totalMin / 60);
+      const m = totalMin % 60;
+      if (h > 0) return h + ' jam ' + m + ' menit lagi';
+      return m + ' menit lagi';
+    }
+
+    function _renderNewsCard(ev, nowMs, isToday) {
       const isPast = ev._wib && ev._wib.getTime() < nowMs;
       const vals = [];
       if (ev.forecast) vals.push('<span>Forecast: '+ev.forecast+'</span>');
       if (ev.previous) vals.push('<span>Prev: '+ev.previous+'</span>');
       if (ev.actual) vals.push('<span class="actual">Actual: '+ev.actual+'</span>');
       const stateClass = isPast ? ' past' : ' upcoming';
+      const evMs = ev._wib ? ev._wib.getTime() : 0;
+      const countdownHtml = isToday && !isPast
+        ? '<span class="news-countdown" data-evms="'+evMs+'">'+(_fmtCountdown(evMs, nowMs)||'')+'</span>'
+        : '';
       return '<div class="news-card '+_impactClass(ev.impact)+stateClass+'">'+
         '<div class="news-bulls">'+_impactBars(ev.impact)+'</div>'+
         '<div class="news-body">'+
           '<div class="news-title">'+ev.title+'</div>'+
-          '<div class="news-meta"><span>'+_svgClock+_fmtTime(ev._wib)+'</span><span>'+_svgCal+_fmtDayDate(ev._wib)+'</span></div>'+
+          '<div class="news-meta"><span>'+_svgClock+_fmtTime(ev._wib)+'</span><span>'+_svgCal+_fmtDayDate(ev._wib)+'</span>'+countdownHtml+'</div>'+
           (vals.length?'<div class="news-values">'+vals.join('')+'</div>':'')+
         '</div></div>';
     }
@@ -11302,11 +11317,11 @@ app.get('/monitoring', async (_req, res) => {
       const futureByDay = groupByDay(future);
       const pastByDay = groupByDay(past);
       let html = '';
-      if (today.length > 0) { html += '<div class="news-section-label">'+_svgPin+'Hari Ini — '+_fmtDayDate(nowWIB)+' ('+today.length+')</div>'+today.map(ev=>_renderNewsCard(ev,nowMs)).join(''); }
-      Object.entries(futureByDay).forEach(([d,evs]) => { html += '<div class="news-section-label">'+_svgCalDays+d+' ('+evs.length+')</div>'+evs.map(ev=>_renderNewsCard(ev,nowMs)).join(''); });
+      if (today.length > 0) { html += '<div class="news-section-label">'+_svgPin+'Hari Ini — '+_fmtDayDate(nowWIB)+' ('+today.length+')</div>'+today.map(ev=>_renderNewsCard(ev,nowMs,true)).join(''); }
+      Object.entries(futureByDay).forEach(([d,evs]) => { html += '<div class="news-section-label">'+_svgCalDays+d+' ('+evs.length+')</div>'+evs.map(ev=>_renderNewsCard(ev,nowMs,false)).join(''); });
       if (Object.keys(pastByDay).length > 0) {
         html += '<div class="news-section-label" style="opacity:0.5;margin-top:12px;">— Sudah Lewat —</div>';
-        Object.entries(pastByDay).forEach(([d,evs]) => { html += '<div class="news-section-label">'+_svgCalDays+d+' ('+evs.length+')</div>'+evs.map(ev=>_renderNewsCard(ev,nowMs)).join(''); });
+        Object.entries(pastByDay).forEach(([d,evs]) => { html += '<div class="news-section-label">'+_svgCalDays+d+' ('+evs.length+')</div>'+evs.map(ev=>_renderNewsCard(ev,nowMs,false)).join(''); });
       }
       body.innerHTML = html || '<div class="news-empty">Tidak ada event minggu ini</div>';
     }
@@ -11324,9 +11339,24 @@ app.get('/monitoring', async (_req, res) => {
       _renderNewsBody();
     }
 
+    let _newsCountdownInterval = null;
+    function _startCountdownTicker() {
+      if (_newsCountdownInterval) clearInterval(_newsCountdownInterval);
+      _newsCountdownInterval = setInterval(() => {
+        const nowMs = Date.now() + 7*3600*1000; // WIB approx
+        document.querySelectorAll('.news-countdown[data-evms]').forEach(el => {
+          const evMs = parseInt(el.dataset.evms, 10);
+          const txt = _fmtCountdown(evMs, nowMs);
+          if (txt) { el.textContent = txt; }
+          else { el.textContent = ''; el.closest('.news-card')?.classList.replace('upcoming','past'); }
+        });
+      }, 30000);
+    }
+
     function openNewsModal() {
       const modal = document.getElementById('newsModal');
       if (modal) modal.classList.add('active');
+      _startCountdownTicker();
       const body = document.getElementById('newsModalBody');
       if (_newsEventsCache.length > 0) { _renderNewsBody(); return; }
       body.innerHTML = '<div class="news-empty">Memuat kalender Forex Factory...</div>';
@@ -11351,6 +11381,7 @@ app.get('/monitoring', async (_req, res) => {
     function closeNewsModal() {
       const modal = document.getElementById('newsModal');
       if (modal) modal.classList.remove('active');
+      if (_newsCountdownInterval) { clearInterval(_newsCountdownInterval); _newsCountdownInterval = null; }
     }
 
     function openIndicatorSettings() {
