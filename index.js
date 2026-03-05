@@ -50,6 +50,7 @@ const TREASURY_URL = process.env.TREASURY_URL ||
 
 // Treasury Promo API Config
 const TREASURY_NOMINAL_URL = 'https://connect.treasury.id/nominal/suggestion'
+const TREASURY_PROMO_SUGGESTION_URL = 'https://connect.treasury.id/promotion/suggestion'
 const TREASURY_LOGIN_URL = 'https://connect.treasury.id/user/signin'
 const TREASURY_CREDENTIALS = {
   "client_id": "3",
@@ -140,6 +141,7 @@ const subscriptions = new Set()
 let treasuryToken = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzY29wZXMiOlsiKiJdLCJhdWQiOiIzIiwiZXhwIjoxNzY3NzA3ODcwLCJqdGkiOiJyWmc2RTdLeU16YUtVZzB0Q3dPeUc5dGQxMlNROHh3YUxLT2IyZGZiMElCZjM0anJYMW5PSXVZZDNMOUxTUHR0eXd3eVRYN1RXN0RJbFpUdDdkbUhjRVJiWnJWbmVUSjJZWkl0IiwiaWF0IjoxNzY2NDExODcwLCJuYmYiOjE3NjY0MTE4NzAsInN1YiI6IjE2ODg3Nzk0In0.FDb_1WLhjE4pJ5zfhuAkAX4-mhIylcXAZmNbyWA2o-E9N8bzxrKqkiL0RRPaISggDOBz2m31eYtM_3-hNwsDIkhejhBnDDDYmD8xurKe1275zYE3OJE2XGw8QhXwlop1K_IA0PzVzXqnPJm5DQyKCU6Ya_QRVMmidVpOji3Q4bbR-aHL9U0l1CsubwvI7laj66qCjw2XT7ftKf0bFW1mm5yDz-l0zuJVzpNlvsFBqroI_RR6nVHeu4wG3QYhvoATKUyRntjWMLuPRB9wu2WA7-DJuQtACvfMPdqoNhfT-sgSYxR1WXuI4micZe3_tOKbabiK2FJUoLHkHtPnPwEuAxnxDwzlvqOoQrTpbtBRUbRprjjdJ6CD0J2TR7qkkhX284BJHBVub8kYTNYpYIhim9Zzvgh_1TdBnX-nBFNvK0fFiaA4VbqAnl5jcFTs2HEglj_Vh3RT0XHa7b8DSjHfRlnsWxr6jJexT7-6svnXHQFUBnRG-qa5RXYyp9mDxqIWsURcS19OuxSSwlHVTRsLq_4AMfupWwKLSRFIERHwYgrbYozDlROb-x8FDLuOlON8wiMSSlSaVCXW0ZboV7h6ROte_mrRoTjRsn2QVA1pyGZbSn6NfEudvqcLcHXBz1cc9rdJMJ6lvRBInUHg2JjZxzTJRGiVa69ICmm0D4bQK3Y'
 let lastPromoStatus = null // 'ON' atau 'OFF'
 let lowestOnPriceCache = undefined // undefined = belum diload, null = belum ada nilai
+let cachedPromoSuggestions = [] // Cache active promotion suggestions
 let promoTriggerTimeout = null // Timeout 5 detik setelah harga berubah
 let promoCheckInterval = null // Interval cek promo setiap 1 detik
 let isPromoIntervalRunning = false
@@ -1688,6 +1690,63 @@ function startContinuousPromoCheck() {
 function triggerPromoCheck() {
   // Continuous check sudah berjalan, tidak perlu trigger manual
 }
+
+// 🎟️ PROMO SUGGESTIONS - Fetch & polling setiap 1 menit
+async function fetchPromoSuggestions() {
+  try {
+    if (!treasuryToken) await refreshTreasuryToken()
+    const res = await fetch(TREASURY_PROMO_SUGGESTION_URL, {
+      method: 'GET',
+      headers: {
+        'accept': 'application/json',
+        'authorization': `Bearer ${treasuryToken}`,
+        'content-type': 'application/json',
+        'x-app-version': '8.0.82',
+        'x-language': 'id',
+        'x-platform': 'android',
+        'x-version': '1.0'
+      },
+      signal: AbortSignal.timeout(10000)
+    })
+    if (!res.ok) {
+      if (res.status === 401) { treasuryToken = null; return fetchPromoSuggestions() }
+      throw new Error(`HTTP ${res.status}`)
+    }
+    const json = await res.json()
+    if (json.meta?.status !== 'success') throw new Error('API error')
+    const active = (json.data?.data || [])
+      .filter(p => p.promotion_status === true)
+      .map(p => ({
+        code: p.promotion_code,
+        name: p.promotion_name,
+        short_desc: p.promotion_short_description,
+        min_trx: p.promotion_tnc?.minimum_transaction || '-',
+        end_to: p.promotion_tnc?.end_to || '-'
+      }))
+    return active
+  } catch (e) {
+    pushLog(`❌ PromoSuggestion error: ${e.message}`)
+    return null
+  }
+}
+
+async function pollPromoSuggestions() {
+  const active = await fetchPromoSuggestions()
+  if (active === null) return // error, skip
+  const prevIds = cachedPromoSuggestions.map(p => p.code).sort().join(',')
+  const newIds = active.map(p => p.code).sort().join(',')
+  if (prevIds !== newIds) {
+    cachedPromoSuggestions = active
+    broadcastSSE({ type: 'promo_suggestions', promos: active })
+    pushLog(`🎟️ Promo suggestions updated: ${active.length} active`)
+  }
+}
+
+// Start polling setiap 1 menit
+setTimeout(() => {
+  pollPromoSuggestions()
+  setInterval(pollPromoSuggestions, 60000)
+}, 8000) // Tunda 8 detik setelah server start
 
 // 📱 PUSH NOTIFICATION HELPER - Kirim notif ke semua subscriber
 // Cooldown TERPISAH untuk price dan promo agar tidak saling blocking
@@ -4609,6 +4668,20 @@ app.get('/api/lowest-on-price', async (_req, res) => {
     res.json({ success: true, price })
   } catch (e) {
     res.json({ success: false, error: e.message })
+  }
+})
+
+// Get active promo suggestions (cached)
+app.get('/api/promo-suggestions', async (_req, res) => {
+  try {
+    // Jika cache kosong, fetch langsung
+    if (cachedPromoSuggestions.length === 0) {
+      const active = await fetchPromoSuggestions()
+      if (active !== null) cachedPromoSuggestions = active
+    }
+    res.json({ success: true, promos: cachedPromoSuggestions })
+  } catch (e) {
+    res.json({ success: false, error: e.message, promos: [] })
   }
 })
 
@@ -9108,7 +9181,108 @@ app.get('/monitoring', async (_req, res) => {
     .indicator-btn.calc:hover {
       background: linear-gradient(135deg, #ffaa33 0%, #f7931a 100%);
     }
-    
+    .indicator-btn.promo {
+      background: rgba(34, 197, 94, 0.9);
+      border-color: rgba(34, 197, 94, 0.5);
+    }
+    .indicator-btn.promo:hover { background: rgba(34, 197, 94, 1); }
+    .promo-btn-row {
+      position: absolute;
+      left: 0;
+      display: flex;
+      gap: 8px;
+    }
+
+    /* Promo Suggestions Modal */
+    .promo-suggestions-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .promo-suggestions-overlay.active { display: flex; }
+    .promo-suggestions-modal {
+      background: #1a2332;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 20px;
+      width: 92%;
+      max-width: 480px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .promo-suggestions-modal h3 {
+      margin: 0 0 14px 0;
+      font-size: 1em;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .promo-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+    }
+    .promo-card-code {
+      font-size: 0.75em;
+      font-weight: 800;
+      color: #22c55e;
+      letter-spacing: 0.05em;
+      background: rgba(34,197,94,0.1);
+      border: 1px solid rgba(34,197,94,0.3);
+      border-radius: 6px;
+      padding: 2px 8px;
+      display: inline-block;
+      margin-bottom: 6px;
+    }
+    .promo-card-name {
+      font-size: 0.8em;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+    .promo-card-desc {
+      font-size: 0.72em;
+      color: #9ca3af;
+      margin-bottom: 6px;
+    }
+    .promo-card-meta {
+      display: flex;
+      gap: 10px;
+      font-size: 0.68em;
+      color: #6b7280;
+    }
+    .promo-card-meta span { display: flex; align-items: center; gap: 3px; }
+    .promo-empty {
+      text-align: center;
+      color: #6b7280;
+      font-size: 0.82em;
+      padding: 20px 0;
+    }
+    .promo-modal-close {
+      float: right;
+      background: rgba(255,255,255,0.1);
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      padding: 4px 10px;
+      cursor: pointer;
+      font-size: 0.8em;
+    }
+    .promo-last-update {
+      font-size: 0.65em;
+      color: #6b7280;
+      margin-top: 10px;
+      text-align: center;
+    }
+
     /* Indicator Settings Modal */
     .indicator-settings-overlay {
       display: none;
@@ -10042,6 +10216,19 @@ app.get('/monitoring', async (_req, res) => {
   </div>
 
   <!-- Indicator Settings Modal -->
+  <!-- Promo Suggestions Modal -->
+  <div class="promo-suggestions-overlay" id="promoSuggestionsModal" onclick="if(event.target===this)closePromoSuggestions()">
+    <div class="promo-suggestions-modal">
+      <h3>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+        Promo Aktif Treasury
+        <button class="promo-modal-close" onclick="closePromoSuggestions()">Tutup</button>
+      </h3>
+      <div id="promoSuggestionsList"><div class="promo-empty">Memuat...</div></div>
+      <div class="promo-last-update" id="promoLastUpdate"></div>
+    </div>
+  </div>
+
   <div class="indicator-settings-overlay" id="indicatorSettingsModal">
     <div class="indicator-settings-modal">
       <div class="indicator-settings-header">
@@ -10233,6 +10420,12 @@ app.get('/monitoring', async (_req, res) => {
               <span class="promo-dot" id="promoDot"></span>
               <span id="promoStatusText">-</span>
             </div>
+          </div>
+          <div class="promo-btn-row">
+            <button class="indicator-btn promo" onclick="openPromoSuggestions()">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+              Cek Promo
+            </button>
           </div>
           <div class="indicator-buttons-row">
             <button class="indicator-btn settings" onclick="openIndicatorSettings()">
@@ -10612,6 +10805,45 @@ app.get('/monitoring', async (_req, res) => {
     let tempIndicatorState = {};
 
     // Open Indicator Settings Modal
+    // 🎟️ PROMO SUGGESTIONS
+    function renderPromoSuggestions(promos) {
+      const container = document.getElementById('promoSuggestionsList');
+      const lastUpdate = document.getElementById('promoLastUpdate');
+      if (!container) return;
+      if (!promos || promos.length === 0) {
+        container.innerHTML = '<div class="promo-empty">Tidak ada promo aktif saat ini</div>';
+      } else {
+        container.innerHTML = promos.map(p =>
+          '<div class="promo-card">' +
+            '<div class="promo-card-code">' + p.code + '</div>' +
+            '<div class="promo-card-name">' + p.name + '</div>' +
+            '<div class="promo-card-desc">' + p.short_desc + '</div>' +
+            '<div class="promo-card-meta">' +
+              '<span>Min: ' + p.min_trx + '</span>' +
+              '<span>&#128197; s.d. ' + p.end_to + '</span>' +
+            '</div>' +
+          '</div>'
+        ).join('');
+      }
+      if (lastUpdate) lastUpdate.textContent = 'Update: ' + new Date().toLocaleTimeString('id-ID');
+    }
+
+    function openPromoSuggestions() {
+      const modal = document.getElementById('promoSuggestionsModal');
+      if (modal) modal.classList.add('active');
+      fetch('/api/promo-suggestions').then(r => r.json()).then(data => {
+        renderPromoSuggestions(data.promos || []);
+      }).catch(() => {
+        const c = document.getElementById('promoSuggestionsList');
+        if (c) c.innerHTML = '<div class="promo-empty">Gagal memuat data</div>';
+      });
+    }
+
+    function closePromoSuggestions() {
+      const modal = document.getElementById('promoSuggestionsModal');
+      if (modal) modal.classList.remove('active');
+    }
+
     function openIndicatorSettings() {
       const activeIndicators = getActiveIndicators();
       tempIndicatorState = {};
@@ -11738,6 +11970,12 @@ app.get('/monitoring', async (_req, res) => {
           updateMobileSelector();
           updateHistory();
           console.log('Nominal settings updated');
+          return;
+        }
+
+        // Handle promo suggestions real-time update
+        if (data.type === 'promo_suggestions') {
+          renderPromoSuggestions(data.promos || []);
           return;
         }
 
