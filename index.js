@@ -4707,7 +4707,6 @@ app.get('/api/ff-calendar', async (_req, res) => {
     }
 
     // Fetch Forex Factory JSON feed (this week + next week)
-    const https = require('https')
     const fetchJson = (url) => new Promise((resolve, reject) => {
       https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (r) => {
         let data = ''
