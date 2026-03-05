@@ -10547,8 +10547,7 @@ app.get('/monitoring', async (_req, res) => {
         <button class="promo-modal-close" onclick="closeNewsModal()">Tutup</button>
       </h3>
       <div class="news-filter-row" id="newsFilterRow">
-        <button class="news-filter-btn active" data-min="0" onclick="setNewsFilter(0,this)">Semua</button>
-        <button class="news-filter-btn" data-min="1" onclick="setNewsFilter(1,this)">
+        <button class="news-filter-btn active" data-impact="Low" onclick="toggleNewsFilter('Low',this)">
           <span style="display:inline-flex;gap:2px;vertical-align:middle;">
             <span style="display:inline-block;width:4px;height:12px;border-radius:2px;background:#ffd600;"></span>
             <span style="display:inline-block;width:4px;height:12px;border-radius:2px;background:rgba(255,255,255,0.15);"></span>
@@ -10556,7 +10555,7 @@ app.get('/monitoring', async (_req, res) => {
           </span>
           Low
         </button>
-        <button class="news-filter-btn" data-min="2" onclick="setNewsFilter(2,this)">
+        <button class="news-filter-btn active" data-impact="Medium" onclick="toggleNewsFilter('Medium',this)">
           <span style="display:inline-flex;gap:2px;vertical-align:middle;">
             <span style="display:inline-block;width:4px;height:12px;border-radius:2px;background:#ff9800;"></span>
             <span style="display:inline-block;width:4px;height:12px;border-radius:2px;background:#ff9800;"></span>
@@ -10564,7 +10563,7 @@ app.get('/monitoring', async (_req, res) => {
           </span>
           Medium
         </button>
-        <button class="news-filter-btn" data-min="3" onclick="setNewsFilter(3,this)">
+        <button class="news-filter-btn active" data-impact="High" onclick="toggleNewsFilter('High',this)">
           <span style="display:inline-flex;gap:2px;vertical-align:middle;">
             <span style="display:inline-block;width:4px;height:12px;border-radius:2px;background:#ef5350;"></span>
             <span style="display:inline-block;width:4px;height:12px;border-radius:2px;background:#ef5350;"></span>
@@ -11202,7 +11201,7 @@ app.get('/monitoring', async (_req, res) => {
     }
 
     let _newsEventsCache = [];
-    let _newsMinBars = 0;
+    let _newsActiveFilters = new Set(['Low','Medium','High']);
 
     const _HARI = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
     const _toWIB = (isoStr) => { const d = new Date(isoStr); if (isNaN(d)) return null; return new Date(d.getTime() + 7*3600*1000); };
@@ -11236,16 +11235,12 @@ app.get('/monitoring', async (_req, res) => {
         '</div></div>';
     }
 
-    function _renderNewsBody(minBars) {
+    function _renderNewsBody() {
       const body = document.getElementById('newsModalBody');
       if (!body) return;
-      const filtered = minBars === 0
-        ? _newsEventsCache
-        : minBars === 1
-          ? _newsEventsCache.filter(ev => (_impactNum[ev.impact]||0) === 1)   // Low only
-          : minBars === 3
-            ? _newsEventsCache.filter(ev => (_impactNum[ev.impact]||0) === 3) // High only
-            : _newsEventsCache.filter(ev => (_impactNum[ev.impact]||0) === 2); // Medium only
+      const filtered = _newsActiveFilters.size === 0
+        ? []
+        : _newsEventsCache.filter(ev => _newsActiveFilters.has(ev.impact));
       if (filtered.length === 0) { body.innerHTML = '<div class="news-empty">Tidak ada event dengan filter ini</div>'; return; }
       const nowWIB = _toWIB(new Date().toISOString());
       const todayStr = _fmtDate(nowWIB);
@@ -11259,18 +11254,24 @@ app.get('/monitoring', async (_req, res) => {
       body.innerHTML = html || '<div class="news-empty">Tidak ada event minggu ini</div>';
     }
 
-    function setNewsFilter(minBars, btn) {
-      _newsMinBars = minBars;
-      document.querySelectorAll('.news-filter-btn').forEach(b => b.classList.remove('active'));
-      if (btn) btn.classList.add('active');
-      _renderNewsBody(minBars);
+    function toggleNewsFilter(impact, btn) {
+      if (_newsActiveFilters.has(impact)) {
+        // Don't allow deselecting all
+        if (_newsActiveFilters.size === 1) return;
+        _newsActiveFilters.delete(impact);
+        btn.classList.remove('active');
+      } else {
+        _newsActiveFilters.add(impact);
+        btn.classList.add('active');
+      }
+      _renderNewsBody();
     }
 
     function openNewsModal() {
       const modal = document.getElementById('newsModal');
       if (modal) modal.classList.add('active');
       const body = document.getElementById('newsModalBody');
-      if (_newsEventsCache.length > 0) { _renderNewsBody(_newsMinBars); return; }
+      if (_newsEventsCache.length > 0) { _renderNewsBody(); return; }
       body.innerHTML = '<div class="news-empty">Memuat kalender Forex Factory...</div>';
       fetch('/api/ff-calendar')
         .then(r => r.json())
@@ -11283,7 +11284,7 @@ app.get('/monitoring', async (_req, res) => {
           data.events.forEach(ev => { ev._wib = _toWIB(ev.date); });
           data.events.sort((a,b) => (a._wib||0) - (b._wib||0));
           _newsEventsCache = data.events;
-          _renderNewsBody(_newsMinBars);
+          _renderNewsBody();
         })
         .catch(() => {
           body.innerHTML = '<div class="news-empty">Gagal memuat data Forex Factory</div>';
