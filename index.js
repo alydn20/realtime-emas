@@ -8569,6 +8569,9 @@ app.get('/monitoring', async (_req, res) => {
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
   <title>Gold Price Monitor</title>
   <style>
+    /* Lucide icons sizing */
+    [data-lucide] { display: inline-flex; vertical-align: middle; flex-shrink: 0; }
+
     :root {
       --bg-page: linear-gradient(180deg, #0f1117 0%, #131722 100%);
       --bg-header: rgba(19,23,34,0.95);
@@ -10320,7 +10323,8 @@ app.get('/monitoring', async (_req, res) => {
       .history-table th, .history-table td { padding: 6px 8px; font-size: 1.3em; }
     }
 
-    /* ===== LIGHT MODE OVERRIDES ===== */
+    /* ===== LIGHT MODE OVERRIDES (disabled) ===== */
+    /* Light mode removed - dark only
     body.light-mode .header { background: var(--bg-header); border-color: var(--border-color); }
     body.light-mode .header-left h1 { color: var(--text-heading); }
     body.light-mode .header-left .subtitle { color: var(--text-secondary); }
@@ -10386,7 +10390,7 @@ app.get('/monitoring', async (_req, res) => {
     body.light-mode .news-card { background: #f5f7fd; border-color: var(--border-color); }
     body.light-mode .news-title { color: var(--text-heading); }
     body.light-mode .news-meta { color: #787b86; }
-    /* ===== END LIGHT MODE ===== */
+    end light mode */
 
     /* Professional Toast System */
     .toast-container {
@@ -10524,7 +10528,7 @@ app.get('/monitoring', async (_req, res) => {
   <div class="promo-suggestions-overlay" id="promoSuggestionsModal" onclick="if(event.target===this)closePromoSuggestions()">
     <div class="promo-suggestions-modal">
       <h3>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+        <i data-lucide="tag" style="width:15px;height:15px;color:#22c55e;"></i>
         Promo Aktif Treasury
         <button class="promo-modal-close" onclick="closePromoSuggestions()">Tutup</button>
       </h3>
@@ -10537,7 +10541,7 @@ app.get('/monitoring', async (_req, res) => {
   <div class="promo-suggestions-overlay" id="newsModal" onclick="if(event.target===this)closeNewsModal()">
     <div class="promo-suggestions-modal">
       <h3>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
+        <i data-lucide="newspaper" style="width:15px;height:15px;color:#fbbf24;"></i>
         News XAU/USD (Forex Factory)
         <button class="promo-modal-close" onclick="closeNewsModal()">Tutup</button>
       </h3>
@@ -10656,36 +10660,32 @@ app.get('/monitoring', async (_req, res) => {
     <div class="header">
       <div class="header-left">
         <h1>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f7931a" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10h8M8 14h8"/></svg>
+          <i data-lucide="coins" style="width:22px;height:22px;color:#f7931a;flex-shrink:0;"></i>
           Gold Price Monitor
           <div class="sound-toggle-header" id="soundToggle" onclick="toggleSound()" title="Toggle Sound">
-            <svg id="soundIconOn" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-            <svg id="soundIconOff" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+            <i id="soundIconOn" data-lucide="volume-2" style="width:16px;height:16px;"></i>
+            <i id="soundIconOff" data-lucide="volume-x" style="width:16px;height:16px;display:none;"></i>
           </div>
-          <button class="theme-toggle-btn" id="themeToggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">
-            <svg id="themeIconDark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-            <svg id="themeIconLight" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-          </button>
         </h1>
         <div class="subtitle">Real-time Treasury Gold Rates</div>
         <div class="chart-title-header">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity:0.6;"><path d="M3 3v18h18"/><path d="M18 9l-5 5-4-4-3 3"/></svg>
+          <i data-lucide="trending-up" style="width:13px;height:13px;opacity:0.6;"></i>
           <span style="font-size:0.85em;color:#9ca3af;">XAU/USD Chart</span>
           <span id="trendIcon" style="margin-left:4px;font-size:0.9em;"></span>
           <span class="live-badge" style="font-size:0.7em;padding:3px 8px;">Live</span>
           <button class="calc-btn-header" onclick="openGoldCalc()">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M8 10h8M8 14h8"/></svg>
+            <i data-lucide="calculator" style="width:11px;height:11px;"></i>
             Hitung Emas
           </button>
         </div>
       </div>
       <div class="header-right">
         <button class="install-btn" id="installBtn" onclick="installApp()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <i data-lucide="download" style="width:15px;height:15px;"></i>
           Install
         </button>
         <button class="logout-btn" id="logoutBtn" onclick="logout()" title="Logout">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <i data-lucide="log-out" style="width:16px;height:16px;"></i>
         </button>
       </div>
     </div>
@@ -10728,7 +10728,7 @@ app.get('/monitoring', async (_req, res) => {
         </div>
         <div class="invest-stats">
           <button class="nominal-settings-btn" onclick="openNominalSettings()" title="Pilih Nominal">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <i data-lucide="sliders-horizontal" style="width:13px;height:13px;"></i>
           </button>
           <div id="investStatsList"></div>
         </div>
@@ -10744,21 +10744,21 @@ app.get('/monitoring', async (_req, res) => {
           </div>
           <div class="promo-btn-row">
             <button class="indicator-btn promo" onclick="openPromoSuggestions()">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+              <i data-lucide="tag" style="width:11px;height:11px;"></i>
               Cek Promo
             </button>
             <button class="indicator-btn news" onclick="openNewsModal()">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
+              <i data-lucide="newspaper" style="width:11px;height:11px;"></i>
               Cek News
             </button>
           </div>
           <div class="indicator-buttons-row">
             <button class="indicator-btn settings" onclick="openIndicatorSettings()">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <i data-lucide="settings-2" style="width:11px;height:11px;"></i>
               Indikator
             </button>
             <button class="indicator-btn guide" onclick="openIndicatorGuide()">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <i data-lucide="book-open" style="width:11px;height:11px;"></i>
               Panduan
             </button>
           </div>
@@ -10857,7 +10857,7 @@ app.get('/monitoring', async (_req, res) => {
 
     <div class="history-section">
       <div class="history-header">
-        <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Riwayat Perubahan Harga</h2>
+        <h2><i data-lucide="history" style="width:15px;height:15px;vertical-align:middle;margin-right:6px;"></i>Riwayat Perubahan Harga</h2>
         <div style="display:flex;align-items:center;gap:8px;">
           <span class="count" id="historyCount">0 records</span>
           <button onclick="openHistoryNominalSettings()" title="Pilih Nominal Riwayat" style="background:none;border:1px solid #374151;border-radius:6px;padding:3px 7px;cursor:pointer;color:#9ca3af;display:flex;align-items:center;gap:4px;font-size:0.75em;">
@@ -11644,28 +11644,8 @@ app.get('/monitoring', async (_req, res) => {
       return audioContext;
     }
 
-    // ===== THEME TOGGLE =====
-    let isDarkMode = localStorage.getItem('themeMode') !== 'light';
-
-    function applyTheme(dark) {
-      document.body.classList.toggle('light-mode', !dark);
-      const iconDark = document.getElementById('themeIconDark');
-      const iconLight = document.getElementById('themeIconLight');
-      if (iconDark) { iconDark.style.display = dark ? 'block' : 'none'; }
-      if (iconLight) { iconLight.style.display = dark ? 'none' : 'block'; }
-      // Update meta theme-color
-      const meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.content = dark ? '#0f1117' : '#f0f3fa';
-    }
-
-    function toggleTheme() {
-      isDarkMode = !isDarkMode;
-      localStorage.setItem('themeMode', isDarkMode ? 'dark' : 'light');
-      applyTheme(isDarkMode);
-    }
-
-    // Apply on load
-    applyTheme(isDarkMode);
+    // Init Lucide icons
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 
     function toggleSound() {
       soundEnabled = !soundEnabled;
