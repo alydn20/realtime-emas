@@ -10250,18 +10250,18 @@ app.get('/monitoring', async (_req, res) => {
       .chart-stats > .stat-item.stat-alone { grid-column: 1 / -1; justify-self: center; }
       .tradingview-widget-container { height: 350px; }
 
-      /* Mobile: invest stats horizontal scroll */
+      /* Mobile: invest stats wrap */
       .invest-stats {
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        overflow-y: hidden;
-        justify-content: flex-start;
+        flex-wrap: wrap;
+        overflow-x: hidden;
+        justify-content: center;
         padding: 4px 12px 8px;
         gap: 6px;
-        scrollbar-width: none;
-        -ms-overflow-style: none;
       }
-      .invest-stats::-webkit-scrollbar { display: none; }
+      #investStatsList {
+        flex-wrap: wrap;
+        justify-content: center;
+      }
       .invest-stats .stat-item.invest {
         flex: 0 0 auto;
         padding: 4px 8px;
