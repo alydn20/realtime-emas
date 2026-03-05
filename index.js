@@ -10572,7 +10572,13 @@ app.get('/monitoring', async (_req, res) => {
     <div class="history-section">
       <div class="history-header">
         <h2><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:middle;margin-right:8px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Riwayat Perubahan Harga</h2>
-        <span class="count" id="historyCount">0 records</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="count" id="historyCount">0 records</span>
+          <button onclick="openNominalSettings()" title="Pilih Nominal" style="background:none;border:1px solid #374151;border-radius:6px;padding:3px 7px;cursor:pointer;color:#9ca3af;display:flex;align-items:center;gap:4px;font-size:0.75em;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M8.46 8.46a5 5 0 0 0 0 7.07"/></svg>
+            Nominal
+          </button>
+        </div>
       </div>
       <div style="overflow-x:auto;">
       <table class="history-table">
