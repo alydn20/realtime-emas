@@ -8808,6 +8808,13 @@ app.get('/monitoring', async (_req, res) => {
       scrollbar-width: none;
     }
     .invest-stats::-webkit-scrollbar { display: none; }
+    #investStatsList {
+      display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      gap: 6px;
+      align-items: center;
+    }
     .invest-stats .stat-item {
       display: flex;
       flex-direction: row;
