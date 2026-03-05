@@ -8565,21 +8565,21 @@ app.get('/monitoring', async (_req, res) => {
     [data-lucide] { display: inline-flex; vertical-align: middle; flex-shrink: 0; }
 
     :root {
-      --bg-page: linear-gradient(180deg, #0f1117 0%, #131722 100%);
-      --bg-header: rgba(19,23,34,0.95);
-      --bg-card: #1e222d;
-      --bg-card-hover: #252a3a;
-      --bg-input: #2a2e39;
-      --text-primary: #d1d4dc;
-      --text-secondary: #787b86;
-      --text-heading: #ffffff;
-      --border-color: rgba(255,255,255,0.07);
-      --border-hover: rgba(255,255,255,0.15);
-      --shadow: 0 4px 24px rgba(0,0,0,0.35);
+      --bg-page: linear-gradient(160deg, #06101e 0%, #091628 50%, #0c1a32 100%);
+      --bg-header: rgba(7, 13, 26, 0.97);
+      --bg-card: #0e1b2e;
+      --bg-card-hover: #152338;
+      --bg-input: #1a2e48;
+      --text-primary: #c4d0df;
+      --text-secondary: #5e7080;
+      --text-heading: #eef3fa;
+      --border-color: rgba(247, 147, 26, 0.1);
+      --border-hover: rgba(247, 147, 26, 0.28);
+      --shadow: 0 4px 32px rgba(0,0,0,0.55), 0 0 0 1px rgba(247,147,26,0.04);
       --gold: #f7931a;
-      --green: #26a69a;
-      --red: #ef5350;
-      --blue: #2196f3;
+      --green: #0ecb81;
+      --red: #f6465d;
+      --blue: #3b9eff;
       --theme-icon-dark: block;
       --theme-icon-light: none;
     }
@@ -8620,8 +8620,9 @@ app.get('/monitoring', async (_req, res) => {
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
       border-radius: 16px;
-      border: 1px solid var(--border-color);
-      box-shadow: var(--shadow);
+      border: 1px solid rgba(247,147,26,0.18);
+      border-top: 1px solid rgba(247,147,26,0.3);
+      box-shadow: var(--shadow), 0 -1px 0 rgba(247,147,26,0.15) inset;
       transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
     }
     .header-left h1 {
@@ -8792,17 +8793,21 @@ app.get('/monitoring', async (_req, res) => {
     .stat-item.price-up .stat-value { color: #4ade80; }
     .stat-item.price-down { border-color: rgba(248, 113, 113, 0.4); box-shadow: 0 0 20px rgba(248, 113, 113, 0.1); }
     .stat-item.price-down .stat-value { color: #f87171; }
+    .stat-item.invest { border-left: 2px solid rgba(247,147,26,0.5); }
     .stat-item.invest .stat-label { color: #f7931a; }
 
     /* Invest Stats Row - horizontal pill per nominal */
     .invest-stats {
       display: flex;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      overflow-x: auto;
       gap: 6px;
       padding: 0 16px 8px 16px;
       justify-content: center;
       align-items: center;
+      scrollbar-width: none;
     }
+    .invest-stats::-webkit-scrollbar { display: none; }
     .invest-stats .stat-item {
       display: flex;
       flex-direction: row;
@@ -9302,11 +9307,11 @@ app.get('/monitoring', async (_req, res) => {
       width: 100%;
     }
     .indicator-btn {
-      background: rgba(30, 40, 50, 0.9);
-      color: #fff;
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 6px;
-      padding: 4px 10px;
+      background: rgba(20, 32, 50, 0.9);
+      color: #c4d0df;
+      border: 1px solid rgba(247,147,26,0.15);
+      border-radius: 20px;
+      padding: 5px 12px;
       font-size: 0.7em;
       font-weight: 600;
       cursor: pointer;
@@ -9320,18 +9325,20 @@ app.get('/monitoring', async (_req, res) => {
       transform: translateY(-1px);
     }
     .indicator-btn.guide {
-      background: rgba(247, 147, 26, 0.9);
-      border-color: rgba(247, 147, 26, 0.5);
+      background: linear-gradient(135deg, rgba(247,147,26,0.25), rgba(247,147,26,0.12));
+      border-color: rgba(247,147,26,0.35);
+      color: #f7931a;
     }
     .indicator-btn.guide:hover {
-      background: rgba(247, 147, 26, 1);
+      background: linear-gradient(135deg, rgba(247,147,26,0.4), rgba(247,147,26,0.2));
     }
     .indicator-btn.settings {
-      background: rgba(59, 130, 246, 0.9);
-      border-color: rgba(59, 130, 246, 0.5);
+      background: linear-gradient(135deg, rgba(59,158,255,0.2), rgba(59,158,255,0.1));
+      border-color: rgba(59,158,255,0.3);
+      color: #3b9eff;
     }
     .indicator-btn.settings:hover {
-      background: rgba(59, 130, 246, 1);
+      background: linear-gradient(135deg, rgba(59,158,255,0.35), rgba(59,158,255,0.18));
     }
     .indicator-btn.calc {
       background: linear-gradient(135deg, #f7931a 0%, #e8850a 100%);
@@ -9341,16 +9348,17 @@ app.get('/monitoring', async (_req, res) => {
       background: linear-gradient(135deg, #ffaa33 0%, #f7931a 100%);
     }
     .indicator-btn.promo {
-      background: rgba(34, 197, 94, 0.9);
-      border-color: rgba(34, 197, 94, 0.5);
+      background: linear-gradient(135deg, rgba(14,203,129,0.25), rgba(14,203,129,0.1));
+      border-color: rgba(14,203,129,0.35);
+      color: #0ecb81;
     }
-    .indicator-btn.promo:hover { background: rgba(34, 197, 94, 1); }
+    .indicator-btn.promo:hover { background: linear-gradient(135deg, rgba(14,203,129,0.4), rgba(14,203,129,0.2)); }
     .indicator-btn.news {
-      background: rgba(251, 191, 36, 0.9);
-      border-color: rgba(251, 191, 36, 0.5);
-      color: #000;
+      background: linear-gradient(135deg, rgba(247,147,26,0.25), rgba(247,147,26,0.1));
+      border-color: rgba(247,147,26,0.35);
+      color: #f7931a;
     }
-    .indicator-btn.news:hover { background: rgba(251, 191, 36, 1); }
+    .indicator-btn.news:hover { background: linear-gradient(135deg, rgba(247,147,26,0.4), rgba(247,147,26,0.2)); }
     /* History table: hide non-essential cols on mobile */
     .col-spread, .col-usdidr { }
     @media (max-width: 600px) {
