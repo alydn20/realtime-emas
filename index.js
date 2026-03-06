@@ -141,6 +141,8 @@ const subscriptions = new Set()
 let treasuryToken = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzY29wZXMiOlsiKiJdLCJhdWQiOiIzIiwiZXhwIjoxNzY3NzA3ODcwLCJqdGkiOiJyWmc2RTdLeU16YUtVZzB0Q3dPeUc5dGQxMlNROHh3YUxLT2IyZGZiMElCZjM0anJYMW5PSXVZZDNMOUxTUHR0eXd3eVRYN1RXN0RJbFpUdDdkbUhjRVJiWnJWbmVUSjJZWkl0IiwiaWF0IjoxNzY2NDExODcwLCJuYmYiOjE3NjY0MTE4NzAsInN1YiI6IjE2ODg3Nzk0In0.FDb_1WLhjE4pJ5zfhuAkAX4-mhIylcXAZmNbyWA2o-E9N8bzxrKqkiL0RRPaISggDOBz2m31eYtM_3-hNwsDIkhejhBnDDDYmD8xurKe1275zYE3OJE2XGw8QhXwlop1K_IA0PzVzXqnPJm5DQyKCU6Ya_QRVMmidVpOji3Q4bbR-aHL9U0l1CsubwvI7laj66qCjw2XT7ftKf0bFW1mm5yDz-l0zuJVzpNlvsFBqroI_RR6nVHeu4wG3QYhvoATKUyRntjWMLuPRB9wu2WA7-DJuQtACvfMPdqoNhfT-sgSYxR1WXuI4micZe3_tOKbabiK2FJUoLHkHtPnPwEuAxnxDwzlvqOoQrTpbtBRUbRprjjdJ6CD0J2TR7qkkhX284BJHBVub8kYTNYpYIhim9Zzvgh_1TdBnX-nBFNvK0fFiaA4VbqAnl5jcFTs2HEglj_Vh3RT0XHa7b8DSjHfRlnsWxr6jJexT7-6svnXHQFUBnRG-qa5RXYyp9mDxqIWsURcS19OuxSSwlHVTRsLq_4AMfupWwKLSRFIERHwYgrbYozDlROb-x8FDLuOlON8wiMSSlSaVCXW0ZboV7h6ROte_mrRoTjRsn2QVA1pyGZbSn6NfEudvqcLcHXBz1cc9rdJMJ6lvRBInUHg2JjZxzTJRGiVa69ICmm0D4bQK3Y'
 let lastPromoStatus = null // 'ON' atau 'OFF'
 let lowestOnPriceCache = undefined // undefined = belum diload, null = belum ada nilai
+let lowestOnPendingTimeout = null // Timeout 10 detik sebelum update titik ON terendah
+let lowestOnPendingPrice = null // Harga kandidat yang sedang menunggu konfirmasi
 let cachedPromoSuggestions = [] // Cache active promotion suggestions
 let promoTriggerTimeout = null // Timeout 5 detik setelah harga berubah
 let promoCheckInterval = null // Interval cek promo setiap 1 detik
@@ -1583,7 +1585,7 @@ async function doPromoBroadcast() {
     }
 
     // Track lowest ON price — hanya saat Treasury API konfirmasi status ON
-    // (tidak di fastPoll agar tidak catat harga saat status belum diupdate)
+    // Update dengan delay 10 detik untuk menghindari fluktuasi sesaat
     if (currentStatus === 'ON' && lastKnownPrice?.buy) {
       const currentBuy = lastKnownPrice.buy
       if (lowestOnPriceCache === undefined) {
@@ -1591,11 +1593,26 @@ async function doPromoBroadcast() {
         lowestOnPriceCache = storedVal !== null ? parseInt(storedVal, 10) : null
       }
       if (lowestOnPriceCache === null || currentBuy < lowestOnPriceCache) {
-        lowestOnPriceCache = currentBuy
-        await redis.set(REDIS_KEYS.LOWEST_ON_PRICE, String(currentBuy))
-        broadcastSSE({ type: 'lowest_on_price', price: currentBuy })
-        pushLog(`🏷️ Titik ON terendah: ${formatRupiah(currentBuy)}`)
+        // Harga lebih rendah — tunggu 10 detik sebelum commit
+        if (lowestOnPendingTimeout) clearTimeout(lowestOnPendingTimeout)
+        lowestOnPendingPrice = currentBuy
+        lowestOnPendingTimeout = setTimeout(async () => {
+          // Setelah 10 detik: cek masih ON dan harga masih lebih rendah
+          if (lastPromoStatus !== 'ON') return
+          if (lowestOnPriceCache !== null && lowestOnPendingPrice >= lowestOnPriceCache) return
+          lowestOnPriceCache = lowestOnPendingPrice
+          await redis.set(REDIS_KEYS.LOWEST_ON_PRICE, String(lowestOnPendingPrice))
+          broadcastSSE({ type: 'lowest_on_price', price: lowestOnPendingPrice })
+          pushLog(`🏷️ Titik ON terendah: ${formatRupiah(lowestOnPendingPrice)} (konfirmasi 10 detik)`)
+          lowestOnPendingPrice = null
+          lowestOnPendingTimeout = null
+        }, 10000)
       }
+    } else if (currentStatus !== 'ON' && lowestOnPendingTimeout) {
+      // Status berubah jadi OFF — batalkan pending update
+      clearTimeout(lowestOnPendingTimeout)
+      lowestOnPendingTimeout = null
+      lowestOnPendingPrice = null
     }
 
     let shouldBroadcast = false
