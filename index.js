@@ -9490,9 +9490,14 @@ app.get('/monitoring', async (_req, res) => {
     .news-card.past .news-title { color: #9ca3af; }
     .news-card.upcoming { background: rgba(14,203,129,0.07); border-color: rgba(14,203,129,0.2); }
     .news-countdown { background: rgba(14,203,129,0.15); color: #0ecb81; border-radius: 4px; padding: 1px 6px; font-size: 0.85em; font-weight: 600; white-space: nowrap; }
+    .news-title-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 3px; }
+    .news-title { font-size: 0.82em; font-weight: 700; color: #fff; }
+    .news-pred { font-size: 0.72em; font-weight: 700; padding: 2px 7px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; }
+    .news-pred.pred-up { background: rgba(14,203,129,0.18); color: #0ecb81; border: 1px solid rgba(14,203,129,0.3); }
+    .news-pred.pred-down { background: rgba(246,70,93,0.15); color: #f6465d; border: 1px solid rgba(246,70,93,0.25); }
     .news-bulls { font-size: 1em; min-width: 44px; text-align: center; line-height: 1; padding-top: 2px; }
     .news-body { flex: 1; }
-    .news-title { font-size: 0.82em; font-weight: 700; color: #fff; margin-bottom: 3px; }
+    .news-title { font-size: 0.82em; font-weight: 700; color: #fff; }
     .news-meta { font-size: 0.7em; color: #9ca3af; display: flex; gap: 8px; flex-wrap: wrap; }
     .news-meta span { display: flex; align-items: center; gap: 3px; }
     .news-values { font-size: 0.7em; color: #9ca3af; margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; }
@@ -11262,6 +11267,28 @@ app.get('/monitoring', async (_req, res) => {
       return m + ' menit lagi';
     }
 
+    function _predictGold(ev) {
+      const t = (ev.title || '').toLowerCase();
+      const f = ev.forecast ? parseFloat(ev.forecast.replace(/[^0-9.-]/g, '')) : NaN;
+      const p = ev.previous ? parseFloat(ev.previous.replace(/[^0-9.-]/g, '')) : NaN;
+      if (isNaN(f) || isNaN(p) || f === p) return null;
+      // Indikator yang naik = USD kuat = emas turun
+      const bullUSD = t.includes('interest rate') || t.includes('fed') || t.includes('fomc') ||
+        t.includes('non-farm') || t.includes('nfp') || t.includes('payroll') ||
+        t.includes('gdp') || t.includes('retail sales') || t.includes('pmi') ||
+        t.includes('ism') || t.includes('consumer confidence') || t.includes('average hourly') ||
+        t.includes('core retail') || t.includes('business inventories');
+      // Indikator yang naik = USD lemah = emas naik
+      const bearUSD = t.includes('unemployment') || t.includes('jobless') || t.includes('claims') ||
+        t.includes('unit labor costs');
+      // Inflasi: naik = emas naik
+      const inflation = t.includes('cpi') || t.includes('inflation') || t.includes('pce') ||
+        t.includes('import prices');
+      if (bearUSD || inflation) return f > p ? 'NAIK' : 'TURUN';
+      if (bullUSD) return f > p ? 'TURUN' : 'NAIK';
+      return null;
+    }
+
     function _renderNewsCard(ev, nowMs, isToday) {
       const isPast = ev._wib && ev._wib.getTime() < nowMs;
       const vals = [];
@@ -11273,10 +11300,14 @@ app.get('/monitoring', async (_req, res) => {
       const countdownHtml = isToday && !isPast
         ? '<span class="news-countdown" data-evms="'+evMs+'">'+(_fmtCountdown(evMs, nowMs)||'')+'</span>'
         : '';
+      const pred = !isPast ? _predictGold(ev) : null;
+      const predHtml = pred
+        ? '<span class="news-pred '+(pred==='NAIK'?'pred-up':'pred-down')+'">'+(pred==='NAIK'?'▲ Emas Naik':'▼ Emas Turun')+'</span>'
+        : '';
       return '<div class="news-card '+_impactClass(ev.impact)+stateClass+'">'+
         '<div class="news-bulls">'+_impactBars(ev.impact)+'</div>'+
         '<div class="news-body">'+
-          '<div class="news-title">'+ev.title+'</div>'+
+          '<div class="news-title-row"><span class="news-title">'+ev.title+'</span>'+predHtml+'</div>'+
           '<div class="news-meta"><span>'+_svgClock+_fmtTime(ev._wib)+'</span><span>'+_svgCal+_fmtDayDate(ev._wib)+'</span>'+countdownHtml+'</div>'+
           (vals.length?'<div class="news-values">'+vals.join('')+'</div>':'')+
         '</div></div>';
