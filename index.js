@@ -1595,9 +1595,11 @@ async function doPromoBroadcast() {
       const currentBuy = lastKnownPrice.buy
       if (lowestOnPriceCache === null || currentBuy < lowestOnPriceCache) {
         // Harga lebih rendah — tunggu 10 detik sebelum commit
-        if (lowestOnPendingTimeout) clearTimeout(lowestOnPendingTimeout)
-        lowestOnPendingPrice = currentBuy
-        lowestOnPendingTimeout = setTimeout(async () => {
+        // Hanya reset timer jika harga lebih rendah dari pending sebelumnya (atau belum ada pending)
+        if (!lowestOnPendingTimeout || currentBuy < (lowestOnPendingPrice ?? Infinity)) {
+          if (lowestOnPendingTimeout) clearTimeout(lowestOnPendingTimeout)
+          lowestOnPendingPrice = currentBuy
+          lowestOnPendingTimeout = setTimeout(async () => {
           // Setelah 10 detik: cek masih ON, lalu commit harga terendah
           if (lastPromoStatus !== 'ON') return
           if (lowestOnPriceCache !== null && lowestOnPendingPrice >= lowestOnPriceCache) return
@@ -1607,7 +1609,8 @@ async function doPromoBroadcast() {
           pushLog(`🏷️ Titik ON terendah: ${formatRupiah(lowestOnPendingPrice)} (konfirmasi 10 detik)`)
           lowestOnPendingPrice = null
           lowestOnPendingTimeout = null
-        }, 10000)
+          }, 10000)
+        }
       }
     } else if (currentStatus !== 'ON') {
       // Status OFF — batalkan pending update terendah
