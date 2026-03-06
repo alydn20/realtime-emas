@@ -1586,18 +1586,19 @@ async function doPromoBroadcast() {
 
     // Track lowest ON price — hanya saat Treasury API konfirmasi status ON
     // Update dengan delay 10 detik untuk menghindari fluktuasi sesaat
+    if (lowestOnPriceCache === undefined) {
+      const storedVal = await redis.get(REDIS_KEYS.LOWEST_ON_PRICE)
+      lowestOnPriceCache = storedVal !== null ? parseInt(storedVal, 10) : null
+    }
+
     if (currentStatus === 'ON' && lastKnownPrice?.buy) {
       const currentBuy = lastKnownPrice.buy
-      if (lowestOnPriceCache === undefined) {
-        const storedVal = await redis.get(REDIS_KEYS.LOWEST_ON_PRICE)
-        lowestOnPriceCache = storedVal !== null ? parseInt(storedVal, 10) : null
-      }
       if (lowestOnPriceCache === null || currentBuy < lowestOnPriceCache) {
         // Harga lebih rendah — tunggu 10 detik sebelum commit
         if (lowestOnPendingTimeout) clearTimeout(lowestOnPendingTimeout)
         lowestOnPendingPrice = currentBuy
         lowestOnPendingTimeout = setTimeout(async () => {
-          // Setelah 10 detik: cek masih ON dan harga masih lebih rendah
+          // Setelah 10 detik: cek masih ON, lalu commit harga terendah
           if (lastPromoStatus !== 'ON') return
           if (lowestOnPriceCache !== null && lowestOnPendingPrice >= lowestOnPriceCache) return
           lowestOnPriceCache = lowestOnPendingPrice
@@ -1608,11 +1609,20 @@ async function doPromoBroadcast() {
           lowestOnPendingTimeout = null
         }, 10000)
       }
-    } else if (currentStatus !== 'ON' && lowestOnPendingTimeout) {
-      // Status berubah jadi OFF — batalkan pending update
-      clearTimeout(lowestOnPendingTimeout)
-      lowestOnPendingTimeout = null
-      lowestOnPendingPrice = null
+    } else if (currentStatus !== 'ON') {
+      // Status OFF — batalkan pending
+      if (lowestOnPendingTimeout) {
+        clearTimeout(lowestOnPendingTimeout)
+        lowestOnPendingTimeout = null
+        lowestOnPendingPrice = null
+      }
+      // Harga lebih tinggi dari titik terendah saat OFF → reset
+      if (lowestOnPriceCache !== null && lastKnownPrice?.buy && lastKnownPrice.buy > lowestOnPriceCache) {
+        lowestOnPriceCache = null
+        await redis.del(REDIS_KEYS.LOWEST_ON_PRICE)
+        broadcastSSE({ type: 'lowest_on_price', price: null })
+        pushLog(`🏷️ Titik ON terendah direset (OFF + harga lebih tinggi)`)
+      }
     }
 
     let shouldBroadcast = false
