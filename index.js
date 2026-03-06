@@ -2987,6 +2987,17 @@ app.get('/sse', async (req, res) => {
     })}\n\n`)
   }
 
+  // Kirim titik ON terendah jika ada
+  if (lowestOnPriceCache === undefined) {
+    try {
+      const storedVal = await redis.get(REDIS_KEYS.LOWEST_ON_PRICE)
+      lowestOnPriceCache = storedVal !== null ? parseInt(storedVal, 10) : null
+    } catch (e) {}
+  }
+  if (lowestOnPriceCache !== null && lowestOnPriceCache !== undefined) {
+    res.write(`data: ${JSON.stringify({ type: 'lowest_on_price', price: lowestOnPriceCache })}\n\n`)
+  }
+
   sseClients.set(res, userInfo)
 
   // Broadcast online users update to admin
