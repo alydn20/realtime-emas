@@ -143,6 +143,7 @@ let lastPromoStatus = null // 'ON' atau 'OFF'
 let lowestOnPriceCache = undefined // undefined = belum diload, null = belum ada nilai
 let lowestOnPendingTimeout = null // Timeout 10 detik sebelum update titik ON terendah
 let lowestOnPendingPrice = null // Harga kandidat yang sedang menunggu konfirmasi
+let lowestOnResetTimeout = null // Timeout 60 detik sebelum reset titik ON saat OFF
 let cachedPromoSuggestions = [] // Cache active promotion suggestions
 let promoTriggerTimeout = null // Timeout 5 detik setelah harga berubah
 let promoCheckInterval = null // Interval cek promo setiap 1 detik
@@ -1610,18 +1611,31 @@ async function doPromoBroadcast() {
         }, 10000)
       }
     } else if (currentStatus !== 'ON') {
-      // Status OFF — batalkan pending
+      // Status OFF — batalkan pending update terendah
       if (lowestOnPendingTimeout) {
         clearTimeout(lowestOnPendingTimeout)
         lowestOnPendingTimeout = null
         lowestOnPendingPrice = null
       }
-      // Harga lebih tinggi dari titik terendah saat OFF → reset
+      // Harga lebih tinggi dari titik terendah saat OFF → reset setelah 60 detik
       if (lowestOnPriceCache !== null && lastKnownPrice?.buy && lastKnownPrice.buy > lowestOnPriceCache) {
-        lowestOnPriceCache = null
-        await redis.del(REDIS_KEYS.LOWEST_ON_PRICE)
-        broadcastSSE({ type: 'lowest_on_price', price: null })
-        pushLog(`🏷️ Titik ON terendah direset (OFF + harga lebih tinggi)`)
+        if (!lowestOnResetTimeout) {
+          lowestOnResetTimeout = setTimeout(async () => {
+            lowestOnResetTimeout = null
+            if (lastPromoStatus === 'ON') return // sudah ON lagi, batalkan
+            if (lowestOnPriceCache === null) return // sudah direset sebelumnya
+            lowestOnPriceCache = null
+            await redis.del(REDIS_KEYS.LOWEST_ON_PRICE)
+            broadcastSSE({ type: 'lowest_on_price', price: null })
+            pushLog(`🏷️ Titik ON terendah direset (OFF 60 detik + harga lebih tinggi)`)
+          }, 60000)
+        }
+      } else {
+        // Harga tidak lebih tinggi, batalkan pending reset
+        if (lowestOnResetTimeout) {
+          clearTimeout(lowestOnResetTimeout)
+          lowestOnResetTimeout = null
+        }
       }
     }
 
@@ -1633,6 +1647,7 @@ async function doPromoBroadcast() {
         pushLog(`🎁 Status ON kembali! Reset OFF counter (was ${offBroadcastCount})`)
         offBroadcastCount = 0
         offStartTime = null
+        if (lowestOnResetTimeout) { clearTimeout(lowestOnResetTimeout); lowestOnResetTimeout = null }
       }
       // ON: Kirim 1x per menit
       if (currentMinute !== lastPromoBroadcastMinute || isFirstCheck || statusChanged) {
