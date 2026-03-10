@@ -4034,7 +4034,6 @@ app.post('/api/login', rateLimit(5, 60000), express.json(), async (req, res) => 
   const { phone, pin } = req.body
   if (!phone) return res.json({ success: false, error: 'Nomor HP wajib diisi' })
   if (!pin) return res.json({ success: false, error: 'PIN wajib diisi' })
-  }
 
   const normalizedPhone = normalizePhone(phone)
   const check = await isUserValid(normalizedPhone)
