@@ -11680,7 +11680,7 @@ app.get('/monitoring', async (_req, res) => {
       const text = input?.value?.trim();
       if (!text) return;
       input.value = '';
-      const session = localStorage.getItem('session') || '';
+      const session = localStorage.getItem('goldmonitor_session') || '';
       fetch('/api/chat/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
