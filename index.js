@@ -10584,6 +10584,35 @@ app.get('/monitoring', async (_req, res) => {
     end light mode */
 
     /* Professional Toast System */
+    #reloadBanner {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 99999;
+      background: linear-gradient(90deg, #f59e0b, #d97706);
+      color: #000;
+      text-align: center;
+      padding: 12px 16px;
+      font-size: 0.92em;
+      font-weight: 700;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+      gap: 12px;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    #reloadBanner.show { display: flex; }
+    #reloadBanner button {
+      background: #000;
+      color: #f59e0b;
+      border: none;
+      border-radius: 8px;
+      padding: 6px 18px;
+      font-weight: 700;
+      font-size: 0.95em;
+      cursor: pointer;
+      white-space: nowrap;
+    }
     .toast-container {
       position: fixed;
       top: 20px;
@@ -10680,6 +10709,11 @@ app.get('/monitoring', async (_req, res) => {
   </style>
 </head>
 <body>
+  <!-- Reload Banner: shown when admin triggers force reload -->
+  <div id="reloadBanner">
+    <span>⚠️ Ada pembaruan tersedia. Silakan reload halaman untuk mendapatkan data terbaru.</span>
+    <button onclick="window.location.reload()">Reload Sekarang</button>
+  </div>
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- Nominal Settings Modal -->
@@ -12889,7 +12923,8 @@ app.get('/monitoring', async (_req, res) => {
         }
 
         if (data.type === 'force_reload') {
-          window.location.reload();
+          const banner = document.getElementById('reloadBanner');
+          if (banner) banner.classList.add('show');
           return;
         }
 
