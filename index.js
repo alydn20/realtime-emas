@@ -2424,6 +2424,22 @@ function rateLimit(maxReq, windowMs) {
   }
 }
 
+// Cloudflare Turnstile CAPTCHA verification
+async function verifyTurnstile(token, ip) {
+  const secret = process.env.TURNSTILE_SECRET_KEY
+  if (!secret) return true // skip jika belum dikonfigurasi
+  if (!token) return false
+  try {
+    const resp = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret, response: token, remoteip: ip })
+    })
+    const data = await resp.json()
+    return data.success === true
+  } catch { return false }
+}
+
 // ==================== SUPER ADMIN LOGIN ====================
 // Login page untuk akses /qr dan /admin
 app.get('/admin-login', (req, res) => {
@@ -2585,6 +2601,7 @@ app.get('/admin-login', (req, res) => {
       .btn { padding: 14px; }
     }
   </style>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
   <div class="card">
@@ -2606,6 +2623,7 @@ app.get('/admin-login', (req, res) => {
         <label>Password</label>
         <input type="password" id="password" placeholder="Masukkan password" required>
       </div>
+      <div class="cf-turnstile" data-sitekey="${process.env.TURNSTILE_SITE_KEY || ''}" data-size="invisible"></div>
       <button type="submit" class="btn">Login Admin</button>
     </form>
     <a href="/login" class="back-link">← Kembali ke halaman user</a>
@@ -2618,10 +2636,14 @@ app.get('/admin-login', (req, res) => {
       const error = document.getElementById('error');
 
       try {
+        let turnstileToken = '';
+        if (window.turnstile) {
+          try { turnstileToken = turnstile.getResponse() || ''; } catch {}
+        }
         const res = await fetch('/api/admin-login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
+          body: JSON.stringify({ username, password, 'cf-turnstile-response': turnstileToken })
         });
         const data = await res.json();
 
@@ -2648,6 +2670,9 @@ app.get('/admin-login', (req, res) => {
 // API untuk login
 app.post('/api/admin-login', rateLimit(10, 60000), async (req, res) => {
   const { username, password } = req.body
+  if (!(await verifyTurnstile(req.body['cf-turnstile-response'], req.ip))) {
+    return res.json({ success: false, error: 'Verifikasi CAPTCHA gagal' })
+  }
   if (username === SUPER_ADMIN.username && password === SUPER_ADMIN.password) {
     // Generate simple token
     const token = Buffer.from(username + ':' + password + ':' + Date.now()).toString('base64')
@@ -3925,6 +3950,9 @@ function verifyPin(inputPin, storedHash) {
 app.post('/api/check-user', rateLimit(10, 60000), express.json(), async (req, res) => {
   const { phone } = req.body
   if (!phone) return res.json({ success: false, error: 'Nomor HP wajib diisi' })
+  if (!(await verifyTurnstile(req.body['cf-turnstile-response'], req.ip))) {
+    return res.json({ success: false, error: 'Verifikasi CAPTCHA gagal, coba lagi' })
+  }
 
   const normalizedPhone = normalizePhone(phone)
   const check = await isUserValid(normalizedPhone)
@@ -3961,6 +3989,9 @@ app.post('/api/login', rateLimit(5, 60000), express.json(), async (req, res) => 
   const { phone, pin } = req.body
   if (!phone) return res.json({ success: false, error: 'Nomor HP wajib diisi' })
   if (!pin) return res.json({ success: false, error: 'PIN wajib diisi' })
+  if (!(await verifyTurnstile(req.body['cf-turnstile-response'], req.ip))) {
+    return res.json({ success: false, error: 'Verifikasi CAPTCHA gagal, coba lagi' })
+  }
 
   const normalizedPhone = normalizePhone(phone)
   const check = await isUserValid(normalizedPhone)
@@ -5643,6 +5674,7 @@ app.get('/login', (_req, res) => {
       .pin-input { width: 42px; height: 50px; font-size: 1.3em; }
     }
   </style>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
   <div class="container">
@@ -5672,6 +5704,7 @@ app.get('/login', (_req, res) => {
             <input type="tel" id="phoneInput" placeholder="8xxxxxxxxxx" maxlength="12" autocomplete="tel">
           </div>
         </div>
+        <div class="cf-turnstile" id="turnstileWidget" data-sitekey="${process.env.TURNSTILE_SITE_KEY || ''}" data-size="invisible" data-callback="onTurnstileDone"></div>
         <button class="btn btn-primary" id="checkBtn" onclick="checkUser()">
           Masuk ke Akun
         </button>
@@ -5893,10 +5926,12 @@ app.get('/login', (_req, res) => {
       hideMessage();
 
       try {
+        let tsToken = '';
+        if (window.turnstile) { try { tsToken = turnstile.getResponse() || ''; } catch {} }
         const res = await fetch('/api/check-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone })
+          body: JSON.stringify({ phone, 'cf-turnstile-response': tsToken })
         });
 
         const data = await res.json();
@@ -5954,10 +5989,12 @@ app.get('/login', (_req, res) => {
       hideMessage();
 
       try {
+        let tsToken = '';
+        if (window.turnstile) { try { tsToken = turnstile.getResponse() || ''; } catch {} }
         const res = await fetch('/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: currentPhone, pin })
+          body: JSON.stringify({ phone: currentPhone, pin, 'cf-turnstile-response': tsToken })
         });
 
         const data = await res.json();
