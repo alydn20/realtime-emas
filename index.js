@@ -10977,7 +10977,7 @@ app.get('/monitoring', async (_req, res) => {
           <div id="apiHealthWidget" title="Kelancaran koneksi ke Treasury API" style="display:inline-flex;align-items:center;gap:5px;margin-left:4px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:3px 8px;cursor:default;">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" id="apiHealthIcon" style="color:#5e7080;flex-shrink:0;"><path d="M1 6l5 6 4-4 4 8 4-6 5 2"/></svg>
             <span id="apiHealthPct" style="font-size:0.72em;font-weight:700;color:#5e7080;letter-spacing:0.03em;">--%</span>
-            <span style="font-size:0.65em;color:#4a5568;white-space:nowrap;">API Treasury</span>
+            <span style="font-size:0.65em;color:#4a5568;white-space:nowrap;">Kelancaran Aplikasi</span>
           </div>
         </div>
       </div>
@@ -13080,7 +13080,7 @@ app.get('/monitoring', async (_req, res) => {
               pctEl.style.color = color;
               iconEl.style.color = color;
               widget.style.borderColor = color.replace(')', ',0.25)').replace('rgb', 'rgba');
-              widget.title = 'API Treasury: ' + ms + 'ms · Data ' + ageS + 's lalu · Kelancaran ' + final + '%';
+              widget.title = 'Kelancaran Aplikasi: ' + final + '% · API ' + ms + 'ms · Data ' + ageS + 's lalu';
             }
           }
 
