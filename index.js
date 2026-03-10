@@ -2207,13 +2207,18 @@ async function checkPriceUpdate() {
 let isFastPolling = false
 let lastKnownTimestamp = 0
 let consecutiveErrors = 0
+let lastFetchMs = null       // berapa ms request ke Treasury API
+let lastDataAgeMs = null     // berapa ms sejak Treasury update datanya
+let latencyHistory = []      // rolling 10 sample terakhir untuk avg
 
 async function fastPoll() {
   if (isFastPolling) return
   isFastPolling = true
 
   try {
+    const _fetchStart = Date.now()
     const treasuryData = await fetchTreasury()
+    const _fetchMs = Date.now() - _fetchStart
 
     if (!treasuryData?.data?.buying_rate) {
       consecutiveErrors++
@@ -2222,6 +2227,14 @@ async function fastPoll() {
 
     consecutiveErrors = 0
     lastSuccessfulFetch = Date.now() // Track successful fetch
+
+    // Simpan latency
+    lastFetchMs = _fetchMs
+    lastDataAgeMs = treasuryData.data.updated_at
+      ? Date.now() - new Date(treasuryData.data.updated_at).getTime()
+      : null
+    latencyHistory.push(_fetchMs)
+    if (latencyHistory.length > 10) latencyHistory.shift()
 
     const currentPrice = {
       buy: treasuryData.data.buying_rate,
@@ -2252,7 +2265,9 @@ async function fastPoll() {
         updatedAt: currentPrice.updated_at,
         usdIdr: cachedMarketData.usdIdr?.rate,
         xauUsd: cachedMarketData.xauUsd,
-        serverTime: new Date().toISOString()
+        serverTime: new Date().toISOString(),
+        fetchMs: lastFetchMs,
+        dataAgeMs: lastDataAgeMs
       })
     } else if (isPriceChanged) {
       lastKnownPrice = currentPrice
@@ -2269,7 +2284,9 @@ async function fastPoll() {
         updatedAt: currentPrice.updated_at,
         usdIdr: cachedMarketData.usdIdr?.rate,
         xauUsd: cachedMarketData.xauUsd,
-        serverTime: new Date().toISOString()
+        serverTime: new Date().toISOString(),
+        fetchMs: lastFetchMs,
+        dataAgeMs: lastDataAgeMs
       })
 
       // 🎁 Trigger promo check 5 detik setelah harga berubah
@@ -4859,6 +4876,20 @@ app.post('/api/admin/nominal-settings', express.json(), async (req, res) => {
   } catch (e) {
     res.json({ success: false, error: e.message })
   }
+})
+
+// Public: Treasury API latency stats
+app.get('/api/latency', async (req, res) => {
+  if (!await requireSession(req, res)) return
+  const avg = latencyHistory.length
+    ? Math.round(latencyHistory.reduce((a, b) => a + b, 0) / latencyHistory.length)
+    : null
+  res.json({
+    fetchMs: lastFetchMs,
+    dataAgeMs: lastDataAgeMs,
+    avgFetchMs: avg,
+    samples: latencyHistory.length
+  })
 })
 
 // Public: Get promo limit
@@ -10943,6 +10974,11 @@ app.get('/monitoring', async (_req, res) => {
             <i data-lucide="calculator" style="width:11px;height:11px;"></i>
             Hitung Emas
           </button>
+          <div id="apiHealthWidget" title="Kelancaran koneksi ke Treasury API" style="display:inline-flex;align-items:center;gap:5px;margin-left:4px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:3px 8px;cursor:default;">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" id="apiHealthIcon" style="color:#5e7080;flex-shrink:0;"><path d="M1 6l5 6 4-4 4 8 4-6 5 2"/></svg>
+            <span id="apiHealthPct" style="font-size:0.72em;font-weight:700;color:#5e7080;letter-spacing:0.03em;">--%</span>
+            <span style="font-size:0.65em;color:#4a5568;white-space:nowrap;">API Treasury</span>
+          </div>
         </div>
       </div>
       <div class="header-right">
@@ -13024,6 +13060,28 @@ app.get('/monitoring', async (_req, res) => {
           }
           if (dataTimestamp > lastUpdatedAt) {
             lastUpdatedAt = dataTimestamp;
+          }
+
+          // Update API health widget
+          if (data.fetchMs != null) {
+            const pctEl = document.getElementById('apiHealthPct');
+            const iconEl = document.getElementById('apiHealthIcon');
+            const widget = document.getElementById('apiHealthWidget');
+            if (pctEl && iconEl && widget) {
+              const ms = data.fetchMs;
+              // Smoothness: 0ms=100%, 5000ms=0% (linear)
+              const smooth = Math.max(0, Math.round(100 - (ms / 50)));
+              // Penalti tambahan jika data Treasury stale > 60 detik
+              const ageS = data.dataAgeMs != null ? Math.round(data.dataAgeMs / 1000) : 0;
+              const agePenalty = ageS > 60 ? Math.min(30, Math.round((ageS - 60) / 10)) : 0;
+              const final = Math.max(0, smooth - agePenalty);
+              const color = final >= 80 ? '#00c853' : final >= 50 ? '#f7931a' : '#ff5252';
+              pctEl.textContent = final + '%';
+              pctEl.style.color = color;
+              iconEl.style.color = color;
+              widget.style.borderColor = color.replace(')', ',0.25)').replace('rgb', 'rgba');
+              widget.title = 'API Treasury: ' + ms + 'ms · Data ' + ageS + 's lalu · Kelancaran ' + final + '%';
+            }
           }
 
           // Update harga beli
