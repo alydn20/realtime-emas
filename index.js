@@ -4130,19 +4130,17 @@ app.post('/api/login', rateLimit(5, 60000), express.json(), async (req, res) => 
     return res.json({ success: false, error: 'PIN salah. Silakan coba lagi.' })
   }
 
-  // Check existing sessions for this user (max 3 devices)
-  const allSessions = await redis.hgetall(REDIS_KEYS.SESSIONS) || {}
-  const userSessions = []
-  for (const [sessId, sessPhone] of Object.entries(allSessions)) {
-    if (sessPhone === normalizedPhone) {
-      userSessions.push(sessId)
+  // Check existing sessions (max 3 devices, kecuali admin phone tidak ada limit)
+  if (normalizedPhone !== ADMIN_PHONE) {
+    const allSessions = await redis.hgetall(REDIS_KEYS.SESSIONS) || {}
+    const userSessions = []
+    for (const [sessId, sessPhone] of Object.entries(allSessions)) {
+      if (sessPhone === normalizedPhone) userSessions.push(sessId)
     }
-  }
-
-  // If already 3 sessions, remove the oldest one (first in array)
-  if (userSessions.length >= 3) {
-    await redis.hdel(REDIS_KEYS.SESSIONS, userSessions[0])
-    pushLog(`Auth | User +${normalizedPhone} exceeded 3 devices, oldest session removed`)
+    if (userSessions.length >= 3) {
+      await redis.hdel(REDIS_KEYS.SESSIONS, userSessions[0])
+      pushLog(`Auth | User +${normalizedPhone} exceeded 3 devices, oldest session removed`)
+    }
   }
 
   // Create new session
