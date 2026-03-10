@@ -1619,12 +1619,12 @@ async function doPromoBroadcast() {
         lowestOnPendingTimeout = null
         lowestOnPendingPrice = null
       }
-      // Reset titik ON terendah jika OFF sudah 3+ menit dan harga di atas terendah
-      if (offBroadcastCount >= 3 && lowestOnPriceCache !== null && lastKnownPrice?.buy && lastKnownPrice.buy > lowestOnPriceCache) {
+      // Reset titik ON terendah jika OFF sudah 1+ menit dan harga di atas terendah
+      if (offBroadcastCount >= 1 && lowestOnPriceCache !== null && lastKnownPrice?.buy && lastKnownPrice.buy > lowestOnPriceCache) {
         lowestOnPriceCache = null
         await redis.del(REDIS_KEYS.LOWEST_ON_PRICE)
         broadcastSSE({ type: 'lowest_on_price', price: null })
-        pushLog(`🏷️ Titik ON terendah direset (OFF 3m+ dan harga lebih tinggi)`)
+        pushLog(`🏷️ Titik ON terendah direset (OFF 1m+ dan harga lebih tinggi)`)
       }
     }
 
