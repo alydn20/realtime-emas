@@ -10587,31 +10587,54 @@ app.get('/monitoring', async (_req, res) => {
     #reloadBanner {
       display: none;
       position: fixed;
-      top: 0; left: 0; right: 0;
+      inset: 0;
       z-index: 99999;
-      background: linear-gradient(90deg, #f59e0b, #d97706);
-      color: #000;
-      text-align: center;
-      padding: 12px 16px;
-      font-size: 0.92em;
-      font-weight: 700;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.4);
-      gap: 12px;
+      background: rgba(0,0,0,0.6);
       align-items: center;
       justify-content: center;
-      flex-wrap: wrap;
     }
     #reloadBanner.show { display: flex; }
-    #reloadBanner button {
-      background: #000;
-      color: #f59e0b;
-      border: none;
-      border-radius: 8px;
-      padding: 6px 18px;
+    #reloadBannerBox {
+      background: #1a2332;
+      border: 1px solid rgba(245,158,11,0.4);
+      border-radius: 18px;
+      padding: 28px 28px 24px;
+      max-width: 340px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+    #reloadBannerBox .reload-icon {
+      font-size: 2.4em;
+      line-height: 1;
+    }
+    #reloadBannerBox h4 {
+      margin: 0;
+      font-size: 1em;
       font-weight: 700;
-      font-size: 0.95em;
+      color: #f59e0b;
+    }
+    #reloadBannerBox p {
+      margin: 0;
+      font-size: 0.82em;
+      color: #9ca3af;
+      line-height: 1.5;
+    }
+    #reloadBannerBox button {
+      background: linear-gradient(90deg, #f59e0b, #d97706);
+      color: #000;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 28px;
+      font-weight: 700;
+      font-size: 0.92em;
       cursor: pointer;
-      white-space: nowrap;
+      width: 100%;
+      margin-top: 4px;
     }
     .toast-container {
       position: fixed;
@@ -10711,8 +10734,12 @@ app.get('/monitoring', async (_req, res) => {
 <body>
   <!-- Reload Banner: shown when admin triggers force reload -->
   <div id="reloadBanner">
-    <span>⚠️ Ada pembaruan tersedia. Silakan reload halaman untuk mendapatkan data terbaru.</span>
-    <button onclick="window.location.reload()">Reload Sekarang</button>
+    <div id="reloadBannerBox">
+      <div class="reload-icon">⚠️</div>
+      <h4>Pembaruan Tersedia</h4>
+      <p>Admin telah merilis pembaruan baru. Silakan reload halaman untuk mendapatkan data terbaru.</p>
+      <button onclick="window.location.reload()">Reload Sekarang</button>
+    </div>
   </div>
   <div class="toast-container" id="toastContainer"></div>
 
