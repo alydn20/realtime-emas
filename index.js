@@ -35,8 +35,8 @@ const __dirname = dirname(__filename)
 
 // Redis untuk persistent storage
 const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || 'https://robust-mole-31555.upstash.io',
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || 'AXtDAAIncDIxOWMyMWMzYjQ0MjI0MzJlYWQwNTRkMzM0MjgxYWIxNXAyMzE1NTU'
+  url: process.env.UPSTASH_REDIS_REST_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN
 })
 
 // HTTP Keep-Alive agents untuk koneksi lebih cepat
@@ -2363,6 +2363,31 @@ console.log(`[GOLD] Bot started | Price check: ${PRICE_CHECK_INTERVAL/1000}s | S
 const app = express()
 app.use(express.json({ limit: '10mb' }))
 
+// Security headers
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN')
+  res.setHeader('X-XSS-Protection', '1; mode=block')
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()')
+  next()
+})
+
+// Simple in-memory rate limiter for sensitive endpoints
+const _rateLimitMap = new Map()
+function rateLimit(maxReq, windowMs) {
+  return (req, res, next) => {
+    const key = req.ip + ':' + req.path
+    const now = Date.now()
+    const entry = _rateLimitMap.get(key) || { count: 0, start: now }
+    if (now - entry.start > windowMs) { entry.count = 0; entry.start = now }
+    entry.count++
+    _rateLimitMap.set(key, entry)
+    if (entry.count > maxReq) return res.status(429).json({ error: 'Too many requests' })
+    next()
+  }
+}
+
 // ==================== SUPER ADMIN LOGIN ====================
 // Login page untuk akses /qr dan /admin
 app.get('/admin-login', (req, res) => {
@@ -2585,7 +2610,7 @@ app.get('/admin-login', (req, res) => {
 })
 
 // API untuk login
-app.post('/api/admin-login', async (req, res) => {
+app.post('/api/admin-login', rateLimit(10, 60000), async (req, res) => {
   const { username, password } = req.body
   if (username === SUPER_ADMIN.username && password === SUPER_ADMIN.password) {
     // Generate simple token
@@ -5360,6 +5385,8 @@ app.post('/api/reject-registration', async (req, res) => {
 
 // Get admin phones
 app.get('/api/admin-phones', (req, res) => {
+  const auth = req.headers['x-admin-password'] || ''
+  if (auth !== ADMIN_PASSWORD) return res.status(403).json({ error: 'Unauthorized' })
   res.json({ success: true, phones: ADMIN_PHONES })
 })
 
@@ -12124,9 +12151,7 @@ app.get('/monitoring', async (_req, res) => {
 
     // Promo/Info Notification Banner
     function showPromoNotification(data) {
-      console.log('showPromoNotification called:', data);
       const container = document.getElementById('notifContainer');
-      console.log('notifContainer element:', container);
       if (!container) {
         console.error('notifContainer not found!');
         return;
@@ -12340,7 +12365,6 @@ app.get('/monitoring', async (_req, res) => {
               }
             });
           } else {
-            console.log('🔧 Admin mode: Dev tools enabled');
           }
 
           // Check if PIN change is required
@@ -12428,7 +12452,6 @@ app.get('/monitoring', async (_req, res) => {
           if (currentAppVersion === null) {
             currentAppVersion = data.version;
           } else if (currentAppVersion !== data.version) {
-            console.log('New version detected, reloading...');
             window.location.reload(true);
             return;
           }
@@ -12864,7 +12887,6 @@ app.get('/monitoring', async (_req, res) => {
 
         // 🎁 Handle promo ON/OFF status
         if (data.type === 'promo_status') {
-          console.log('📦 Promo status received:', data.status);
 
           // Update badge UI (selalu update, tidak perlu soundEnabled)
           const badge = document.getElementById('promoStatusBadge');
@@ -12877,7 +12899,6 @@ app.get('/monitoring', async (_req, res) => {
 
           // Sound hanya jika enabled
           if (!soundEnabled) {
-            console.log('🔇 Sound disabled, skipping promo sound');
             return;
           }
 
@@ -12887,23 +12908,19 @@ app.get('/monitoring', async (_req, res) => {
           // Capture status untuk setTimeout
           const statusForSound = data.status;
 
-          console.log('🔊 Promo sound akan diputar dalam 5 detik...');
 
           // Play sound dengan delay 5 detik agar tidak nyatu dengan sound NAIK/TURUN
           setTimeout(() => {
-            console.log('🔊 Playing promo sound:', statusForSound);
             try {
               const soundUrl = statusForSound === 'ON'
                 ? (customSoundOn || defaultPromoSoundOn)
                 : (customSoundOff || defaultPromoSoundOff);
-              console.log('🔊 Sound URL length:', soundUrl ? soundUrl.length : 0);
               const audio = new Audio(soundUrl);
               audio.volume = 0.7;
               audio.play()
-                .then(() => console.log('✅ Promo sound played successfully'))
-                .catch(e => console.log('❌ Promo sound error:', e.message));
+                .then(() => {})
+                .catch(() => {});
             } catch (e) {
-              console.log('❌ Promo sound exception:', e.message);
             }
           }, 5000); // 5 detik delay
 
