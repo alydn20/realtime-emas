@@ -3046,7 +3046,7 @@ app.get('/sse', async (req, res) => {
 
   // Kirim nama samaran dan riwayat chat
   const animal = getAnimalName(phone)
-  res.write(`data: ${JSON.stringify({ type: 'chat_init', animal, messages: chatHistory })}\n\n`)
+  res.write(`data: ${JSON.stringify({ type: 'chat_init', animal, messages: chatHistory, clients: sseClients.size + 1 })}\n\n`)
 
 
   sseClients.set(res, userInfo)
@@ -12840,6 +12840,8 @@ app.get('/monitoring', async (_req, res) => {
           const el = document.getElementById('chatMyAnimal');
           if (el) el.textContent = _chatMyAnimal;
           _loadChatHistory(data.messages || []);
+          const countEl = document.getElementById('chatOnlineCount');
+          if (countEl && data.clients) countEl.textContent = data.clients + ' online';
           return;
         }
 
