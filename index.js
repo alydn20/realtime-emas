@@ -4512,6 +4512,15 @@ app.post('/api/admin/force-logout-all', express.json(), async (req, res) => {
   }
 })
 
+// Admin: Force reload all clients
+app.post('/api/admin/force-reload', express.json(), async (req, res) => {
+  const { password } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+  broadcastSSE({ type: 'force_reload' })
+  pushLog(`Admin | Force reload all users (${sseClients.size} clients)`)
+  res.json({ success: true, message: `Force reload dikirim ke ${sseClients.size} client` })
+})
+
 // Admin: Send push notification
 app.post('/api/admin/push', express.json(), async (req, res) => {
   const { password, title, message, phone, type = 'info' } = req.body
@@ -6971,6 +6980,7 @@ ${authScript}
             <button class="btn btn-danger btn-sm" onclick="clearInvalidUsers()">Hapus Invalid</button>
             <button class="btn btn-sm" style="background:#7f1d1d;color:white;" onclick="clearAllUsers()">Hapus Semua</button>
             <button class="btn btn-sm" style="background:#f59e0b;color:#000;" onclick="forceLogoutAll()">Force Logout Semua</button>
+            <button class="btn btn-sm" style="background:#7c3aed;color:white;" onclick="forceReloadAll()">Force Reload Semua</button>
           </div>
           <div class="warning-box">
             <p><strong>Catatan:</strong> WhatsApp menggunakan format LID (privacy) sehingga nomor telepon member tidak bisa diakses otomatis. User harus mendaftar sendiri via OTP atau ditambahkan manual oleh admin.</p>
@@ -8066,6 +8076,32 @@ ${authScript}
         if (data.success) {
           result.className = 'result-msg success';
           result.textContent = 'Semua user berhasil di-logout. Mereka harus login ulang.';
+        } else {
+          result.className = 'result-msg error';
+          result.textContent = 'Error: ' + data.error;
+        }
+        setTimeout(() => result.className = 'result-msg', 5000);
+      });
+    }
+
+    async function forceReloadAll() {
+      const confirmed = await showConfirm('Force reload semua user? Halaman semua user akan di-refresh otomatis.', { title: 'Force Reload', type: 'warning' });
+      if (!confirmed) return;
+
+      const result = document.getElementById('syncResult');
+      result.className = 'result-msg success';
+      result.textContent = 'Memproses force reload...';
+
+      fetch('/api/admin/force-reload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          result.className = 'result-msg success';
+          result.textContent = data.message;
         } else {
           result.className = 'result-msg error';
           result.textContent = 'Error: ' + data.error;
@@ -10456,6 +10492,10 @@ app.get('/monitoring', async (_req, res) => {
       .history-pagination { padding: 10px 12px; gap: 8px; flex-wrap: wrap; }
       .page-btn { padding: 7px 12px; font-size: 0.8em; }
       .page-info { font-size: 0.78em; }
+      /* Chat modal responsive */
+      #chatModal .promo-suggestions-modal { width: 98%; max-width: 100%; height: 90vh; max-height: 90vh; border-radius: 12px; padding: 14px; }
+      #chatModal .promo-suggestions-modal h3 { font-size: 0.9em; gap: 6px; }
+      #chatInput { font-size: 0.85em; padding: 9px 10px; }
     }
 
     /* Extra small screens */
@@ -10733,12 +10773,9 @@ app.get('/monitoring', async (_req, res) => {
       <h3 style="flex-shrink:0;">
         <i data-lucide="message-circle" style="width:15px;height:15px;color:#3b9eff;"></i>
         Chat Member Aktif
-        <span id="chatOnlineCount" style="font-size:0.7em;color:#9ca3af;font-weight:400;margin-left:4px;"></span>
+        <span id="chatOnlineCount" style="font-size:0.75em;color:#0ecb81;font-weight:600;margin-left:4px;background:rgba(14,203,129,0.12);border-radius:6px;padding:1px 7px;"></span>
         <button class="promo-modal-close" onclick="closeChatModal()">Tutup</button>
       </h3>
-      <div style="flex-shrink:0;background:rgba(59,158,255,0.08);border:1px solid rgba(59,158,255,0.2);border-radius:8px;padding:6px 12px;margin-bottom:8px;font-size:0.72em;color:#9ca3af;">
-        Nama kamu: <strong id="chatMyAnimal" style="color:#3b9eff;">...</strong> — identitas acak, tidak ada data pribadimu
-      </div>
       <div id="chatMessages" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:4px 0;"></div>
       <div style="flex-shrink:0;display:flex;gap:8px;margin-top:8px;">
         <input id="chatInput" type="text" maxlength="300" placeholder="Tulis pesan..." style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:8px 12px;color:#eef3fa;font-size:0.82em;outline:none;" onkeydown="if(event.key==='Enter')sendChat()">
@@ -12755,6 +12792,8 @@ app.get('/monitoring', async (_req, res) => {
 
         // Skip heartbeat silently
         if (data.type === 'heartbeat') {
+          const el = document.getElementById('chatOnlineCount');
+          if (el && data.clients) el.textContent = data.clients + ' online';
           return;
         }
 
@@ -12846,6 +12885,11 @@ app.get('/monitoring', async (_req, res) => {
         if (data.type === 'chat_reset') {
           const box = document.getElementById('chatMessages');
           if (box) box.innerHTML = '';
+          return;
+        }
+
+        if (data.type === 'force_reload') {
+          window.location.reload();
           return;
         }
 
