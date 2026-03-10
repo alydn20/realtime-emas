@@ -151,6 +151,7 @@ let isPromoChecking = false // Guard untuk mencegah concurrent fetch
 let promoCheckCount = 0 // Counter untuk logging
 let offBroadcastCount = 0 // Counter OFF broadcast (max 5)
 let offStartTime = null // Timestamp kapan status pertama kali OFF
+let lastForceReloadAt = 0 // Timestamp terakhir force_reload dikirim
 let lastPromoBroadcastMinute = -1 // Track menit terakhir broadcast
 
 // CACHE GLOBAL untuk market data (pre-fetched)
@@ -3048,6 +3049,11 @@ app.get('/sse', async (req, res) => {
   const animal = getAnimalName(phone)
   res.write(`data: ${JSON.stringify({ type: 'chat_init', animal, messages: chatHistory })}\n\n`)
 
+  // Kirim force_reload jika masih aktif (dalam 5 menit terakhir)
+  if (lastForceReloadAt > 0 && Date.now() - lastForceReloadAt < 5 * 60 * 1000) {
+    res.write(`data: ${JSON.stringify({ type: 'force_reload', at: lastForceReloadAt })}\n\n`)
+  }
+
   sseClients.set(res, userInfo)
 
   // Broadcast online users update to admin
@@ -4516,7 +4522,8 @@ app.post('/api/admin/force-logout-all', express.json(), async (req, res) => {
 app.post('/api/admin/force-reload', express.json(), async (req, res) => {
   const { password } = req.body
   if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
-  broadcastSSE({ type: 'force_reload', at: Date.now() })
+  lastForceReloadAt = Date.now()
+  broadcastSSE({ type: 'force_reload', at: lastForceReloadAt })
   pushLog(`Admin | Force reload all users (${sseClients.size} clients)`)
   res.json({ success: true, message: `Force reload dikirim ke ${sseClients.size} client` })
 })
@@ -10739,7 +10746,7 @@ app.get('/monitoring', async (_req, res) => {
       <div class="reload-icon">⚠️</div>
       <h4>Pembaruan Tersedia</h4>
 
-      <button onclick="window.location.reload()">Reload Sekarang</button>
+      <button onclick="sessionStorage.setItem('force_reload_ack', Date.now()); window.location.reload()">Reload Sekarang</button>
     </div>
   </div>
   <div class="toast-container" id="toastContainer"></div>
@@ -11646,7 +11653,6 @@ app.get('/monitoring', async (_req, res) => {
     }
 
     // ==================== CHAT ====================
-    const _pageLoadTime = Date.now();
     let _chatMyAnimal = '';
     let _chatOpen = false;
     let _chatUnread = 0;
@@ -12952,8 +12958,9 @@ app.get('/monitoring', async (_req, res) => {
         }
 
         if (data.type === 'force_reload') {
-          // Abaikan jika halaman di-load SETELAH broadcast dikirim
-          if (data.at && _pageLoadTime > data.at) return;
+          // Abaikan jika sudah pernah reload untuk broadcast ini
+          const acked = parseInt(sessionStorage.getItem('force_reload_ack') || '0');
+          if (data.at && acked >= data.at) return;
           const banner = document.getElementById('reloadBanner');
           if (banner) banner.classList.add('show');
           return;
