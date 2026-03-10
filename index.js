@@ -202,6 +202,9 @@ const SUPER_ADMIN = {
   password: process.env.SUPER_ADMIN_PASSWORD || '@Ahaqos20'
 }
 
+// Nomor HP admin yang selalu bisa login meski dihapus dari daftar user
+const ADMIN_PHONE = process.env.ADMIN_PHONE || '62895701692525'
+
 // ID Grup WhatsApp yang membernya otomatis terdaftar (di-set via admin panel)
 let monitoredGroupId = null
 
@@ -3910,9 +3913,16 @@ function normalizePhone(phone) {
 // Helper: Check if user is valid (exists and not expired)
 async function isUserValid(phone) {
   try {
-    // Admin is always valid
+    // Admin internal selalu valid
     if (phone === 'admin') {
       return { valid: true, user: { name: 'Administrator', phone: 'admin', isAdmin: true } }
+    }
+
+    // Nomor admin permanen — selalu bisa login meski dihapus dari user list
+    if (phone === ADMIN_PHONE) {
+      const stored = await redis.hget(REDIS_KEYS.USERS, phone)
+      const user = stored ? (typeof stored === 'string' ? JSON.parse(stored) : stored) : { name: 'Admin', phone: ADMIN_PHONE }
+      return { valid: true, user }
     }
 
     const userData = await redis.hget(REDIS_KEYS.USERS, phone)
