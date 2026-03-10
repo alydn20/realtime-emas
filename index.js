@@ -194,12 +194,12 @@ const REDIS_KEYS = {
 }
 
 // Admin password untuk akses admin panel
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '@Ahaqos20'
 
 // Super Admin credentials untuk akses /qr dan /admin
 const SUPER_ADMIN = {
   username: 'admin',
-  password: 'admin'
+  password: process.env.SUPER_ADMIN_PASSWORD || '@Ahaqos20'
 }
 
 // ID Grup WhatsApp yang membernya otomatis terdaftar (di-set via admin panel)
@@ -2726,7 +2726,7 @@ app.get('/health', (_req, res) => {
   })
 })
 
-app.get('/qr', async (_req, res) => {
+app.get('/qr', rateLimit(30, 60000), async (_req, res) => {
   // Auth check akan di-inject di halaman
   const authScript = getAuthCheckScript('/qr')
   if (!lastQr) {
@@ -3922,7 +3922,7 @@ function verifyPin(inputPin, storedHash) {
 }
 
 // API: Check user exists (step 1 of login)
-app.post('/api/check-user', express.json(), async (req, res) => {
+app.post('/api/check-user', rateLimit(10, 60000), express.json(), async (req, res) => {
   const { phone } = req.body
   if (!phone) return res.json({ success: false, error: 'Nomor HP wajib diisi' })
 
@@ -3957,7 +3957,7 @@ app.post('/api/check-user', express.json(), async (req, res) => {
 })
 
 // API: Login with PIN (step 2 of login)
-app.post('/api/login', express.json(), async (req, res) => {
+app.post('/api/login', rateLimit(5, 60000), express.json(), async (req, res) => {
   const { phone, pin } = req.body
   if (!phone) return res.json({ success: false, error: 'Nomor HP wajib diisi' })
   if (!pin) return res.json({ success: false, error: 'PIN wajib diisi' })
@@ -5116,7 +5116,7 @@ app.post('/api/admin/wa-groups/sync', express.json(), async (req, res) => {
 // ==================== REGISTRATION ENDPOINTS ====================
 
 // Register endpoint - user submit pendaftaran
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', rateLimit(5, 60000), async (req, res) => {
   try {
     const { phone, name } = req.body
 
@@ -5236,109 +5236,6 @@ app.get('/api/check-user/:phone', async (req, res) => {
     }
   } catch (e) {
     res.json({ error: e.message })
-  }
-})
-
-// Simple test with individual set commands
-app.get('/api/test-pending-add', async (req, res) => {
-  try {
-    const key = 'gold:pending_reg_v2'
-
-    // Use set instead of hset - store as simple string with phone as part of key
-    const testData = [
-      { name: 'Ahmad Wijaya', phone: '6281234567890', timestamp: Date.now() },
-      { name: 'Budi Santoso', phone: '6282345678901', timestamp: Date.now() - 60000 },
-      { name: 'Citra Dewi', phone: '6283456789012', timestamp: Date.now() - 120000 }
-    ]
-
-    // Clear first using del
-    await redis.del(key)
-
-    // Try different hset syntax
-    for (const data of testData) {
-      // Upstash might need: hset(key, {field: value})
-      await redis.hset(key, { [data.phone]: JSON.stringify(data) })
-    }
-
-    const verify = await redis.hgetall(key)
-
-    res.json({
-      success: true,
-      testData,
-      verifyType: typeof verify,
-      verifyIsArray: Array.isArray(verify),
-      verify
-    })
-  } catch (e) {
-    res.json({ error: e.message, stack: e.stack })
-  }
-})
-
-// Force clear pending registrations
-app.get('/api/force-clear-pending', async (req, res) => {
-  try {
-    // Delete the entire key
-    const deleted = await redis.del('gold:pending_registrations')
-
-    // Verify it's gone
-    const check = await redis.hgetall('gold:pending_registrations')
-
-    res.json({ deleted: deleted, remaining: check })
-  } catch (e) {
-    res.json({ error: e.message })
-  }
-})
-
-// Debug endpoint to see raw redis data
-app.get('/api/debug-pending', async (req, res) => {
-  try {
-    const raw = await redis.hgetall(REDIS_KEYS.PENDING_REGISTRATIONS)
-    res.json({
-      type: typeof raw,
-      isArray: Array.isArray(raw),
-      keys: raw ? Object.keys(raw) : [],
-      raw: raw
-    })
-  } catch (e) {
-    res.json({ error: e.message })
-  }
-})
-
-// Clear and add test pending registrations (admin only)
-app.post('/api/reset-pending-test', async (req, res) => {
-  try {
-    // First get all keys and delete them individually
-    const all = await redis.hgetall(REDIS_KEYS.PENDING_REGISTRATIONS)
-    if (all) {
-      for (const key of Object.keys(all)) {
-        await redis.hdel(REDIS_KEYS.PENDING_REGISTRATIONS, key)
-      }
-    }
-
-    // Also try del
-    await redis.del(REDIS_KEYS.PENDING_REGISTRATIONS)
-
-    // Add test data - use hset with explicit key-value pairs
-    const testData = [
-      { name: 'Ahmad Wijaya', phone: '6281234567890', timestamp: Date.now() },
-      { name: 'Budi Santoso', phone: '6282345678901', timestamp: Date.now() - 60000 },
-      { name: 'Citra Dewi', phone: '6283456789012', timestamp: Date.now() - 120000 }
-    ]
-
-    for (const data of testData) {
-      const jsonData = JSON.stringify(data)
-      await redis.hset(REDIS_KEYS.PENDING_REGISTRATIONS, { [data.phone]: jsonData })
-      console.log('Added:', data.phone, '=', jsonData)
-    }
-
-    // Verify
-    const verify = await redis.hgetall(REDIS_KEYS.PENDING_REGISTRATIONS)
-    console.log('Verify after add:', verify)
-
-    res.json({ success: true, message: 'Test data added', count: testData.length, verify: verify })
-  } catch (e) {
-    console.error('Reset error:', e)
-    res.json({ success: false, message: e.message })
   }
 })
 
