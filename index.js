@@ -2373,6 +2373,42 @@ app.use((_req, res, next) => {
   next()
 })
 
+// Middleware: terima x-admin-token sebagai auth pengganti password
+app.use((req, res, next) => {
+  const token = req.headers['x-admin-token']
+  if (token) {
+    try {
+      const decoded = Buffer.from(token, 'base64').toString()
+      const [username, pwd] = decoded.split(':')
+      if (username === SUPER_ADMIN.username && pwd === SUPER_ADMIN.password) {
+        if (req.body && typeof req.body === 'object') req.body.password = ADMIN_PASSWORD
+        req.query = { ...req.query, password: ADMIN_PASSWORD }
+        req.headers['x-admin-password'] = ADMIN_PASSWORD
+        req._adminAuthed = true
+      }
+    } catch {}
+  }
+  next()
+})
+
+// Helper: validasi session user atau admin — kembalikan false jika tidak valid (sudah kirim 403)
+async function requireSession(req, res) {
+  if (req._adminAuthed) return true
+  const session = req.query.session || (req.body && req.body.session)
+  if (!session) { res.status(403).json({ error: 'Unauthorized' }); return false }
+  let phone = null
+  try { phone = await redis.hget(REDIS_KEYS.SESSIONS, session) } catch {}
+  if (!phone) { res.status(403).json({ error: 'Unauthorized' }); return false }
+  return true
+}
+
+// Helper: validasi admin password untuk endpoint berbahaya
+function requireAdminPassword(req, res) {
+  const pw = req.query.password || (req.body && req.body.password) || req.headers['x-admin-password']
+  if (pw !== ADMIN_PASSWORD) { res.status(403).json({ error: 'Unauthorized' }); return false }
+  return true
+}
+
 // Simple in-memory rate limiter for sensitive endpoints
 const _rateLimitMap = new Map()
 function rateLimit(maxReq, windowMs) {
@@ -2911,6 +2947,7 @@ app.get('/daily-stats', async (_req, res) => {
 
 // Price History API - konsisten di semua device (async untuk Redis)
 app.get('/price-history', async (req, res) => {
+  if (!await requireSession(req, res)) return
   const page = parseInt(req.query.page) || 1
   const perPage = parseInt(req.query.perPage) || 10
   const history = await getPriceHistory(page, perPage)
@@ -2921,6 +2958,7 @@ app.get('/price-history', async (req, res) => {
 
 // Clear price history (untuk reset data duplikat)
 app.get('/clear-history', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return
   try {
     await redis.del(REDIS_KEYS.PRICE_HISTORY)
     priceHistoryCache = []
@@ -2933,6 +2971,7 @@ app.get('/clear-history', async (req, res) => {
 
 // Remove duplicate entries from history
 app.get('/cleanup-history', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return
   try {
     const allHistory = await redis.lrange(REDIS_KEYS.PRICE_HISTORY, 0, -1)
     const seen = new Set()
@@ -3170,6 +3209,7 @@ app.get('/api/admin/online-users', (req, res) => {
 // Contoh: /send-notif?title=Promo&message=Diskon%2050%25&type=promo
 // type: promo, info, warning, urgent
 app.get('/send-notif', (req, res) => {
+  if (!requireAdminPassword(req, res)) return
   const { title, message, type = 'info' } = req.query
 
   if (!title || !message) {
@@ -4650,7 +4690,8 @@ app.delete('/api/admin/notif-history', async (req, res) => {
 // ==================== SOUND SETTINGS ====================
 
 // Get sound settings (public - for monitoring page)
-app.get('/api/sound-settings', async (_req, res) => {
+app.get('/api/sound-settings', async (req, res) => {
+  if (!await requireSession(req, res)) return
   try {
     const settings = await redis.get(REDIS_KEYS.SOUND_SETTINGS)
     if (settings) {
@@ -4702,7 +4743,8 @@ const DEFAULT_NOMINAL_CONFIG = {
 }
 
 // Get nominal settings (public - for client)
-app.get('/api/nominal-settings', async (_req, res) => {
+app.get('/api/nominal-settings', async (req, res) => {
+  if (!await requireSession(req, res)) return
   try {
     const settings = await redis.get(REDIS_KEYS.NOMINAL_SETTINGS)
     let config = settings ? (typeof settings === 'string' ? JSON.parse(settings) : settings) : DEFAULT_NOMINAL_CONFIG
@@ -4761,7 +4803,8 @@ app.post('/api/admin/nominal-settings', express.json(), async (req, res) => {
 })
 
 // Public: Get promo limit
-app.get('/api/promo-limit', async (_req, res) => {
+app.get('/api/promo-limit', async (req, res) => {
+  if (!await requireSession(req, res)) return
   try {
     const val = await redis.get(REDIS_KEYS.PROMO_LIMIT)
     const limit = val !== null ? parseInt(val, 10) : null
@@ -4811,7 +4854,8 @@ app.post('/api/chat/send', express.json(), async (req, res) => {
   res.json({ success: true })
 })
 
-app.get('/api/lowest-on-price', async (_req, res) => {
+app.get('/api/lowest-on-price', async (req, res) => {
+  if (!await requireSession(req, res)) return
   try {
     const val = await redis.get(REDIS_KEYS.LOWEST_ON_PRICE)
     const price = val !== null ? parseInt(val, 10) : null
@@ -4822,7 +4866,8 @@ app.get('/api/lowest-on-price', async (_req, res) => {
 })
 
 // Get active promo suggestions (cached)
-app.get('/api/promo-suggestions', async (_req, res) => {
+app.get('/api/promo-suggestions', async (req, res) => {
+  if (!await requireSession(req, res)) return
   try {
     // Jika cache kosong, fetch langsung
     if (cachedPromoSuggestions.length === 0) {
@@ -4841,7 +4886,8 @@ let cachedFFCalendar = []
 let lastFFCalendarFetch = 0
 const FF_CALENDAR_TTL = 5 * 60 * 1000 // cache 5 menit
 
-app.get('/api/ff-calendar', async (_req, res) => {
+app.get('/api/ff-calendar', async (req, res) => {
+  if (!await requireSession(req, res)) return
   try {
     const now = Date.now()
     if (cachedFFCalendar.length > 0 && now - lastFFCalendarFetch < FF_CALENDAR_TTL) {
@@ -5133,6 +5179,7 @@ app.post('/api/register', async (req, res) => {
 
 // Get pending registrations (admin only)
 app.get('/api/pending-registrations', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return
   try {
     const all = await redis.hgetall(REDIS_KEYS.PENDING_REGISTRATIONS)
 
@@ -5297,6 +5344,7 @@ app.post('/api/reset-pending-test', async (req, res) => {
 
 // Approve registration (admin only)
 app.post('/api/approve-registration', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return
   try {
     const { phone } = req.body
     console.log('Approve request for phone:', phone)
@@ -5345,6 +5393,7 @@ app.post('/api/approve-registration', async (req, res) => {
 
 // Reject registration (admin only)
 app.post('/api/reject-registration', async (req, res) => {
+  if (!requireAdminPassword(req, res)) return
   try {
     const { phone, reason } = req.body
     console.log('Reject request for phone:', phone)
@@ -7320,7 +7369,12 @@ ${authScript}
 
   <script>
     // Admin sudah terautentikasi via /admin-login
-    const adminPass = 'admin123'; // Default password untuk API calls
+    function adminFetch(url, opts) {
+      var o = opts || {};
+      var token = localStorage.getItem('super_admin_token') || '';
+      var hdrs = Object.assign({ 'x-admin-token': token }, o.headers || {});
+      return fetch(url, Object.assign({}, o, { headers: hdrs }));
+    }
 
     // ==================== Professional Modal System ====================
     const modalIcons = {
@@ -7514,7 +7568,7 @@ ${authScript}
     let currentSoundOff = '';
 
     function loadSoundSettings() {
-      fetch('/api/sound-settings')
+      adminFetch('/api/sound-settings')
         .then(r => r.json())
         .then(data => {
           if (data.success) {
@@ -7601,10 +7655,10 @@ ${authScript}
       result.className = 'result-msg success';
       result.textContent = 'Menyimpan...';
 
-      fetch('/api/admin/sound-settings', {
+      adminFetch('/api/admin/sound-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, soundUp, soundDown, soundOn, soundOff })
+        body: JSON.stringify({ soundUp, soundDown, soundOn, soundOff })
       })
       .then(r => r.json())
       .then(data => {
@@ -7635,10 +7689,10 @@ ${authScript}
       result.className = 'result-msg success';
       result.textContent = 'Mereset sound...';
 
-      fetch('/api/admin/sound-settings', {
+      adminFetch('/api/admin/sound-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, soundUp: '', soundDown: '', soundOn: '', soundOff: '' })
+        body: JSON.stringify({ soundUp: '', soundDown: '', soundOn: '', soundOff: '' })
       })
       .then(r => r.json())
       .then(data => {
@@ -7752,7 +7806,7 @@ ${authScript}
 
     // ==================== Promo Limit Functions ====================
     function loadPromoLimit() {
-      fetch('/api/promo-limit')
+      adminFetch('/api/promo-limit')
         .then(r => r.json())
         .then(data => {
           const cur = document.getElementById('promoLimitCurrent');
@@ -7771,10 +7825,10 @@ ${authScript}
         result.textContent = 'Masukkan angka yang valid';
         return;
       }
-      fetch('/api/admin/promo-limit', {
+      adminFetch('/api/admin/promo-limit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, limit: parseInt(val, 10) })
+        body: JSON.stringify({ limit: parseInt(val, 10) })
       })
       .then(r => r.json())
       .then(data => {
@@ -7794,7 +7848,7 @@ ${authScript}
     let currentNominals = [];
 
     function loadNominals() {
-      fetch('/api/admin/nominal-settings?password=' + encodeURIComponent(adminPass))
+      adminFetch('/api/admin/nominal-settings')
         .then(r => r.json())
         .then(data => {
           if (data.success) {
@@ -7906,10 +7960,10 @@ ${authScript}
         nominals: currentNominals
       };
 
-      fetch('/api/admin/nominal-settings', {
+      adminFetch('/api/admin/nominal-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, config: config })
+        body: JSON.stringify({ config: config })
       })
       .then(r => r.json())
       .then(data => {
@@ -7936,7 +7990,7 @@ ${authScript}
       const select = document.getElementById('waGroupSelect');
       select.innerHTML = '<option value="">Memuat grup...</option>';
 
-      fetch('/api/admin/wa-groups?password=' + encodeURIComponent(adminPass))
+      adminFetch('/api/admin/wa-groups')
         .then(r => r.json())
         .then(data => {
           if (!data.success) {
@@ -7977,10 +8031,10 @@ ${authScript}
         return;
       }
 
-      fetch('/api/admin/wa-groups/set', {
+      adminFetch('/api/admin/wa-groups/set', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, groupId })
+        body: JSON.stringify({ groupId })
       })
       .then(r => r.json())
       .then(data => {
@@ -8001,10 +8055,10 @@ ${authScript}
       result.className = 'result-msg success';
       result.textContent = 'Menyinkronkan member...';
 
-      fetch('/api/admin/wa-groups/sync', {
+      adminFetch('/api/admin/wa-groups/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass })
+        body: JSON.stringify({ })
       })
       .then(r => r.json())
       .then(data => {
@@ -8028,10 +8082,10 @@ ${authScript}
       result.className = 'result-msg success';
       result.textContent = 'Menghapus user invalid...';
 
-      fetch('/api/admin/users/clear-invalid', {
+      adminFetch('/api/admin/users/clear-invalid', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass })
+        body: JSON.stringify({ })
       })
       .then(r => r.json())
       .then(data => {
@@ -8057,10 +8111,10 @@ ${authScript}
       result.className = 'result-msg success';
       result.textContent = 'Menghapus semua user...';
 
-      fetch('/api/admin/users/clear-all', {
+      adminFetch('/api/admin/users/clear-all', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, confirm: 'DELETE_ALL' })
+        body: JSON.stringify({ confirm: 'DELETE_ALL' })
       })
       .then(r => r.json())
       .then(data => {
@@ -8084,10 +8138,10 @@ ${authScript}
       result.className = 'result-msg success';
       result.textContent = 'Memproses force logout...';
 
-      fetch('/api/admin/force-logout-all', {
+      adminFetch('/api/admin/force-logout-all', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass })
+        body: JSON.stringify({ })
       })
       .then(r => r.json())
       .then(data => {
@@ -8105,7 +8159,7 @@ ${authScript}
 
     // Load pending registrations
     function loadPendingRegistrations() {
-      fetch('/api/pending-registrations')
+      adminFetch('/api/pending-registrations')
         .then(r => r.json())
         .then(data => {
           const list = data.registrations || [];
@@ -8151,7 +8205,7 @@ ${authScript}
       const confirmed = await showConfirm('Setujui pendaftaran ini?', { title: 'Setujui Pendaftaran', type: 'info', confirmText: 'Setujui' });
       if (!confirmed) return;
 
-      fetch('/api/approve-registration', {
+      adminFetch('/api/approve-registration', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone })
@@ -8168,7 +8222,7 @@ ${authScript}
       const confirmed = await showConfirm('Tolak pendaftaran ini?', { title: 'Tolak Pendaftaran', type: 'warning', confirmText: 'Tolak' });
       if (!confirmed) return;
 
-      fetch('/api/reject-registration', {
+      adminFetch('/api/reject-registration', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, reason: '' })
@@ -8181,7 +8235,7 @@ ${authScript}
     }
 
     function loadUsers() {
-      fetch('/api/admin/users?password=' + encodeURIComponent(adminPass))
+      adminFetch('/api/admin/users')
         .then(r => r.json())
         .then(data => {
           if (!data.success) return;
@@ -8256,10 +8310,10 @@ ${authScript}
       const confirmed = await showConfirm('Reset PIN user +62' + phone + ' ke default (000000)?', { title: 'Reset PIN', type: 'warning' });
       if (!confirmed) return;
 
-      fetch('/api/admin/reset-pin', {
+      adminFetch('/api/admin/reset-pin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, phone })
+        body: JSON.stringify({ phone })
       })
       .then(r => r.json())
       .then(data => {
@@ -8281,7 +8335,7 @@ ${authScript}
       if (!phone) { showAlert('Nomor WA wajib diisi', 'warning'); return; }
 
       const bodyData = {
-        password: adminPass,
+
         phone,
         name
       };
@@ -8291,7 +8345,7 @@ ${authScript}
         bodyData.expiredTimestamp = new Date(expiredDate + 'T23:59:59').getTime();
       }
 
-      fetch('/api/admin/users', {
+      adminFetch('/api/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyData)
@@ -8335,10 +8389,10 @@ ${authScript}
       result.className = 'result-msg success';
       result.textContent = 'Mengimport ' + phones.length + ' nomor...';
 
-      fetch('/api/admin/users/bulk', {
+      adminFetch('/api/admin/users/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, phones })
+        body: JSON.stringify({ phones })
       })
       .then(r => r.json())
       .then(data => {
@@ -8411,7 +8465,7 @@ ${authScript}
       const expiredDate = document.getElementById('editExpiredDate').value;
 
       const bodyData = {
-        password: adminPass,
+
         phone,
         name
       };
@@ -8423,7 +8477,7 @@ ${authScript}
         bodyData.addDays = parseInt(addDays);
       }
 
-      fetch('/api/admin/users', {
+      adminFetch('/api/admin/users', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyData)
@@ -8444,10 +8498,10 @@ ${authScript}
       const confirmed = await showConfirm('Hapus user +62' + phone + '?', { title: 'Hapus User', type: 'danger', confirmText: 'Hapus' });
       if (!confirmed) return;
 
-      fetch('/api/admin/users', {
+      adminFetch('/api/admin/users', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, phone })
+        body: JSON.stringify({ phone })
       })
       .then(r => r.json())
       .then(data => {
@@ -8460,10 +8514,10 @@ ${authScript}
       const confirmed = await showConfirm('Blokir user +62' + phone + '? User tidak bisa login sampai di-unblock.', { title: 'Blokir User', type: 'danger', confirmText: 'Blokir' });
       if (!confirmed) return;
 
-      fetch('/api/admin/users/block', {
+      adminFetch('/api/admin/users/block', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, phone })
+        body: JSON.stringify({ phone })
       })
       .then(r => r.json())
       .then(data => {
@@ -8480,10 +8534,10 @@ ${authScript}
       const confirmed = await showConfirm('Buka blokir user +62' + phone + '?', { title: 'Unblock User', type: 'info', confirmText: 'Unblock' });
       if (!confirmed) return;
 
-      fetch('/api/admin/users/unblock', {
+      adminFetch('/api/admin/users/unblock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, phone })
+        body: JSON.stringify({ phone })
       })
       .then(r => r.json())
       .then(data => {
@@ -8504,10 +8558,10 @@ ${authScript}
       result.className = 'result-msg success';
       result.textContent = 'Mengeluarkan user dari grup...';
 
-      fetch('/api/admin/users/kick', {
+      adminFetch('/api/admin/users/kick', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, phone })
+        body: JSON.stringify({ phone })
       })
       .then(r => r.json())
       .then(data => {
@@ -8542,10 +8596,10 @@ ${authScript}
 
       if (!title || !message) { showAlert('Judul dan pesan wajib diisi', 'warning'); return; }
 
-      fetch('/api/admin/push', {
+      adminFetch('/api/admin/push', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, phone: phone || null, type, title, message })
+        body: JSON.stringify({ phone: phone || null, type, title, message })
       })
       .then(r => r.json())
       .then(data => {
@@ -8577,10 +8631,10 @@ ${authScript}
       result.className = 'result-msg success';
       result.textContent = 'Mengirim...';
 
-      fetch('/api/admin/push', {
+      adminFetch('/api/admin/push', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, type: currentBcastType, title, message })
+        body: JSON.stringify({ type: currentBcastType, title, message })
       })
       .then(r => r.json())
       .then(data => {
@@ -8599,7 +8653,7 @@ ${authScript}
     }
 
     function loadBroadcastHistory() {
-      fetch('/api/admin/notif-history?password=' + encodeURIComponent(adminPass))
+      adminFetch('/api/admin/notif-history')
         .then(r => r.json())
         .then(data => {
           if (!data.success) return;
@@ -8664,7 +8718,7 @@ ${authScript}
     async function deleteNotifHistory(id) {
       const ok = await showConfirm('Hapus notifikasi ini dari riwayat?', { title: 'Hapus Riwayat', type: 'danger' });
       if (!ok) return;
-      fetch('/api/admin/notif-history/' + id + '?password=' + encodeURIComponent(adminPass), { method: 'DELETE' })
+      adminFetch('/api/admin/notif-history/' + id, { method: 'DELETE' })
         .then(r => r.json())
         .then(data => { if (data.success) loadBroadcastHistory(); });
     }
@@ -8672,7 +8726,7 @@ ${authScript}
     async function clearAllNotifHistory() {
       const ok = await showConfirm('Hapus semua riwayat notifikasi?', { title: 'Hapus Semua', type: 'danger' });
       if (!ok) return;
-      fetch('/api/admin/notif-history?password=' + encodeURIComponent(adminPass), { method: 'DELETE' })
+      adminFetch('/api/admin/notif-history', { method: 'DELETE' })
         .then(r => r.json())
         .then(data => { if (data.success) loadBroadcastHistory(); });
     }
@@ -9238,6 +9292,24 @@ app.get('/monitoring', async (_req, res) => {
       50% { transform: scale(1.2); box-shadow: 0 0 0 5px rgba(239,68,68,0); }
     }
     #chatUnreadBadge.pulse { animation: badgePulse 1s ease-in-out infinite; }
+    @keyframes promoBlink {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(14,203,129,0.8); background: linear-gradient(135deg, rgba(14,203,129,0.25), rgba(14,203,129,0.1)); }
+      50% { box-shadow: 0 0 0 6px rgba(14,203,129,0); background: linear-gradient(135deg, rgba(14,203,129,0.55), rgba(14,203,129,0.35)); }
+    }
+    @keyframes promoBadgePop {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.25); }
+    }
+    .indicator-btn.promo.has-new {
+      animation: promoBlink 0.8s ease-in-out infinite !important;
+      border-color: rgba(14,203,129,0.8) !important;
+    }
+    .indicator-btn.promo.has-new #promoBadge {
+      animation: promoBadgePop 0.8s ease-in-out infinite;
+    }
+    body.light-mode .indicator-btn.promo.has-new {
+      animation: promoBlink 0.8s ease-in-out infinite !important;
+    }
     .chart-stats {
       display: flex;
       flex-wrap: wrap;
@@ -10975,9 +11047,10 @@ app.get('/monitoring', async (_req, res) => {
             </div>
           </div>
           <div class="all-btns-row">
-            <button class="indicator-btn promo" onclick="openPromoSuggestions()">
+            <button class="indicator-btn promo" id="promoBtnEl" onclick="openPromoSuggestions()">
               <i data-lucide="tag" style="width:11px;height:11px;"></i>
               Cek Promo
+              <span id="promoBadge" style="display:none;background:#ef4444;color:#fff;border-radius:99px;padding:0 5px;font-size:0.8em;margin-left:3px;font-weight:700;line-height:1.4;">0</span>
             </button>
             <button class="indicator-btn news" onclick="openNewsModal()">
               <i data-lucide="newspaper" style="width:11px;height:11px;"></i>
@@ -11391,13 +11464,38 @@ app.get('/monitoring', async (_req, res) => {
         ).join('');
       }
       if (lastUpdate) lastUpdate.textContent = 'Update: ' + new Date().toLocaleTimeString('id-ID');
+      // Update badge count
+      const badgeEl = document.getElementById('promoBadge');
+      const btnEl = document.getElementById('promoBtnEl');
+      const count = (promos && promos.length) ? promos.length : 0;
+      if (badgeEl) {
+        badgeEl.textContent = count;
+        badgeEl.style.display = count > 0 ? 'inline' : 'none';
+      }
+      // Cek apakah ada promo baru yang belum dilihat
+      if (count > 0 && btnEl) {
+        const currentIds = (promos || []).map(p => p.code).sort().join(',');
+        const seenIds = localStorage.getItem('promoSeenIds') || '';
+        if (currentIds !== seenIds) {
+          btnEl.classList.add('has-new');
+        }
+      } else if (btnEl) {
+        btnEl.classList.remove('has-new');
+      }
     }
 
     function openPromoSuggestions() {
       const modal = document.getElementById('promoSuggestionsModal');
       if (modal) modal.classList.add('active');
-      fetch('/api/promo-suggestions').then(r => r.json()).then(data => {
-        renderPromoSuggestions(data.promos || []);
+      monFetch('/api/promo-suggestions').then(r => r.json()).then(data => {
+        const promos = data.promos || [];
+        renderPromoSuggestions(promos);
+        // Mark as seen - simpan IDs ke localStorage
+        const seenIds = promos.map(p => p.code).sort().join(',');
+        localStorage.setItem('promoSeenIds', seenIds);
+        // Hentikan kedip
+        const btnEl = document.getElementById('promoBtnEl');
+        if (btnEl) btnEl.classList.remove('has-new');
       }).catch(() => {
         const c = document.getElementById('promoSuggestionsList');
         if (c) c.innerHTML = '<div class="promo-empty">Gagal memuat data</div>';
@@ -11557,7 +11655,7 @@ app.get('/monitoring', async (_req, res) => {
       const body = document.getElementById('newsModalBody');
       if (_newsEventsCache.length > 0) { _renderNewsBody(); return; }
       body.innerHTML = '<div class="news-empty">Memuat kalender Forex Factory...</div>';
-      fetch('/api/ff-calendar')
+      monFetch('/api/ff-calendar')
         .then(r => r.json())
         .then(data => {
           document.getElementById('newsLastUpdate').textContent = 'Update: ' + new Date().toLocaleTimeString('id-ID');
@@ -11878,7 +11976,7 @@ app.get('/monitoring', async (_req, res) => {
 
     // Load history dari server (sama untuk semua user)
     function loadHistory() {
-      fetch('/price-history?page=' + currentPage + '&perPage=' + PER_PAGE)
+      monFetch('/price-history?page=' + currentPage + '&perPage=' + PER_PAGE)
         .then(r => r.json())
         .then(data => {
           totalRecords = data.total || 0;
@@ -12033,7 +12131,7 @@ app.get('/monitoring', async (_req, res) => {
     // Load custom sounds from server
     async function loadCustomSounds() {
       try {
-        const res = await fetch('/api/sound-settings');
+        const res = await monFetch('/api/sound-settings');
         const data = await res.json();
         if (data.success) {
           customSoundUp = data.settings.soundUp || '';
@@ -12601,7 +12699,7 @@ app.get('/monitoring', async (_req, res) => {
 
     // Load nominal settings from API
     function loadNominalSettings() {
-      fetch('/api/nominal-settings')
+      monFetch('/api/nominal-settings')
         .then(r => r.json())
         .then(data => {
           if (data.success) {
@@ -12721,7 +12819,7 @@ app.get('/monitoring', async (_req, res) => {
     }
 
     function loadAndShowPromoLimit() {
-      fetch('/api/promo-limit')
+      monFetch('/api/promo-limit')
         .then(r => r.json())
         .then(data => {
           const card = document.getElementById('promoLimitCard');
@@ -12739,7 +12837,7 @@ app.get('/monitoring', async (_req, res) => {
     loadAndShowPromoLimit();
 
     function loadLowestOnPrice() {
-      fetch('/api/lowest-on-price')
+      monFetch('/api/lowest-on-price')
         .then(r => r.json())
         .then(data => {
           const card = document.getElementById('lowestOnCard');
@@ -12760,6 +12858,13 @@ app.get('/monitoring', async (_req, res) => {
     let evtSource = null;
     let sseReconnectTimer = null;
     let lastDataTime = Date.now();
+
+    // Helper: fetch dengan session otomatis untuk monitoring page
+    function monFetch(url, opts) {
+      var session = localStorage.getItem('goldmonitor_session') || '';
+      var sep = url.indexOf('?') !== -1 ? '&' : '?';
+      return fetch(url + sep + 'session=' + encodeURIComponent(session), opts || {});
+    }
 
     function connectSSE() {
       if (evtSource) {
@@ -13175,6 +13280,23 @@ app.get('/monitoring', async (_req, res) => {
 
     // Load history dari localStorage saat halaman dimuat
     loadHistory();
+
+    // Initial promo badge load
+    monFetch('/api/promo-suggestions').then(r => r.json()).then(data => {
+      const promos = data.promos || [];
+      const badgeEl = document.getElementById('promoBadge');
+      const btnEl = document.getElementById('promoBtnEl');
+      const count = promos.length;
+      if (badgeEl) {
+        badgeEl.textContent = count;
+        badgeEl.style.display = count > 0 ? 'inline' : 'none';
+      }
+      if (count > 0 && btnEl) {
+        const currentIds = promos.map(p => p.code).sort().join(',');
+        const seenIds = localStorage.getItem('promoSeenIds') || '';
+        if (currentIds !== seenIds) btnEl.classList.add('has-new');
+      }
+    }).catch(() => {});
   </script>
 </body>
 </html>`
