@@ -2942,6 +2942,42 @@ app.get('/cleanup-history', async (req, res) => {
   }
 })
 
+// ==================== CHAT ====================
+const CHAT_ANIMALS = ['Harimau','Gajah','Singa','Serigala','Beruang','Rusa','Kuda','Zebra','Jerapah','Panda','Koala','Kanguru','Rubah','Otter','Lynx','Cheetah','Jaguar','Tapir','Bison','Flamingo','Pinguin','Elang','Naga','Phoenix','Kuda Nil','Badak','Gorila','Simpanse','Capybara','Axolotl','Cerpelai','Luwak','Musang','Biawak','Komodo','Iguana','Kadal','Bunglon','Tokek','Buaya','Aligator','Anaconda','Python','Cobra','Viper','Sanca','Belut','Kuda Laut','Pari','Hiu','Ikan Mas','Koi','Gurame','Salmon','Tuna','Cumi','Gurita','Kepiting','Lobster','Udang','Kerang','Tiram','Ubur','Bintang Laut','Landak Laut','Kura Laut','Penyu','Dugong','Lumba','Paus','Orca','Delfin','Anjing Laut','Walrus','Berang','Platipus','Wombat','Tasmanian','Oposum','Armadillo','Trenggiling','Landak','Tikus Tanah','Hamster','Gerbil','Marmot','Berang Air','Beaver','Tupai','Bajing','Monyet','Babon','Mandrill','Orang','Gibbon','Bonobo','Lemur','Galago','Makaka','Macaw','Kakaktua','Beo','Kenari','Murai','Kutilang','Cendrawasih','Merak','Kasuari','Emu','Nuri','Lovebird','Burung Hantu','Elang Bondol','Rajawali','Kondor','Vulture','Albatros','Pelikan','Bangau','Kuntul','Blekok','Pecuk','Kormoran','Gannet','Dodo','Quetzal','Toucan','Hornbill','Woodpecker','Robin','Wren','Sparrow','Finch','Swallow','Martin','Swift','Hummingbird','Kingfisher','Bee Eater','Roller','Hoopoe','Trogon','Manakin','Cotinga','Tanager','Oriole','Raven','Crow','Jay','Magpie','Starling','Mynah','Bulbul','Thrush','Warbler','Vireo','Creeper','Nuthatch','Treecreeper','Dipper','Waxwing','Flycatcher','Pipit','Wagtail','Lark','Bunting','Grosbeak','Cardinal','Towhee','Junco','Siskin','Goldfinch','Linnet','Chaffinch','Hawfinch','Redstart','Wheatear','Chat','Stonechat','Whinchat','Dunnock','Accentor','Warblers','Grassbird','Cisticola','Apalis','Camaroptera','Prinia','Tailorbird','Sunbird','Flowerpecker','Spiderhunter','Sugarbird','Honeyeater','Thornbill','Gerygone','Weebill','Fairywren','Emu Wren','Grasswren','Bristlebird','Pilotbird','Rockwarbler','Whipbird','Quail Thrush','Logrunner','Treecreeper AU','Sitella','Shrike Tit','Whistler','Shrike','Monarch','Fantail','Drongo','Iora','Woodswallow','Currawong','Butcherbird','Bellbird','Catbird','Bowerbird','Riflebird','Sicklebill','Lophorina','Parotia','Astrapia','Paradigalla','Manucodia','Trumpet','Satinbird','Berrypecker','Pitohui','Ifrita','Ploughbill','Cnemophilus','Macgregor','Melampitta','Paradisaea','Cicinnurus','Diphyllodes','Seleucidis','Pteridophora','Epimachus','Ptiloris','Craspedophora','Ptilonorhynchus']
+const chatHistory = [] // max 100 pesan, in-memory
+const MAX_CHAT = 100
+const phoneAnimalMap = new Map() // phone -> animal name
+
+function getAnimalName(phone) {
+  if (phoneAnimalMap.has(phone)) return phoneAnimalMap.get(phone)
+  // Hash phone ke index yang konsisten
+  let hash = 0
+  for (let i = 0; i < phone.length; i++) hash = (hash * 31 + phone.charCodeAt(i)) >>> 0
+  // Hindari nama yang sudah dipakai user lain
+  const usedNames = new Set(phoneAnimalMap.values())
+  let idx = hash % CHAT_ANIMALS.length
+  let tries = 0
+  while (usedNames.has(CHAT_ANIMALS[idx]) && tries < CHAT_ANIMALS.length) { idx = (idx + 1) % CHAT_ANIMALS.length; tries++ }
+  const name = CHAT_ANIMALS[idx]
+  phoneAnimalMap.set(phone, name)
+  return name
+}
+
+// Reset chat tiap tengah malam (00:00 server time)
+function scheduleMidnightChatReset() {
+  const now = new Date()
+  const next = new Date(now)
+  next.setHours(24, 0, 0, 0) // jam 00:00 hari berikutnya
+  const msUntilMidnight = next - now
+  setTimeout(() => {
+    chatHistory.length = 0
+    broadcastSSE({ type: 'chat_reset' })
+    console.log('[CHAT] Reset tengah malam')
+    scheduleMidnightChatReset() // jadwal ulang untuk besok
+  }, msUntilMidnight)
+}
+scheduleMidnightChatReset()
+
 // SSE (Server-Sent Events) untuk real-time push ke frontend
 // Map: res -> { phone, name, connectedAt, lastActivity }
 const sseClients = new Map()
@@ -3007,6 +3043,10 @@ app.get('/sse', async (req, res) => {
   if (lowestOnPriceCache !== null && lowestOnPriceCache !== undefined) {
     res.write(`data: ${JSON.stringify({ type: 'lowest_on_price', price: lowestOnPriceCache })}\n\n`)
   }
+
+  // Kirim nama samaran dan riwayat chat
+  const animal = getAnimalName(phone)
+  res.write(`data: ${JSON.stringify({ type: 'chat_init', animal, messages: chatHistory })}\n\n`)
 
   sseClients.set(res, userInfo)
 
@@ -4721,6 +4761,30 @@ app.post('/api/admin/promo-limit', express.json(), async (req, res) => {
 })
 
 // Get lowest ON price
+// Chat API
+app.get('/api/chat/history', async (req, res) => {
+  const session = req.query.session || ''
+  if (!session) return res.status(403).json({ error: 'Unauthorized' })
+  const phone = await redis.hget(REDIS_KEYS.SESSIONS, session).catch(() => null)
+  if (!phone) return res.status(403).json({ error: 'Unauthorized' })
+  res.json({ success: true, messages: chatHistory, animal: getAnimalName(phone) })
+})
+
+app.post('/api/chat/send', express.json(), async (req, res) => {
+  const { session, message } = req.body || {}
+  if (!session || !message) return res.status(400).json({ error: 'Missing params' })
+  const phone = await redis.hget(REDIS_KEYS.SESSIONS, session).catch(() => null)
+  if (!phone) return res.status(403).json({ error: 'Unauthorized' })
+  const text = String(message).trim().slice(0, 300)
+  if (!text) return res.status(400).json({ error: 'Empty message' })
+  const animal = getAnimalName(phone)
+  const msg = { animal, text, time: Date.now() }
+  chatHistory.push(msg)
+  if (chatHistory.length > MAX_CHAT) chatHistory.shift()
+  broadcastSSE({ type: 'chat_message', ...msg })
+  res.json({ success: true })
+})
+
 app.get('/api/lowest-on-price', async (_req, res) => {
   try {
     const val = await redis.get(REDIS_KEYS.LOWEST_ON_PRICE)
@@ -9391,6 +9455,15 @@ app.get('/monitoring', async (_req, res) => {
     .indicator-btn.guide:hover {
       background: linear-gradient(135deg, rgba(247,147,26,0.4), rgba(247,147,26,0.2));
     }
+    .indicator-btn.chat { background: linear-gradient(135deg, rgba(59,158,255,0.2), rgba(59,158,255,0.1)); border-color: rgba(59,158,255,0.3); color: #3b9eff; }
+    .indicator-btn.chat:hover { background: linear-gradient(135deg, rgba(59,158,255,0.35), rgba(59,158,255,0.2)); }
+    .chat-bubble { padding: 7px 11px; border-radius: 12px; font-size: 0.8em; max-width: 85%; word-break: break-word; }
+    .chat-bubble.mine { background: rgba(59,158,255,0.18); border: 1px solid rgba(59,158,255,0.25); align-self: flex-end; }
+    .chat-bubble.others { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); align-self: flex-start; }
+    .chat-animal { font-size: 0.75em; font-weight: 700; margin-bottom: 2px; }
+    .chat-animal.mine { color: #3b9eff; text-align: right; }
+    .chat-animal.others { color: #f7931a; }
+    .chat-time { font-size: 0.68em; color: #6b7280; margin-top: 2px; text-align: right; }
     .indicator-btn.settings {
       background: linear-gradient(135deg, rgba(59,158,255,0.2), rgba(59,158,255,0.1));
       border-color: rgba(59,158,255,0.3);
@@ -10654,6 +10727,26 @@ app.get('/monitoring', async (_req, res) => {
     </div>
   </div>
 
+  <!-- Chat Modal -->
+  <div class="promo-suggestions-overlay" id="chatModal" onclick="if(event.target===this)closeChatModal()">
+    <div class="promo-suggestions-modal" style="display:flex;flex-direction:column;height:80vh;max-height:600px;">
+      <h3 style="flex-shrink:0;">
+        <i data-lucide="message-circle" style="width:15px;height:15px;color:#3b9eff;"></i>
+        Chat Member Aktif
+        <span id="chatOnlineCount" style="font-size:0.7em;color:#9ca3af;font-weight:400;margin-left:4px;"></span>
+        <button class="promo-modal-close" onclick="closeChatModal()">Tutup</button>
+      </h3>
+      <div style="flex-shrink:0;background:rgba(59,158,255,0.08);border:1px solid rgba(59,158,255,0.2);border-radius:8px;padding:6px 12px;margin-bottom:8px;font-size:0.72em;color:#9ca3af;">
+        Nama kamu: <strong id="chatMyAnimal" style="color:#3b9eff;">...</strong> — identitas acak, tidak ada data pribadimu
+      </div>
+      <div id="chatMessages" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:4px 0;"></div>
+      <div style="flex-shrink:0;display:flex;gap:8px;margin-top:8px;">
+        <input id="chatInput" type="text" maxlength="300" placeholder="Tulis pesan..." style="flex:1;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:8px 12px;color:#eef3fa;font-size:0.82em;outline:none;" onkeydown="if(event.key==='Enter')sendChat()">
+        <button onclick="sendChat()" style="background:rgba(59,158,255,0.2);border:1px solid rgba(59,158,255,0.3);color:#3b9eff;border-radius:10px;padding:8px 14px;font-size:0.82em;font-weight:600;cursor:pointer;">Kirim</button>
+      </div>
+    </div>
+  </div>
+
   <div class="indicator-settings-overlay" id="indicatorSettingsModal">
     <div class="indicator-settings-modal">
       <div class="indicator-settings-header">
@@ -10862,6 +10955,10 @@ app.get('/monitoring', async (_req, res) => {
             <button class="indicator-btn guide" onclick="openIndicatorGuide()">
               <i data-lucide="book-open" style="width:11px;height:11px;"></i>
               Panduan
+            </button>
+            <button class="indicator-btn chat" onclick="openChatModal()">
+              <i data-lucide="message-circle" style="width:11px;height:11px;"></i>
+              Chat <span id="chatUnreadBadge" style="display:none;background:#ef4444;color:#fff;border-radius:99px;padding:0 5px;font-size:0.8em;margin-left:2px;">0</span>
             </button>
           </div>
         </div>
@@ -11447,6 +11544,77 @@ app.get('/monitoring', async (_req, res) => {
       const modal = document.getElementById('newsModal');
       if (modal) modal.classList.remove('active');
       if (_newsCountdownInterval) { clearInterval(_newsCountdownInterval); _newsCountdownInterval = null; }
+    }
+
+    // ==================== CHAT ====================
+    let _chatMyAnimal = '';
+    let _chatOpen = false;
+    let _chatUnread = 0;
+
+    function _fmtChatTime(ms) {
+      const d = new Date(ms);
+      return d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function _renderChatBubble(msg) {
+      const isMine = msg.animal === _chatMyAnimal;
+      return '<div style="display:flex;flex-direction:column;align-items:'+(isMine?'flex-end':'flex-start')+'">' +
+        '<div class="chat-animal '+(isMine?'mine':'others')+'">'+msg.animal+'</div>'+
+        '<div class="chat-bubble '+(isMine?'mine':'others')+'">'+msg.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>'+
+        '<div class="chat-time">'+_fmtChatTime(msg.time)+'</div>'+
+      '</div>';
+    }
+
+    function _appendChatMsg(msg) {
+      const box = document.getElementById('chatMessages');
+      if (!box) return;
+      const el = document.createElement('div');
+      el.innerHTML = _renderChatBubble(msg);
+      box.appendChild(el.firstChild);
+      box.scrollTop = box.scrollHeight;
+      if (!_chatOpen) {
+        _chatUnread++;
+        const badge = document.getElementById('chatUnreadBadge');
+        if (badge) { badge.textContent = _chatUnread; badge.style.display = ''; }
+      }
+    }
+
+    function _loadChatHistory(messages) {
+      const box = document.getElementById('chatMessages');
+      if (!box) return;
+      box.innerHTML = messages.map(_renderChatBubble).join('');
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function openChatModal() {
+      _chatOpen = true;
+      _chatUnread = 0;
+      const badge = document.getElementById('chatUnreadBadge');
+      if (badge) badge.style.display = 'none';
+      const modal = document.getElementById('chatModal');
+      if (modal) modal.classList.add('active');
+      const box = document.getElementById('chatMessages');
+      if (box) box.scrollTop = box.scrollHeight;
+      document.getElementById('chatInput')?.focus();
+    }
+
+    function closeChatModal() {
+      _chatOpen = false;
+      const modal = document.getElementById('chatModal');
+      if (modal) modal.classList.remove('active');
+    }
+
+    function sendChat() {
+      const input = document.getElementById('chatInput');
+      const text = input?.value?.trim();
+      if (!text) return;
+      input.value = '';
+      const session = localStorage.getItem('session') || '';
+      fetch('/api/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session, message: text })
+      }).catch(() => {});
     }
 
     function openIndicatorSettings() {
@@ -12659,6 +12827,25 @@ app.get('/monitoring', async (_req, res) => {
             if (card) card.style.display = 'none';
           }
           updateStatCentering();
+          return;
+        }
+
+        if (data.type === 'chat_init') {
+          _chatMyAnimal = data.animal || '';
+          const el = document.getElementById('chatMyAnimal');
+          if (el) el.textContent = _chatMyAnimal;
+          _loadChatHistory(data.messages || []);
+          return;
+        }
+
+        if (data.type === 'chat_message') {
+          _appendChatMsg(data);
+          return;
+        }
+
+        if (data.type === 'chat_reset') {
+          const box = document.getElementById('chatMessages');
+          if (box) box.innerHTML = '';
           return;
         }
 
