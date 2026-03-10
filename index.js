@@ -2388,6 +2388,26 @@ app.use((_req, res, next) => {
   res.setHeader('X-XSS-Protection', '1; mode=block')
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()')
+
+  // HSTS: paksa HTTPS selama 1 tahun
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+
+  // CSP: batasi sumber resource yang boleh dimuat
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://s3.tradingview.com https://unpkg.com https://challenges.cloudflare.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: https:",
+    "connect-src 'self' wss://*.tradingview.com https://*.tradingview.com https://challenges.cloudflare.com",
+    "frame-src https://s3.tradingview.com https://www.tradingview-widget.com https://challenges.cloudflare.com",
+    "worker-src 'self' blob:",
+    "manifest-src 'self'",
+    "base-uri 'self'",
+    "form-action 'self'"
+  ].join('; ')
+  res.setHeader('Content-Security-Policy', csp)
+
   next()
 })
 
