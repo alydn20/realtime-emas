@@ -10737,7 +10737,7 @@ app.get('/monitoring', async (_req, res) => {
     <div id="reloadBannerBox">
       <div class="reload-icon">⚠️</div>
       <h4>Pembaruan Tersedia</h4>
-      <p>Admin telah merilis pembaruan baru. Silakan reload halaman untuk mendapatkan data terbaru.</p>
+
       <button onclick="window.location.reload()">Reload Sekarang</button>
     </div>
   </div>
