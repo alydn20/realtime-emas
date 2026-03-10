@@ -11132,6 +11132,18 @@ app.get('/monitoring', async (_req, res) => {
             support_host: "https://www.tradingview.com"
           };
 
+          // Suppress TradingView telemetry errors (requests to their own analytics server)
+          if (!window._tvTelemetryBlocked) {
+            window._tvTelemetryBlocked = true;
+            const _origFetch = window.fetch;
+            window.fetch = function(url, opts) {
+              if (typeof url === 'string' && url.includes('telemetry.tradingview.com')) {
+                return Promise.resolve(new Response('', { status: 200 }));
+              }
+              return _origFetch.apply(this, arguments);
+            };
+          }
+
           // Load TradingView widget script
           const container = document.getElementById('tradingview-widget');
           const script = document.createElement('script');
