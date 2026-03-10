@@ -3112,6 +3112,29 @@ function scheduleMidnightChatReset() {
 }
 scheduleMidnightChatReset()
 
+// Reset semua session setiap Senin 00:00 (paksa login ulang mingguan)
+function scheduleWeeklySessionReset() {
+  const now = new Date()
+  const next = new Date(now)
+  // Hitung hari ke Senin berikutnya (day=1)
+  const daysUntilMonday = (8 - now.getDay()) % 7 || 7
+  next.setDate(now.getDate() + daysUntilMonday)
+  next.setHours(0, 0, 0, 0)
+  const ms = next - now
+  console.log(`[SESSION] Reset session dijadwalkan: ${next.toLocaleString('id-ID')} (${Math.round(ms/3600000)}j lagi)`)
+  setTimeout(async () => {
+    try {
+      await redis.del(REDIS_KEYS.SESSIONS)
+      console.log('[SESSION] Semua session dihapus (reset Senin)')
+      broadcastSSE({ type: 'session_expired' })
+    } catch (e) {
+      console.error('[SESSION] Gagal reset session:', e.message)
+    }
+    scheduleWeeklySessionReset() // jadwal ulang Senin depan
+  }, ms)
+}
+scheduleWeeklySessionReset()
+
 // Price Alert Bot: cek pergerakan harga setiap 30 menit
 let _priceSnapshot30 = null
 setInterval(() => {
@@ -4097,7 +4120,7 @@ app.post('/api/login', rateLimit(5, 60000), express.json(), async (req, res) => 
     return res.json({ success: false, error: 'PIN salah. Silakan coba lagi.' })
   }
 
-  // Check existing sessions for this user (max 2 devices)
+  // Check existing sessions for this user (max 3 devices)
   const allSessions = await redis.hgetall(REDIS_KEYS.SESSIONS) || {}
   const userSessions = []
   for (const [sessId, sessPhone] of Object.entries(allSessions)) {
@@ -4106,11 +4129,10 @@ app.post('/api/login', rateLimit(5, 60000), express.json(), async (req, res) => 
     }
   }
 
-  // If already 2 sessions, remove the oldest one (first in array)
-  if (userSessions.length >= 2) {
-    // Remove oldest session (FIFO - first in first out)
+  // If already 3 sessions, remove the oldest one (first in array)
+  if (userSessions.length >= 3) {
     await redis.hdel(REDIS_KEYS.SESSIONS, userSessions[0])
-    pushLog(`Auth | User +${normalizedPhone} exceeded 2 devices, oldest session removed`)
+    pushLog(`Auth | User +${normalizedPhone} exceeded 3 devices, oldest session removed`)
   }
 
   // Create new session
@@ -13023,6 +13045,13 @@ app.get('/monitoring', async (_req, res) => {
         if (data.type === 'chat_reset') {
           const box = document.getElementById('chatMessages');
           if (box) box.innerHTML = '';
+          return;
+        }
+
+        if (data.type === 'session_expired') {
+          localStorage.removeItem('goldmonitor_session');
+          alert('Sesi Anda telah berakhir. Silakan login kembali.');
+          window.location.href = '/login';
           return;
         }
 
