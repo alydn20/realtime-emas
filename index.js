@@ -1636,6 +1636,7 @@ async function doPromoBroadcast() {
         pushLog(`🎁 Status ON kembali! Reset OFF counter (was ${offBroadcastCount})`)
         offBroadcastCount = 0
         offStartTime = null
+        sendBotMessage('Promo Treasury aktif. Cek tab Promo untuk melihat detail penawaran yang tersedia.')
       }
       // ON: Kirim 1x per menit
       if (currentMinute !== lastPromoBroadcastMinute || isFirstCheck || statusChanged) {
@@ -3037,6 +3038,13 @@ const chatHistory = [] // max 100 pesan, in-memory
 const MAX_CHAT = 100
 const phoneAnimalMap = new Map() // phone -> animal name
 
+function sendBotMessage(text) {
+  const msg = { animal: 'SISTEM', text, time: Date.now(), isBot: true }
+  chatHistory.push(msg)
+  if (chatHistory.length > MAX_CHAT) chatHistory.shift()
+  broadcastSSE({ type: 'chat_message', ...msg })
+}
+
 function getAnimalName(phone) {
   if (phoneAnimalMap.has(phone)) return phoneAnimalMap.get(phone)
   // Hash phone ke index yang konsisten
@@ -3066,6 +3074,26 @@ function scheduleMidnightChatReset() {
   }, msUntilMidnight)
 }
 scheduleMidnightChatReset()
+
+// Price Alert Bot: cek pergerakan harga setiap 30 menit
+let _priceSnapshot30 = null
+setInterval(() => {
+  if (!lastKnownPrice?.buy) return
+  if (!_priceSnapshot30) {
+    _priceSnapshot30 = { buy: lastKnownPrice.buy, sell: lastKnownPrice.sell }
+    return
+  }
+  const buyDiff = lastKnownPrice.buy - _priceSnapshot30.buy
+  const absBuy = Math.abs(buyDiff)
+  const threshold = 2000
+  if (absBuy >= threshold) {
+    const dir = buyDiff > 0 ? 'naik' : 'turun'
+    const changeStr = 'Rp ' + absBuy.toLocaleString('id-ID')
+    const nowStr = 'Rp ' + lastKnownPrice.buy.toLocaleString('id-ID') + '/gram'
+    sendBotMessage(`Pergerakan Harga | Harga beli ${dir} ${changeStr} dalam 30 menit. Saat ini: ${nowStr}`)
+  }
+  _priceSnapshot30 = { buy: lastKnownPrice.buy, sell: lastKnownPrice.sell }
+}, 30 * 60 * 1000)
 
 // SSE (Server-Sent Events) untuk real-time push ke frontend
 // Map: res -> { phone, name, connectedAt, lastActivity }
@@ -11624,6 +11652,18 @@ app.get('/monitoring', async (_req, res) => {
     }
 
     function _renderChatBubble(msg) {
+      if (msg.isBot) {
+        var safeText = msg.text.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        var parts = safeText.split('|');
+        var label = parts.length > 1 ? parts[0].trim() : 'SISTEM';
+        var body = parts.length > 1 ? parts.slice(1).join('|').trim() : safeText;
+        return '<div style="display:flex;justify-content:center;margin:8px 0;">' +
+          '<div style="background:rgba(247,147,26,0.07);border:1px solid rgba(247,147,26,0.2);border-radius:10px;padding:8px 16px;max-width:92%;text-align:center;">' +
+          '<div style="font-size:0.68em;font-weight:700;color:rgba(247,147,26,0.75);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:3px;">'+label+'</div>' +
+          '<div style="font-size:0.84em;color:#c4d0df;line-height:1.4;">'+body+'</div>' +
+          '<div style="font-size:0.68em;color:#4e606e;margin-top:3px;">'+_fmtChatTime(msg.time)+'</div>' +
+          '</div></div>';
+      }
       const isMine = msg.animal === _chatMyAnimal;
       return '<div style="display:flex;flex-direction:column;align-items:'+(isMine?'flex-end':'flex-start')+'">' +
         '<div class="chat-animal '+(isMine?'mine':'others')+'">'+msg.animal+'</div>'+
