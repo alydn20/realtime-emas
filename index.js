@@ -4034,8 +4034,6 @@ app.post('/api/login', rateLimit(5, 60000), express.json(), async (req, res) => 
   const { phone, pin } = req.body
   if (!phone) return res.json({ success: false, error: 'Nomor HP wajib diisi' })
   if (!pin) return res.json({ success: false, error: 'PIN wajib diisi' })
-  if (!(await verifyTurnstile(req.body['cf-turnstile-response'], req.ip))) {
-    return res.json({ success: false, error: 'Verifikasi CAPTCHA gagal, coba lagi' })
   }
 
   const normalizedPhone = normalizePhone(phone)
@@ -6048,12 +6046,10 @@ app.get('/login', (_req, res) => {
       hideMessage();
 
       try {
-        let tsToken = '';
-        if (window.turnstile) { try { tsToken = turnstile.getResponse() || ''; } catch {} }
         const res = await fetch('/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: currentPhone, pin, 'cf-turnstile-response': tsToken })
+          body: JSON.stringify({ phone: currentPhone, pin })
         });
 
         const data = await res.json();
