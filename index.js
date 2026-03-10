@@ -9206,6 +9206,11 @@ app.get('/monitoring', async (_req, res) => {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.7; }
     }
+    @keyframes badgePulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239,68,68,0.7); }
+      50% { transform: scale(1.2); box-shadow: 0 0 0 5px rgba(239,68,68,0); }
+    }
+    #chatUnreadBadge.pulse { animation: badgePulse 1s ease-in-out infinite; }
     .chart-stats {
       display: flex;
       flex-wrap: wrap;
@@ -11578,7 +11583,7 @@ app.get('/monitoring', async (_req, res) => {
       if (!_chatOpen) {
         _chatUnread++;
         const badge = document.getElementById('chatUnreadBadge');
-        if (badge) { badge.textContent = _chatUnread; badge.style.display = ''; }
+        if (badge) { badge.textContent = _chatUnread; badge.style.display = ''; badge.classList.add('pulse'); }
       }
     }
 
@@ -11593,7 +11598,7 @@ app.get('/monitoring', async (_req, res) => {
       _chatOpen = true;
       _chatUnread = 0;
       const badge = document.getElementById('chatUnreadBadge');
-      if (badge) badge.style.display = 'none';
+      if (badge) { badge.style.display = 'none'; badge.classList.remove('pulse'); }
       const modal = document.getElementById('chatModal');
       if (modal) modal.classList.add('active');
       const box = document.getElementById('chatMessages');
