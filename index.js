@@ -4516,7 +4516,7 @@ app.post('/api/admin/force-logout-all', express.json(), async (req, res) => {
 app.post('/api/admin/force-reload', express.json(), async (req, res) => {
   const { password } = req.body
   if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
-  broadcastSSE({ type: 'force_reload' })
+  broadcastSSE({ type: 'force_reload', at: Date.now() })
   pushLog(`Admin | Force reload all users (${sseClients.size} clients)`)
   res.json({ success: true, message: `Force reload dikirim ke ${sseClients.size} client` })
 })
@@ -10587,9 +10587,10 @@ app.get('/monitoring', async (_req, res) => {
     #reloadBanner {
       display: none;
       position: fixed;
-      inset: 0;
+      top: 0; left: 0; right: 0; bottom: 0;
+      width: 100%; height: 100%;
       z-index: 99999;
-      background: rgba(0,0,0,0.6);
+      background: rgba(0,0,0,0.65);
       align-items: center;
       justify-content: center;
     }
@@ -11645,6 +11646,7 @@ app.get('/monitoring', async (_req, res) => {
     }
 
     // ==================== CHAT ====================
+    const _pageLoadTime = Date.now();
     let _chatMyAnimal = '';
     let _chatOpen = false;
     let _chatUnread = 0;
@@ -12950,6 +12952,8 @@ app.get('/monitoring', async (_req, res) => {
         }
 
         if (data.type === 'force_reload') {
+          // Abaikan jika halaman di-load SETELAH broadcast dikirim
+          if (data.at && _pageLoadTime > data.at) return;
           const banner = document.getElementById('reloadBanner');
           if (banner) banner.classList.add('show');
           return;
