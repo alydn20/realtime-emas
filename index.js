@@ -151,7 +151,6 @@ let isPromoChecking = false // Guard untuk mencegah concurrent fetch
 let promoCheckCount = 0 // Counter untuk logging
 let offBroadcastCount = 0 // Counter OFF broadcast (max 5)
 let offStartTime = null // Timestamp kapan status pertama kali OFF
-let lastForceReloadAt = 0 // Timestamp terakhir force_reload dikirim
 let lastPromoBroadcastMinute = -1 // Track menit terakhir broadcast
 
 // CACHE GLOBAL untuk market data (pre-fetched)
@@ -3049,10 +3048,6 @@ app.get('/sse', async (req, res) => {
   const animal = getAnimalName(phone)
   res.write(`data: ${JSON.stringify({ type: 'chat_init', animal, messages: chatHistory })}\n\n`)
 
-  // Kirim force_reload jika masih aktif (dalam 5 menit terakhir)
-  if (lastForceReloadAt > 0 && Date.now() - lastForceReloadAt < 5 * 60 * 1000) {
-    res.write(`data: ${JSON.stringify({ type: 'force_reload', at: lastForceReloadAt })}\n\n`)
-  }
 
   sseClients.set(res, userInfo)
 
@@ -4516,16 +4511,6 @@ app.post('/api/admin/force-logout-all', express.json(), async (req, res) => {
   } catch (e) {
     res.json({ success: false, error: e.message })
   }
-})
-
-// Admin: Force reload all clients
-app.post('/api/admin/force-reload', express.json(), async (req, res) => {
-  const { password } = req.body
-  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
-  lastForceReloadAt = Date.now()
-  broadcastSSE({ type: 'force_reload', at: lastForceReloadAt })
-  pushLog(`Admin | Force reload all users (${sseClients.size} clients)`)
-  res.json({ success: true, message: `Force reload dikirim ke ${sseClients.size} client` })
 })
 
 // Admin: Send push notification
@@ -6987,7 +6972,6 @@ ${authScript}
             <button class="btn btn-danger btn-sm" onclick="clearInvalidUsers()">Hapus Invalid</button>
             <button class="btn btn-sm" style="background:#7f1d1d;color:white;" onclick="clearAllUsers()">Hapus Semua</button>
             <button class="btn btn-sm" style="background:#f59e0b;color:#000;" onclick="forceLogoutAll()">Force Logout Semua</button>
-            <button class="btn btn-sm" style="background:#7c3aed;color:white;" onclick="forceReloadAll()">Force Reload Semua</button>
           </div>
           <div class="warning-box">
             <p><strong>Catatan:</strong> WhatsApp menggunakan format LID (privacy) sehingga nomor telepon member tidak bisa diakses otomatis. User harus mendaftar sendiri via OTP atau ditambahkan manual oleh admin.</p>
@@ -8091,31 +8075,6 @@ ${authScript}
       });
     }
 
-    async function forceReloadAll() {
-      const confirmed = await showConfirm('Force reload semua user? Halaman semua user akan di-refresh otomatis.', { title: 'Force Reload', type: 'warning' });
-      if (!confirmed) return;
-
-      const result = document.getElementById('syncResult');
-      result.className = 'result-msg success';
-      result.textContent = 'Memproses force reload...';
-
-      fetch('/api/admin/force-reload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass })
-      })
-      .then(r => r.json())
-      .then(data => {
-        if (data.success) {
-          result.className = 'result-msg success';
-          result.textContent = data.message;
-        } else {
-          result.className = 'result-msg error';
-          result.textContent = 'Error: ' + data.error;
-        }
-        setTimeout(() => result.className = 'result-msg', 5000);
-      });
-    }
 
     // Load pending registrations
     function loadPendingRegistrations() {
@@ -10591,59 +10550,6 @@ app.get('/monitoring', async (_req, res) => {
     end light mode */
 
     /* Professional Toast System */
-    #reloadBanner {
-      display: none;
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      width: 100%; height: 100%;
-      z-index: 99999;
-      background: rgba(0,0,0,0.65);
-      align-items: center;
-      justify-content: center;
-    }
-    #reloadBanner.show { display: flex; }
-    #reloadBannerBox {
-      background: #1a2332;
-      border: 1px solid rgba(245,158,11,0.4);
-      border-radius: 18px;
-      padding: 28px 28px 24px;
-      max-width: 340px;
-      width: 90%;
-      text-align: center;
-      box-shadow: 0 8px 40px rgba(0,0,0,0.6);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 12px;
-    }
-    #reloadBannerBox .reload-icon {
-      font-size: 2.4em;
-      line-height: 1;
-    }
-    #reloadBannerBox h4 {
-      margin: 0;
-      font-size: 1em;
-      font-weight: 700;
-      color: #f59e0b;
-    }
-    #reloadBannerBox p {
-      margin: 0;
-      font-size: 0.82em;
-      color: #9ca3af;
-      line-height: 1.5;
-    }
-    #reloadBannerBox button {
-      background: linear-gradient(90deg, #f59e0b, #d97706);
-      color: #000;
-      border: none;
-      border-radius: 10px;
-      padding: 10px 28px;
-      font-weight: 700;
-      font-size: 0.92em;
-      cursor: pointer;
-      width: 100%;
-      margin-top: 4px;
-    }
     .toast-container {
       position: fixed;
       top: 20px;
@@ -10740,15 +10646,6 @@ app.get('/monitoring', async (_req, res) => {
   </style>
 </head>
 <body>
-  <!-- Reload Banner: shown when admin triggers force reload -->
-  <div id="reloadBanner">
-    <div id="reloadBannerBox">
-      <div class="reload-icon">⚠️</div>
-      <h4>Pembaruan Tersedia</h4>
-
-      <button onclick="sessionStorage.setItem('force_reload_ack', Date.now()); window.location.reload()">Reload Sekarang</button>
-    </div>
-  </div>
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- Nominal Settings Modal -->
@@ -12957,14 +12854,6 @@ app.get('/monitoring', async (_req, res) => {
           return;
         }
 
-        if (data.type === 'force_reload') {
-          // Abaikan jika sudah pernah reload untuk broadcast ini
-          const acked = parseInt(sessionStorage.getItem('force_reload_ack') || '0');
-          if (data.at && acked >= data.at) return;
-          const banner = document.getElementById('reloadBanner');
-          if (banner) banner.classList.add('show');
-          return;
-        }
 
         // 🎁 Handle promo ON/OFF status
         if (data.type === 'promo_status') {
