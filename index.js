@@ -2643,7 +2643,6 @@ app.get('/admin-login', (req, res) => {
       .btn { padding: 14px; }
     }
   </style>
-  ${process.env.TURNSTILE_SITE_KEY ? '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>' : ''}
 </head>
 <body>
   <div class="card">
@@ -2665,7 +2664,6 @@ app.get('/admin-login', (req, res) => {
         <label>Password</label>
         <input type="password" id="password" placeholder="Masukkan password" required>
       </div>
-      ${process.env.TURNSTILE_SITE_KEY ? `<div class="cf-turnstile" data-sitekey="${process.env.TURNSTILE_SITE_KEY}"></div>` : ''}
       <button type="submit" class="btn">Login Admin</button>
     </form>
     <a href="/login" class="back-link">← Kembali ke halaman user</a>
@@ -5823,7 +5821,6 @@ app.get('/login', (_req, res) => {
       .pin-input { width: 42px; height: 50px; font-size: 1.3em; }
     }
   </style>
-  ${process.env.TURNSTILE_SITE_KEY ? '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>' : ''}
 </head>
 <body>
   <div class="container">
@@ -5853,7 +5850,6 @@ app.get('/login', (_req, res) => {
             <input type="tel" id="phoneInput" placeholder="8xxxxxxxxxx" maxlength="12" autocomplete="tel">
           </div>
         </div>
-        ${process.env.TURNSTILE_SITE_KEY ? `<div class="cf-turnstile" id="turnstileWidget" data-sitekey="${process.env.TURNSTILE_SITE_KEY}"></div>` : ''}
         <button class="btn btn-primary" id="checkBtn" onclick="checkUser()">
           Masuk ke Akun
         </button>
