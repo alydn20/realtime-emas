@@ -2665,7 +2665,7 @@ app.get('/admin-login', (req, res) => {
         <label>Password</label>
         <input type="password" id="password" placeholder="Masukkan password" required>
       </div>
-      <div class="cf-turnstile" data-sitekey="${process.env.TURNSTILE_SITE_KEY || ''}" data-size="invisible"></div>
+      <div class="cf-turnstile" data-sitekey="${process.env.TURNSTILE_SITE_KEY || ''}"></div>
       <button type="submit" class="btn">Login Admin</button>
     </form>
     <a href="/login" class="back-link">← Kembali ke halaman user</a>
@@ -5812,7 +5812,7 @@ app.get('/login', (_req, res) => {
             <input type="tel" id="phoneInput" placeholder="8xxxxxxxxxx" maxlength="12" autocomplete="tel">
           </div>
         </div>
-        <div class="cf-turnstile" id="turnstileWidget" data-sitekey="${process.env.TURNSTILE_SITE_KEY || ''}" data-size="invisible" data-callback="onTurnstileDone"></div>
+        <div class="cf-turnstile" id="turnstileWidget" data-sitekey="${process.env.TURNSTILE_SITE_KEY || ''}"></div>
         <button class="btn btn-primary" id="checkBtn" onclick="checkUser()">
           Masuk ke Akun
         </button>
