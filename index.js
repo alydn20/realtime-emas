@@ -2404,6 +2404,7 @@ app.use((_req, res, next) => {
     "img-src 'self' data: https:",
     "connect-src 'self' wss://*.tradingview.com https://*.tradingview.com https://challenges.cloudflare.com",
     "frame-src https://s3.tradingview.com https://www.tradingview-widget.com https://challenges.cloudflare.com",
+    "media-src 'self' data: blob:",
     "worker-src 'self' blob:",
     "manifest-src 'self'",
     "base-uri 'self'",
@@ -5468,8 +5469,9 @@ app.post('/api/reject-registration', async (req, res) => {
 
 // Get admin phones
 app.get('/api/admin-phones', (req, res) => {
-  const auth = req.headers['x-admin-password'] || ''
-  if (auth !== ADMIN_PASSWORD) return res.status(403).json({ error: 'Unauthorized' })
+  if (!req._adminAuthed && req.headers['x-admin-password'] !== ADMIN_PASSWORD) {
+    return res.status(403).json({ error: 'Unauthorized' })
+  }
   res.json({ success: true, phones: ADMIN_PHONES })
 })
 
