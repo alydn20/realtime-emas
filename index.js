@@ -4726,8 +4726,15 @@ app.post('/api/admin/force-logout-all', express.json(), async (req, res) => {
     await redis.del(REDIS_KEYS.SESSIONS)
     await redis.del(REDIS_KEYS.LOGIN_TOKENS)
 
-    // Broadcast ke semua client untuk logout
+    // Broadcast ke semua client untuk logout lalu tutup semua koneksi SSE
     broadcastSSE({ type: 'force_logout', message: 'Session expired, please login again' })
+    setTimeout(() => {
+      sseClients.forEach((userInfo, client) => {
+        try { client.end() } catch {}
+      })
+      sseClients.clear()
+      broadcastOnlineUsersToAdmin()
+    }, 300)
 
     pushLog(`Admin | Force logout all users`)
     res.json({ success: true, message: 'Semua user berhasil di-logout' })
