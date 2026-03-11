@@ -2710,9 +2710,6 @@ app.get('/admin-login', (req, res) => {
 // API untuk login
 app.post('/api/admin-login', rateLimit(10, 60000), async (req, res) => {
   const { username, password } = req.body
-  if (!(await verifyTurnstile(req.body['cf-turnstile-response'], req.ip))) {
-    return res.json({ success: false, error: 'Verifikasi CAPTCHA gagal' })
-  }
   if (username === SUPER_ADMIN.username && password === SUPER_ADMIN.password) {
     // Generate simple token
     const token = Buffer.from(username + ':' + password + ':' + Date.now()).toString('base64')
@@ -4086,9 +4083,6 @@ function verifyPin(inputPin, storedHash) {
 app.post('/api/check-user', rateLimit(10, 60000), express.json(), async (req, res) => {
   const { phone } = req.body
   if (!phone) return res.json({ success: false, error: 'Nomor HP wajib diisi' })
-  if (!(await verifyTurnstile(req.body['cf-turnstile-response'], req.ip))) {
-    return res.json({ success: false, error: 'Verifikasi CAPTCHA gagal, coba lagi' })
-  }
 
   const normalizedPhone = normalizePhone(phone)
   const check = await isUserValid(normalizedPhone)
