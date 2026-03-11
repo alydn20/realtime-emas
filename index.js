@@ -2485,6 +2485,9 @@ async function verifyTurnstile(token, ip) {
 // ==================== SUPER ADMIN LOGIN ====================
 // Login page untuk akses /qr dan /admin
 app.get('/admin-login', (req, res) => {
+  if (isAdminCookieValid(req)) {
+    return res.redirect(req.query.redirect || '/admin/users')
+  }
   const { redirect } = req.query
   res.send(`<!DOCTYPE html>
 <html>
@@ -5502,7 +5505,7 @@ app.post('/api/reject-registration', async (req, res) => {
 
 // Get admin phones
 app.get('/api/admin-phones', (req, res) => {
-  if (!req._adminAuthed && req.headers['x-admin-password'] !== ADMIN_PASSWORD) {
+  if (!req._adminAuthed && !isAdminCookieValid(req) && req.headers['x-admin-password'] !== ADMIN_PASSWORD) {
     return res.status(403).json({ error: 'Unauthorized' })
   }
   res.json({ success: true, phones: ADMIN_PHONES })
