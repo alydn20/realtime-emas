@@ -2727,6 +2727,10 @@ app.post('/api/admin-login', rateLimit(10, 60000), async (req, res) => {
     const adminUserData = JSON.stringify({ name: 'Administrator', phone: 'admin', isAdmin: true })
     await redis.hset(REDIS_KEYS.USERS, { 'admin': adminUserData })
 
+    // Set httpOnly cookie untuk server-side auth check di /admin/users
+    const maxAge = 12 * 60 * 60 // 12 jam dalam detik
+    res.setHeader('Set-Cookie', `admin_auth=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}; Path=/`)
+
     res.json({ success: true, token, monitoringSession: adminSessionId })
   } else {
     res.json({ success: false, error: 'Invalid credentials' })
@@ -2748,6 +2752,32 @@ app.post('/api/verify-admin', (req, res) => {
     res.json({ success: false })
   }
 })
+
+// Helper: parse cookie header manual (tanpa cookie-parser)
+function parseCookies(req) {
+  const list = {}
+  const header = req.headers && req.headers.cookie
+  if (!header) return list
+  header.split(';').forEach(part => {
+    const [k, ...v] = part.split('=')
+    if (k) list[k.trim()] = decodeURIComponent(v.join('=').trim())
+  })
+  return list
+}
+
+// Helper: cek cookie admin_auth dari request
+function isAdminCookieValid(req) {
+  try {
+    const cookies = parseCookies(req)
+    const cookie = cookies.admin_auth
+    if (!cookie) return false
+    const decoded = Buffer.from(cookie, 'base64').toString()
+    const [username, password] = decoded.split(':')
+    return username === SUPER_ADMIN.username && password === SUPER_ADMIN.password
+  } catch {
+    return false
+  }
+}
 
 // Helper function untuk generate auth check script
 function getAuthCheckScript(redirectTo) {
@@ -3530,8 +3560,17 @@ app.get('/sw.js', (_req, res) => {
   `)
 })
 
+// ADMIN LOGOUT
+app.get('/admin/logout', (req, res) => {
+  res.setHeader('Set-Cookie', 'admin_auth=; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Path=/')
+  res.redirect('/admin-login')
+})
+
 // ADMIN PAGE - Broadcast Notifications
-app.get('/admin/monitoring', (_req, res) => {
+app.get('/admin/monitoring', (req, res) => {
+  if (!isAdminCookieValid(req)) {
+    return res.redirect('/admin-login?redirect=' + encodeURIComponent('/admin/monitoring'))
+  }
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
   const authScript = getAuthCheckScript('/admin/monitoring')
   const html = `<!DOCTYPE html>
@@ -4822,7 +4861,7 @@ app.get('/api/sound-settings', async (req, res) => {
       const parsed = typeof settings === 'string' ? JSON.parse(settings) : settings
       res.json({ success: true, settings: parsed })
     } else {
-      res.json({ success: true, settings: { soundUp: '', soundDown: '', soundOn: '', soundOff: '' } })
+      res.json({ success: true, settings: { soundUp: '', soundDown: '', soundOn: '', soundOff: '', soundBigUp: '', soundBigDown: '' } })
     }
   } catch (e) {
     res.json({ success: false, error: e.message })
@@ -4831,7 +4870,7 @@ app.get('/api/sound-settings', async (req, res) => {
 
 // Admin: Update sound settings
 app.post('/api/admin/sound-settings', express.json({ limit: '10mb' }), async (req, res) => {
-  const { password, soundUp, soundDown, soundOn, soundOff } = req.body
+  const { password, soundUp, soundDown, soundOn, soundOff, soundBigUp, soundBigDown } = req.body
   if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
 
   try {
@@ -4839,7 +4878,9 @@ app.post('/api/admin/sound-settings', express.json({ limit: '10mb' }), async (re
       soundUp: soundUp || '',
       soundDown: soundDown || '',
       soundOn: soundOn || '',
-      soundOff: soundOff || ''
+      soundOff: soundOff || '',
+      soundBigUp: soundBigUp || '',
+      soundBigDown: soundBigDown || ''
     }
     await redis.set(REDIS_KEYS.SOUND_SETTINGS, JSON.stringify(settings))
 
@@ -6392,7 +6433,10 @@ app.get('/install', (_req, res) => {
 })
 
 // ==================== ADMIN PANEL - USER MANAGEMENT ====================
-app.get('/admin/users', (_req, res) => {
+app.get('/admin/users', (req, res) => {
+  if (!isAdminCookieValid(req)) {
+    return res.redirect('/admin-login?redirect=' + encodeURIComponent('/admin/users'))
+  }
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
   const authScript = getAuthCheckScript('/admin/users')
   const html = `<!DOCTYPE html>
@@ -6876,6 +6920,7 @@ ${authScript}
         <div class="header-actions">
           <a href="/admin/monitoring">Notifikasi</a>
           <a href="/monitoring" target="_blank">Monitoring</a>
+          <a href="/admin/logout" style="color:#f87171;border-color:rgba(248,113,113,0.3);" onclick="return confirm('Yakin ingin logout?')">Logout</a>
         </div>
       </div>
 
@@ -7203,6 +7248,42 @@ ${authScript}
               <audio id="soundDownAudio" controls style="width:100%;height:36px;"></audio>
             </div>
             <button class="btn btn-sm" style="margin-top:10px;background:rgba(248,113,113,0.15);color:#f87171;border:1px solid rgba(248,113,113,0.25);" onclick="testSound('down')">Test Sound Turun</button>
+          </div>
+
+          <!-- Sound Naik Besar -->
+          <div style="background:rgba(250,204,21,0.05);padding:16px;border-radius:12px;border:1px solid rgba(250,204,21,0.25);margin-bottom:14px;">
+            <label style="color:#facc15;font-weight:600;display:block;margin-bottom:6px;font-size:0.9em;">⚡ Sound Naik Besar (&gt;3.000)</label>
+            <p style="color:#6b7280;font-size:0.78em;margin-bottom:10px;">Berbunyi saat harga naik lebih dari Rp 3.000 sekaligus. Jika kosong, memakai sound naik biasa.</p>
+            <div class="form-group" style="margin-bottom:10px;">
+              <label>Upload File Audio</label>
+              <input type="file" id="soundBigUpFile" accept="audio/*" onchange="handleSoundUpload('bigUp')">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+              <label>Atau Masukkan URL</label>
+              <input type="text" id="soundBigUpUrl" placeholder="https://example.com/naik-besar.mp3">
+            </div>
+            <div id="soundBigUpPreview" style="margin-top:10px;display:none;">
+              <audio id="soundBigUpAudio" controls style="width:100%;height:36px;"></audio>
+            </div>
+            <button class="btn btn-sm" style="margin-top:10px;background:rgba(250,204,21,0.15);color:#facc15;border:1px solid rgba(250,204,21,0.25);" onclick="testSound('bigUp')">Test Sound Naik Besar</button>
+          </div>
+
+          <!-- Sound Turun Besar -->
+          <div style="background:rgba(251,146,60,0.05);padding:16px;border-radius:12px;border:1px solid rgba(251,146,60,0.25);margin-bottom:16px;">
+            <label style="color:#fb923c;font-weight:600;display:block;margin-bottom:6px;font-size:0.9em;">⚡ Sound Turun Besar (&gt;3.000)</label>
+            <p style="color:#6b7280;font-size:0.78em;margin-bottom:10px;">Berbunyi saat harga turun lebih dari Rp 3.000 sekaligus. Jika kosong, memakai sound turun biasa.</p>
+            <div class="form-group" style="margin-bottom:10px;">
+              <label>Upload File Audio</label>
+              <input type="file" id="soundBigDownFile" accept="audio/*" onchange="handleSoundUpload('bigDown')">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+              <label>Atau Masukkan URL</label>
+              <input type="text" id="soundBigDownUrl" placeholder="https://example.com/turun-besar.mp3">
+            </div>
+            <div id="soundBigDownPreview" style="margin-top:10px;display:none;">
+              <audio id="soundBigDownAudio" controls style="width:100%;height:36px;"></audio>
+            </div>
+            <button class="btn btn-sm" style="margin-top:10px;background:rgba(251,146,60,0.15);color:#fb923c;border:1px solid rgba(251,146,60,0.25);" onclick="testSound('bigDown')">Test Sound Turun Besar</button>
           </div>
 
           <!-- Sound Promo ON -->
@@ -7606,6 +7687,8 @@ ${authScript}
     let currentSoundDown = '';
     let currentSoundOn = '';
     let currentSoundOff = '';
+    let currentSoundBigUp = '';
+    let currentSoundBigDown = '';
 
     function loadSoundSettings() {
       adminFetch('/api/sound-settings')
@@ -7616,11 +7699,15 @@ ${authScript}
             currentSoundDown = data.settings.soundDown || '';
             currentSoundOn = data.settings.soundOn || '';
             currentSoundOff = data.settings.soundOff || '';
+            currentSoundBigUp = data.settings.soundBigUp || '';
+            currentSoundBigDown = data.settings.soundBigDown || '';
 
             document.getElementById('soundUpUrl').value = currentSoundUp;
             document.getElementById('soundDownUrl').value = currentSoundDown;
             document.getElementById('soundOnUrl').value = currentSoundOn;
             document.getElementById('soundOffUrl').value = currentSoundOff;
+            document.getElementById('soundBigUpUrl').value = currentSoundBigUp;
+            document.getElementById('soundBigDownUrl').value = currentSoundBigDown;
 
             if (currentSoundUp) {
               document.getElementById('soundUpPreview').style.display = 'block';
@@ -7638,12 +7725,20 @@ ${authScript}
               document.getElementById('soundOffPreview').style.display = 'block';
               document.getElementById('soundOffAudio').src = currentSoundOff;
             }
+            if (currentSoundBigUp) {
+              document.getElementById('soundBigUpPreview').style.display = 'block';
+              document.getElementById('soundBigUpAudio').src = currentSoundBigUp;
+            }
+            if (currentSoundBigDown) {
+              document.getElementById('soundBigDownPreview').style.display = 'block';
+              document.getElementById('soundBigDownAudio').src = currentSoundBigDown;
+            }
           }
         });
     }
 
     function handleSoundUpload(direction) {
-      const idMap = { up: 'Up', down: 'Down', on: 'On', off: 'Off' };
+      const idMap = { up: 'Up', down: 'Down', on: 'On', off: 'Off', bigUp: 'BigUp', bigDown: 'BigDown' };
       const suffix = idMap[direction] || 'Up';
       const fileInput = document.getElementById('sound' + suffix + 'File');
       const urlInput = document.getElementById('sound' + suffix + 'Url');
@@ -7690,6 +7785,8 @@ ${authScript}
       const soundDown = document.getElementById('soundDownUrl').value.trim();
       const soundOn = document.getElementById('soundOnUrl').value.trim();
       const soundOff = document.getElementById('soundOffUrl').value.trim();
+      const soundBigUp = document.getElementById('soundBigUpUrl').value.trim();
+      const soundBigDown = document.getElementById('soundBigDownUrl').value.trim();
       const result = document.getElementById('soundResult');
 
       result.className = 'result-msg success';
@@ -7698,7 +7795,7 @@ ${authScript}
       adminFetch('/api/admin/sound-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ soundUp, soundDown, soundOn, soundOff })
+        body: JSON.stringify({ soundUp, soundDown, soundOn, soundOff, soundBigUp, soundBigDown })
       })
       .then(r => r.json())
       .then(data => {
@@ -7707,6 +7804,8 @@ ${authScript}
           currentSoundDown = soundDown;
           currentSoundOn = soundOn;
           currentSoundOff = soundOff;
+          currentSoundBigUp = soundBigUp;
+          currentSoundBigDown = soundBigDown;
           result.className = 'result-msg success';
           result.textContent = 'Sound berhasil disimpan!';
         } else {
@@ -7732,7 +7831,7 @@ ${authScript}
       adminFetch('/api/admin/sound-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ soundUp: '', soundDown: '', soundOn: '', soundOff: '' })
+        body: JSON.stringify({ soundUp: '', soundDown: '', soundOn: '', soundOff: '', soundBigUp: '', soundBigDown: '' })
       })
       .then(r => r.json())
       .then(data => {
@@ -7741,7 +7840,9 @@ ${authScript}
           currentSoundDown = '';
           currentSoundOn = '';
           currentSoundOff = '';
-          ['Up', 'Down', 'On', 'Off'].forEach(s => {
+          currentSoundBigUp = '';
+          currentSoundBigDown = '';
+          ['Up', 'Down', 'On', 'Off', 'BigUp', 'BigDown'].forEach(s => {
             document.getElementById('sound' + s + 'Url').value = '';
             document.getElementById('sound' + s + 'File').value = '';
             document.getElementById('sound' + s + 'Preview').style.display = 'none';
@@ -7757,7 +7858,7 @@ ${authScript}
     }
 
     function testSound(direction) {
-      const idMap = { up: 'Up', down: 'Down', on: 'On', off: 'Off' };
+      const idMap = { up: 'Up', down: 'Down', on: 'On', off: 'Off', bigUp: 'BigUp', bigDown: 'BigDown' };
       const suffix = idMap[direction] || 'Up';
       const url = document.getElementById('sound' + suffix + 'Url').value.trim();
 
@@ -7765,9 +7866,42 @@ ${authScript}
         const audio = new Audio(url);
         audio.volume = 0.5;
         audio.play().catch(e => showAlert('Gagal memutar sound: ' + e.message, 'danger'));
+      } else if (direction === 'bigUp' || direction === 'bigDown') {
+        playDefaultBigSound(direction);
       } else {
         playDefaultSound(direction);
       }
+    }
+
+    function playDefaultBigSound(direction) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if (direction === 'bigUp') {
+          [600, 900, 1400].forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.12);
+            gain.gain.setValueAtTime(0.4, ctx.currentTime + i * 0.12);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.12 + 0.25);
+            osc.start(ctx.currentTime + i * 0.12);
+            osc.stop(ctx.currentTime + i * 0.12 + 0.25);
+          });
+        } else {
+          [1200, 800, 350].forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.12);
+            gain.gain.setValueAtTime(0.35, ctx.currentTime + i * 0.12);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.12 + 0.25);
+            osc.start(ctx.currentTime + i * 0.12);
+            osc.stop(ctx.currentTime + i * 0.12 + 0.25);
+          });
+        }
+      } catch (e) {}
     }
 
     function playDefaultSound(direction) {
@@ -12175,6 +12309,8 @@ app.get('/monitoring', async (_req, res) => {
     let audioContext = null;
     let customSoundUp = '';
     let customSoundDown = '';
+    let customSoundBigUp = '';
+    let customSoundBigDown = '';
 
     // 🎁 Promo ON/OFF sounds (embedded base64 as default)
     const defaultPromoSoundOn = 'data:audio/ogg;base64,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';
@@ -12207,6 +12343,8 @@ app.get('/monitoring', async (_req, res) => {
           customSoundDown = data.settings.soundDown || '';
           customSoundOn = data.settings.soundOn || '';
           customSoundOff = data.settings.soundOff || '';
+          customSoundBigUp = data.settings.soundBigUp || '';
+          customSoundBigDown = data.settings.soundBigDown || '';
         }
       } catch (e) {}
     }
@@ -12270,21 +12408,69 @@ app.get('/monitoring', async (_req, res) => {
       }
     }
 
+    // Default big-change sound: lebih dramatis (chord 2 nada berurutan)
+    function playDefaultBigSound(direction) {
+      try {
+        const ctx = getAudioContext();
+        if (direction === 'bigUp') {
+          // Naik besar: 3 nada naik cepat + sustain
+          [600, 900, 1400].forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.12);
+            gain.gain.setValueAtTime(0.4, ctx.currentTime + i * 0.12);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.12 + 0.25);
+            osc.start(ctx.currentTime + i * 0.12);
+            osc.stop(ctx.currentTime + i * 0.12 + 0.25);
+          });
+        } else {
+          // Turun besar: 3 nada turun cepat
+          [1200, 800, 350].forEach((freq, i) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.12);
+            gain.gain.setValueAtTime(0.35, ctx.currentTime + i * 0.12);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.12 + 0.25);
+            osc.start(ctx.currentTime + i * 0.12);
+            osc.stop(ctx.currentTime + i * 0.12 + 0.25);
+          });
+        }
+      } catch (e) {}
+    }
+
     function playSound(direction) {
       if (!soundEnabled) return;
 
-      const soundUrl = direction === 'up' ? customSoundUp : customSoundDown;
+      // Tentukan URL custom sound yang tepat
+      let soundUrl = '';
+      if (direction === 'bigUp') {
+        soundUrl = customSoundBigUp || customSoundUp; // fallback ke sound naik biasa
+      } else if (direction === 'bigDown') {
+        soundUrl = customSoundBigDown || customSoundDown; // fallback ke sound turun biasa
+      } else if (direction === 'up') {
+        soundUrl = customSoundUp;
+      } else {
+        soundUrl = customSoundDown;
+      }
 
       if (soundUrl) {
-        // Play custom sound from admin
         const audio = new Audio(soundUrl);
         audio.volume = 0.5;
         audio.play().catch(e => {
           console.log('Custom sound error, using default:', e);
-          playDefaultSound(direction);
+          if (direction === 'bigUp' || direction === 'bigDown') {
+            playDefaultBigSound(direction);
+          } else {
+            playDefaultSound(direction);
+          }
         });
+      } else if (direction === 'bigUp' || direction === 'bigDown') {
+        playDefaultBigSound(direction);
       } else {
-        // Play default beep sound
         playDefaultSound(direction);
       }
     }
@@ -12989,6 +13175,8 @@ app.get('/monitoring', async (_req, res) => {
           customSoundDown = data.settings.soundDown || '';
           customSoundOn = data.settings.soundOn || '';
           customSoundOff = data.settings.soundOff || '';
+          customSoundBigUp = data.settings.soundBigUp || '';
+          customSoundBigDown = data.settings.soundBigDown || '';
           console.log('Sound settings updated');
           return;
         }
@@ -13160,7 +13348,12 @@ app.get('/monitoring', async (_req, res) => {
               const cls = change > 0 ? 'up' : 'down';
               document.getElementById('buyChange').textContent = sign + change.toLocaleString('id-ID');
               document.getElementById('buyChange').className = 'stat-change ' + cls;
-              playSound(change > 0 ? 'up' : 'down');
+              // Pakai sound "besar" jika selisih > 3000
+              if (Math.abs(change) > 3000) {
+                playSound(change > 0 ? 'bigUp' : 'bigDown');
+              } else {
+                playSound(change > 0 ? 'up' : 'down');
+              }
 
               // Update trend icon di XAU/USD Chart title
               const trendIcon = document.getElementById('trendIcon');
