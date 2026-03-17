@@ -155,7 +155,7 @@ let lastPromoBroadcastMinute = -1 // Track menit terakhir broadcast
 
 // CACHE GLOBAL untuk market data (pre-fetched)
 let cachedMarketData = {
-  usdIdr: { rate: 16600 }, // Updated default to current market rate
+  usdIdr: null, // Will be populated from realtime API
   xauUsd: null,
   economicEvents: null,
   lastUpdate: 0,
@@ -968,7 +968,7 @@ async function fetchUSDIDRFallback() {
     }
   } catch (_) {}
 
-  return { rate: 16600 }
+  return null
 }
 
 async function fetchUSDIDRFromGoogle() {
@@ -1061,7 +1061,8 @@ async function fetchUSDIDRFromGoogle() {
     }
   }
 
-  return { rate: 15900 }
+  // Google failed — try exchange rate API fallback
+  return await fetchUSDIDRFallback()
 }
 
 async function fetchXAUUSDFromTradingView() {
@@ -10493,6 +10494,7 @@ app.get('/monitoring', async (_req, res) => {
       color: #e7e9ea;
       white-space: nowrap;
       font-family: 'JetBrains Mono', monospace;
+      vertical-align: top;
     }
     .history-table tr:last-child td {
       border-bottom: none;
@@ -10503,7 +10505,7 @@ app.get('/monitoring', async (_req, res) => {
     .history-table .price-up { color: #4ade80; font-weight: 600; }
     .history-table .price-down { color: #f87171; font-weight: 600; }
     .history-table .time-col { color: #8b949e; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; }
-    .history-table td.td-nominal { text-align: right; vertical-align: middle; }
+    .history-table td.td-nominal { text-align: right; vertical-align: top; }
     .history-table td.td-nominal .nom-gram { display: block; color: #8b949e; font-size: 0.8em; }
     .history-table td.td-nominal br { display: none; }
     .history-table td.td-nominal small { display: block; }
@@ -10943,20 +10945,6 @@ app.get('/monitoring', async (_req, res) => {
     </div>
   </div>
 
-  <!-- History Nominal Settings Modal -->
-  <div class="nominal-modal-overlay" id="historyNominalModal">
-    <div class="nominal-modal">
-      <h3>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        Nominal di Riwayat
-      </h3>
-      <div class="nominal-modal-list" id="historyNominalModalList"></div>
-      <div class="nominal-modal-actions">
-        <button class="btn-cancel" onclick="closeHistoryNominalSettings()">Batal</button>
-        <button class="btn-save" onclick="saveHistoryNominalSettings()">Simpan</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Indicator Settings Modal -->
   <!-- Promo Suggestions Modal -->
@@ -11358,10 +11346,6 @@ app.get('/monitoring', async (_req, res) => {
         <h2><i data-lucide="history" style="width:15px;height:15px;vertical-align:middle;margin-right:6px;"></i>Riwayat Perubahan Harga</h2>
         <div style="display:flex;align-items:center;gap:8px;">
           <span class="count" id="historyCount">0 records</span>
-          <button onclick="openHistoryNominalSettings()" title="Pilih Nominal Riwayat" style="background:none;border:1px solid #374151;border-radius:6px;padding:3px 7px;cursor:pointer;color:#9ca3af;display:flex;align-items:center;gap:4px;font-size:0.75em;">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            Nominal
-          </button>
         </div>
       </div>
       <div class="history-table-wrap">
@@ -12216,13 +12200,16 @@ app.get('/monitoring', async (_req, res) => {
         const spread = item.spread || ((item.sell - item.buy) / item.buy * 100).toFixed(2);
         const spreadClass = parseFloat(spread) < 0 ? 'price-down' : '';
 
-        // USD/IDR - use current rate as fallback for old entries
-        const usdIdrVal = item.usdIdr || currentUsdIdr;
+        // USD/IDR - filter out known hardcoded values (15900, 16600), use current rate as fallback
+        const HARDCODED_RATES = [15900, 16600];
+        const rawUsdIdr = item.usdIdr && !HARDCODED_RATES.includes(Math.round(item.usdIdr)) ? item.usdIdr : null;
+        const usdIdrVal = rawUsdIdr || currentUsdIdr;
         const usdIdr = usdIdrVal ? Math.round(usdIdrVal).toLocaleString('id-ID') : '-';
 
         // USD/IDR change - compare with next item (older) in list
         const nextItem = items[index + 1];
-        const prevUsdIdr = nextItem ? (nextItem.usdIdr || currentUsdIdr) : usdIdrVal;
+        const nextRaw = nextItem?.usdIdr && !HARDCODED_RATES.includes(Math.round(nextItem.usdIdr)) ? nextItem.usdIdr : null;
+        const prevUsdIdr = nextItem ? (nextRaw || currentUsdIdr) : usdIdrVal;
         const usdIdrChange = usdIdrVal && prevUsdIdr ? Math.round(usdIdrVal) - Math.round(prevUsdIdr) : 0;
         const usdIdrChangeSign = usdIdrChange >= 0 ? '+' : '';
         const usdIdrChangeClass = usdIdrChange >= 0 ? 'price-up' : 'price-down';
@@ -12911,45 +12898,9 @@ app.get('/monitoring', async (_req, res) => {
     // 💰 Nominal Settings from API
     let loadedNominals = [];
     let userNominalPrefs = {}; // { id: true/false }
-    let historyNominalPrefs = {}; // { id: true/false } — terpisah untuk riwayat
 
     function getHistoryNominals() {
-      return loadedNominals.filter(n => historyNominalPrefs[n.id] !== false);
-    }
-
-    function openHistoryNominalSettings() {
-      const modal = document.getElementById('historyNominalModal');
-      const list = document.getElementById('historyNominalModalList');
-      list.innerHTML = loadedNominals.map(n => {
-        const checked = historyNominalPrefs[n.id] !== false ? 'checked' : '';
-        const discountPercent = parseFloat((n.discountRate * 100).toFixed(3));
-        return '<div class="nominal-modal-item" onclick="toggleHistoryNominalCb(&apos;' + n.id + '&apos;)">' +
-          '<input type="checkbox" id="hnom_' + n.id + '" ' + checked + ' onclick="event.stopPropagation()">' +
-          '<label for="hnom_' + n.id + '">' + n.label + '</label>' +
-          '<span class="nominal-discount">Disc ' + discountPercent + '%</span>' +
-        '</div>';
-      }).join('');
-      modal.classList.add('active');
-    }
-
-    function toggleHistoryNominalCb(id) {
-      const cb = document.getElementById('hnom_' + id);
-      if (cb) cb.checked = !cb.checked;
-    }
-
-    function closeHistoryNominalSettings() {
-      document.getElementById('historyNominalModal').classList.remove('active');
-    }
-
-    function saveHistoryNominalSettings() {
-      loadedNominals.forEach(n => {
-        const cb = document.getElementById('hnom_' + n.id);
-        historyNominalPrefs[n.id] = cb ? cb.checked : true;
-      });
-      localStorage.setItem('historyNominalPrefs', JSON.stringify(historyNominalPrefs));
-      renderHistoryHeaders();
-      loadHistory();
-      closeHistoryNominalSettings();
+      return loadedNominals.filter(n => userNominalPrefs[n.id] !== false);
     }
 
     // Load nominal settings from API
@@ -12966,12 +12917,6 @@ app.get('/monitoring', async (_req, res) => {
             } else {
               // Default: semua nominal aktif
               loadedNominals.forEach(n => { userNominalPrefs[n.id] = true; });
-            }
-            const savedHistory = localStorage.getItem('historyNominalPrefs');
-            if (savedHistory) {
-              historyNominalPrefs = JSON.parse(savedHistory);
-            } else {
-              loadedNominals.forEach(n => { historyNominalPrefs[n.id] = true; });
             }
             applyNominalVisibility();
             updateMobileSelector();
@@ -13052,6 +12997,8 @@ app.get('/monitoring', async (_req, res) => {
       localStorage.setItem('userNominalPrefs', JSON.stringify(userNominalPrefs));
       applyNominalVisibility();
       updateMobileSelector();
+      renderHistoryHeaders();
+      loadHistory();
       closeNominalSettings();
     }
 
