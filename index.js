@@ -10505,6 +10505,7 @@ app.get('/monitoring', async (_req, res) => {
     .history-table .price-up { color: #4ade80; font-weight: 600; }
     .history-table .price-down { color: #f87171; font-weight: 600; }
     .history-table .time-col { color: #8b949e; font-family: 'JetBrains Mono', monospace; font-size: 0.9em; }
+    .history-table th.th-nominal { text-align: right; }
     .history-table td.td-nominal { text-align: right; vertical-align: top; }
     .history-table td.td-nominal .nom-gram { display: block; color: #8b949e; font-size: 0.8em; }
     .history-table td.td-nominal br { display: none; }
