@@ -13742,7 +13742,6 @@ async function start() {
     
     if (qr) {
       lastQr = qr
-      pushLog('WA | QR ready at /qr')
     }
 
     if (connection === 'close') {
