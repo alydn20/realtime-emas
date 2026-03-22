@@ -2385,6 +2385,23 @@ console.log(`[GOLD] Bot started | Price check: ${PRICE_CHECK_INTERVAL/1000}s | S
 const app = express()
 app.use(express.json({ limit: '10mb' }))
 
+// Self-host lucide icons
+let lucideCache = null
+app.get('/assets/lucide.min.js', async (_req, res) => {
+  try {
+    if (!lucideCache) {
+      const r = await fetch('https://unpkg.com/lucide@0.577.0/dist/umd/lucide.min.js', { signal: AbortSignal.timeout(5000) })
+      if (r.ok) lucideCache = await r.text()
+    }
+    if (lucideCache) {
+      res.setHeader('Content-Type', 'application/javascript')
+      res.setHeader('Cache-Control', 'public, max-age=86400')
+      return res.send(lucideCache)
+    }
+  } catch (_) {}
+  res.status(503).send('// lucide unavailable')
+})
+
 // Security headers
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff')
@@ -2399,11 +2416,11 @@ app.use((_req, res, next) => {
   // CSP: batasi sumber resource yang boleh dimuat
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://s3.tradingview.com https://unpkg.com https://challenges.cloudflare.com",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://s3.tradingview.com https://challenges.cloudflare.com",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self'",
     "img-src 'self' data: https:",
-    "connect-src 'self' wss://*.tradingview.com https://*.tradingview.com https://challenges.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com",
+    "connect-src 'self' wss://*.tradingview.com https://*.tradingview.com https://challenges.cloudflare.com",
     "frame-src https://s3.tradingview.com https://www.tradingview-widget.com https://challenges.cloudflare.com",
     "media-src 'self' data: blob:",
     "worker-src 'self' blob:",
@@ -2495,9 +2512,7 @@ app.get('/admin-login', (req, res) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>body,*{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;}</style>
   <title>Admin Login - Gold Price Monitor</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -3579,9 +3594,7 @@ app.get('/admin/monitoring', (req, res) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>body,*{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;}</style>
   <title>Admin - Gold Price Monitor</title>
 ${authScript}
   <style>
@@ -5560,9 +5573,7 @@ app.get('/login', (_req, res) => {
   <meta name="theme-color" content="#0a0e13">
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" href="/icon.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>body,*{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;}</style>
   <title>Login - Gold Price Monitor</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -6447,9 +6458,7 @@ app.get('/admin/users', (req, res) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <style>body,*{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;}code,pre,.mono{font-family:'Courier New',Courier,monospace;}</style>
   <title>Admin - Kelola User</title>
 ${authScript}
   <style>
@@ -8931,10 +8940,8 @@ app.get('/monitoring', async (_req, res) => {
   <link rel="apple-touch-icon" href="/icon.png">
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <link rel="icon" type="image/png" href="/icon.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <style>body,*{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;}code,pre,.mono{font-family:'Courier New',Courier,monospace;}</style>
+  <script src="/assets/lucide.min.js"></script>
   <title>Gold Price Monitor</title>
   <style>
     /* Lucide icons sizing */
