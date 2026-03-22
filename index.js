@@ -2403,7 +2403,7 @@ app.use((_req, res, next) => {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: https:",
-    "connect-src 'self' wss://*.tradingview.com https://*.tradingview.com https://challenges.cloudflare.com",
+    "connect-src 'self' wss://*.tradingview.com https://*.tradingview.com https://challenges.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com",
     "frame-src https://s3.tradingview.com https://www.tradingview-widget.com https://challenges.cloudflare.com",
     "media-src 'self' data: blob:",
     "worker-src 'self' blob:",
