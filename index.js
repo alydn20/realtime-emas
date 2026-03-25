@@ -871,35 +871,38 @@ function formatEconomicCalendar(events) {
   if (!events || events.length === 0) {
     return ''
   }
-  
-  let calendarText = '\n📅 USD News\n'
-  
-  events.forEach((event, index) => {
+
+  let calendarText = '\n'
+
+  // Group events by day+time
+  const groups = []
+  const groupMap = new Map()
+
+  events.forEach(event => {
     const eventDate = new Date(event.date)
     const wibTime = new Date(eventDate.getTime() + (7 * 60 * 60 * 1000))
-    
+
     const minutes = wibTime.getMinutes()
     const roundedMinutes = Math.round(minutes / 5) * 5
     wibTime.setMinutes(roundedMinutes)
     wibTime.setSeconds(0)
-    
+
     const hours = wibTime.getHours().toString().padStart(2, '0')
     const mins = wibTime.getMinutes().toString().padStart(2, '0')
     const timeStr = `${hours}:${mins}`
-    
+
     const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
     const dayName = days[wibTime.getDay()]
-    
+
     const title = event.title || event.event || 'Unknown Event'
     const forecast = event.forecast || '-'
-    const previous = event.previous || '-'
     const actual = event.actual || '-'
-    
+
     const nowTime = Date.now()
     const eventTime = eventDate.getTime()
     const timeSinceEvent = nowTime - eventTime
     const minutesSinceEvent = Math.floor(timeSinceEvent / (60 * 1000))
-    
+
     let timeStatus = ''
     if (timeSinceEvent < 0) {
       const minutesUntil = Math.abs(minutesSinceEvent)
@@ -923,7 +926,7 @@ function formatEconomicCalendar(events) {
         timeStatus = `✅${minsAgo}m lalu`
       }
     }
-    
+
     // Shortened title
     let shortTitle = title
     if (title.includes('Non-Farm')) shortTitle = 'NFP'
@@ -933,32 +936,39 @@ function formatEconomicCalendar(events) {
     else if (title.includes('GDP')) shortTitle = 'GDP'
     else if (title.includes('Retail')) shortTitle = 'Retail'
     else if (title.includes('Jobless')) shortTitle = 'Jobless'
-    
-    calendarText += `• ${dayName} ${timeStr}`
-    
-    if (timeStatus) {
-      calendarText += ` (${timeStatus})`
-    }
-    
-    calendarText += ` ${shortTitle}`
-    
+
+    // Build event text
+    let eventText = shortTitle
     if (actual !== '-' && actual !== '') {
       const goldImpact = analyzeGoldImpact(event)
-      
-      calendarText += ` ${actual}>${forecast}`
-      
+      eventText += ` ${actual}>${forecast}`
       if (goldImpact === 'BAGUS') {
-        calendarText += ` 🟢 BAGUS`
+        eventText += ` 🟢 BAGUS`
       } else if (goldImpact === 'JELEK') {
-        calendarText += ` 🔴 JELEK`
+        eventText += ` 🔴 JELEK`
       }
     } else if (forecast !== '-') {
-      calendarText += ` F:${forecast}`
+      eventText += ` F:${forecast}`
     }
-    
-    calendarText += '\n'
+
+    // Group by day+time
+    const key = `${dayName}|${timeStr}`
+    if (!groupMap.has(key)) {
+      const group = { dayName, timeStr, timeStatus, items: [] }
+      groupMap.set(key, group)
+      groups.push(group)
+    }
+    groupMap.get(key).items.push(eventText)
   })
-  
+
+  groups.forEach(group => {
+    calendarText += `📅 ${group.dayName} ${group.timeStr}`
+    if (group.timeStatus) {
+      calendarText += ` (${group.timeStatus})`
+    }
+    calendarText += `(${group.items.length})\n• ${group.items.join(', ')}\n`
+  })
+
   return calendarText
 }
 
@@ -1423,9 +1433,21 @@ function formatMessage(treasuryData, usdIdrRate, xauUsdPrice = null, priceChange
     }
   }
 
-  let marketSection = `💱 USD Rp${formatRupiah(Math.round(usdIdrRate))}`
+  let marketSection = usdIdrRate
+    ? `💱 USD Rp${formatRupiah(Math.round(usdIdrRate))}`
+    : `💱 USD -`
+
   if (xauUsdPrice) {
     marketSection += ` | XAU $${xauUsdPrice.toFixed(2)}`
+    if (usdIdrRate) {
+      const priceStatus = analyzePriceStatus(buy, sell, xauUsdPrice, usdIdrRate)
+      if (priceStatus.status === 'NORMAL') {
+        marketSection += '(✅)'
+      } else {
+        const diff = Math.round(priceStatus.difference)
+        marketSection += `(⚠️${diff > 0 ? '+' : ''}${formatRupiah(diff)})`
+      }
+    }
   }
 
   const calendarSection = formatEconomicCalendar(economicEvents)
@@ -1460,7 +1482,7 @@ function formatMessage(treasuryData, usdIdrRate, xauUsdPrice = null, priceChange
 
   return `${headerSection}${timeSection}
 
-💰 Beli ${buyFormatted} | Jual ${sellFormatted} (${spreadPercent > 0 ? '-' : ''}${spreadPercent}%)
+💰 Beli ${buyFormatted} | Jual ${sellFormatted} (${Math.abs(parseFloat(spreadPercent)) > 3.35 ? '⚠️' : ''}${spreadPercent > 0 ? '-' : ''}${spreadPercent}%)
 ${marketSection}${promoInfoSection}
 
 ${nominalLines}
