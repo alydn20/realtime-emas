@@ -2457,6 +2457,7 @@ async function fastPoll() {
           lastBroadcastTime = nowWa
           lastBroadcastMinute = currentMinuteWa
           lastBroadcastedPrice = { buy: currentPrice.buy, sell: currentPrice.sell, fetchedAt: currentPrice.fetchedAt }
+          prevUsdIdrRate = null  // Reset agar perubahan USD/IDR tidak repeat di broadcast berikutnya
 
           doBroadcastInstant(waMessage)
 
