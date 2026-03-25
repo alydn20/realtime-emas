@@ -1478,6 +1478,8 @@ function formatMessage(treasuryData, usdIdrRate, xauUsdPrice = null, priceChange
     if (promoLimit !== null && promoLimit !== undefined) {
       promoInfoSection += ` | Limit ${promoLimit} beli/bln`
     }
+  } else if (promoLimit !== null && promoLimit !== undefined) {
+    promoInfoSection = `\n🏷️ Limit ${promoLimit} beli/bln`
   }
 
   // Gunakan nominal dari settings jika ada, fallback ke default
