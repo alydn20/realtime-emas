@@ -1450,8 +1450,10 @@ function formatMessage(treasuryData, usdIdrRate, xauUsdPrice = null, priceChange
   }
 
   let usdChangeStr = ''
-  if (usdIdrChange !== null && usdIdrChange !== 0) {
-    usdChangeStr = usdIdrChange > 0 ? ` (🚀${formatRupiah(Math.round(usdIdrChange))})` : ` (🔻${formatRupiah(Math.round(Math.abs(usdIdrChange)))})`
+  if (usdIdrChange !== null) {
+    const usdChangeRounded = Math.round(usdIdrChange)
+    if (usdChangeRounded > 0) usdChangeStr = ` (🚀${formatRupiah(usdChangeRounded)})`
+    else if (usdChangeRounded < 0) usdChangeStr = ` (🔻${formatRupiah(Math.abs(usdChangeRounded))})`
   }
 
   let marketSection = usdIdrRate
