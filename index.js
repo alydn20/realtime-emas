@@ -179,6 +179,7 @@ const REDIS_KEYS = {
   PUSH_SUBS: 'gold:push_subs',   // Hash: phone -> push subscription JSON
   SESSIONS: 'gold:sessions',     // Hash: sessionId -> phone
   WA_GROUP_ID: 'gold:wa_group_id', // String: ID grup WA yang di-monitor
+  WA_BROADCAST_GROUP_ID: 'gold:wa_broadcast_group_id', // String: ID grup WA untuk broadcast harga otomatis
   WA_AUTH: 'gold:wa_auth',       // Hash: key -> auth data (creds, keys) for persistent WA session
   OTP_CODES: 'gold:otp_codes',   // Hash: phone -> OTP code for registration verification
   LOGIN_TOKENS: 'gold:login_tokens', // Hash: token -> { phone, expires }
@@ -207,6 +208,12 @@ const ADMIN_PHONE = process.env.ADMIN_PHONE || '62895701692525'
 
 // ID Grup WhatsApp yang membernya otomatis terdaftar (di-set via admin panel)
 let monitoredGroupId = null
+
+// ID Grup WhatsApp untuk broadcast harga otomatis (di-set via admin panel)
+let broadcastGroupId = null
+
+// Cache promo limit dari Redis
+let promoLimitCache = null
 
 // ==================== REDIS AUTH STATE (Persistent WA Session) ====================
 async function useRedisAuthState() {
@@ -308,6 +315,29 @@ async function loadMonitoredGroup() {
     }
   } catch (e) {
     pushLog('WA | Failed to load monitored group: ' + e.message)
+  }
+}
+
+// Load broadcast group ID dari Redis saat startup
+async function loadBroadcastGroup() {
+  try {
+    const groupId = await redis.get(REDIS_KEYS.WA_BROADCAST_GROUP_ID)
+    if (groupId) {
+      broadcastGroupId = groupId
+      pushLog('WA | Broadcast group: ' + groupId.substring(0, 20) + '...')
+    }
+  } catch (e) {
+    pushLog('WA | Failed to load broadcast group: ' + e.message)
+  }
+}
+
+// Load promo limit dari Redis
+async function loadPromoLimit() {
+  try {
+    const val = await redis.get(REDIS_KEYS.PROMO_LIMIT)
+    promoLimitCache = val !== null ? parseInt(val, 10) : null
+  } catch (e) {
+    // silent
   }
 }
 
@@ -1342,7 +1372,7 @@ function analyzePriceStatus(treasuryBuy, treasurySell, xauUsdPrice, usdIdrRate) 
   }
 }
 
-function formatMessage(treasuryData, usdIdrRate, xauUsdPrice = null, priceChange = null, economicEvents = null) {
+function formatMessage(treasuryData, usdIdrRate, xauUsdPrice = null, priceChange = null, economicEvents = null, lowestOnPrice = null, promoLimit = null) {
   const buy = treasuryData?.data?.buying_rate || 0
   const sell = treasuryData?.data?.selling_rate || 0
 
@@ -1402,10 +1432,19 @@ function formatMessage(treasuryData, usdIdrRate, xauUsdPrice = null, priceChange
   // Format gram dengan 4 digit desimal
   const formatGrams = (g) => g.toFixed(4)
 
+  // Titik ON + Limit section
+  let promoInfoSection = ''
+  if (lowestOnPrice) {
+    promoInfoSection = `\n🏷️ Titik ON ▼ Rp${formatRupiah(lowestOnPrice)}`
+    if (promoLimit !== null && promoLimit !== undefined) {
+      promoInfoSection += ` | Limit ${promoLimit} beli/bln`
+    }
+  }
+
   return `${headerSection}${timeSection}${statusSection}
 
 💰 Beli ${buyFormatted} | Jual ${sellFormatted} (${spreadPercent > 0 ? '-' : ''}${spreadPercent}%)
-${marketSection}
+${marketSection}${promoInfoSection}
 
 🎁 20jt→${formatGrams(grams20M)}gr (+Rp${formatRupiah(Math.round(profit20M))})
 🎁 30jt→${formatGrams(grams30M)}gr (+Rp${formatRupiah(Math.round(profit30M))})
@@ -1883,6 +1922,12 @@ function doBroadcastInstant(message) {
   // Simpan pesan untuk monitoring (selalu update meski tidak ada subscriber)
   lastBroadcastMessage = message
 
+  // 📢 Kirim ke WA broadcast group (Grup Beli) jika sudah di-set
+  if (sock && isReady && broadcastGroupId) {
+    sock.sendMessage(broadcastGroupId, { text: message }).catch(() => {})
+    pushLog(`SEND | Broadcast to WA group: ${broadcastGroupId.substring(0, 20)}...`)
+  }
+
   if (!sock || !isReady || subscriptions.size === 0) return
 
   broadcastCount++
@@ -2063,8 +2108,8 @@ async function checkPriceUpdate() {
       return
     }
 
-    // Skip WA broadcast jika tidak ada subscriber
-    if (!isReady || subscriptions.size === 0) {
+    // Skip WA broadcast jika tidak ada subscriber DAN tidak ada broadcast group
+    if (!isReady || (subscriptions.size === 0 && !broadcastGroupId)) {
       return
     }
     
@@ -2175,7 +2220,7 @@ async function checkPriceUpdate() {
         updated_at: currentPrice.updated_at
       }
     }
-    const message = formatMessage(broadcastData, cachedMarketData.usdIdr.rate, cachedMarketData.xauUsd, finalPriceChange, cachedMarketData.economicEvents)
+    const message = formatMessage(broadcastData, cachedMarketData.usdIdr.rate, cachedMarketData.xauUsd, finalPriceChange, cachedMarketData.economicEvents, lowestOnPriceCache, promoLimitCache)
 
     // 🚀 INSTANT BROADCAST - Langsung kirim tanpa delay
     doBroadcastInstant(message)
@@ -2295,6 +2340,47 @@ async function fastPoll() {
 
       // 🎁 Trigger promo check 5 detik setelah harga berubah
       triggerPromoCheck()
+
+      // 📱 WA BROADCAST - kirim ke grup WA dan subscriber (throttled: max 1x per menit)
+      if (sock && isReady && (subscriptions.size > 0 || broadcastGroupId)) {
+        const nowWa = Date.now()
+        const currentMinuteWa = new Date(nowWa).getHours() * 60 + new Date(nowWa).getMinutes()
+        const timeSinceLastBroadcast = nowWa - lastBroadcastTime
+        const alreadyBroadcastThisMinute = lastBroadcastMinute === currentMinuteWa
+
+        const buyChangeSinceBroadcast = Math.abs(currentPrice.buy - (lastBroadcastedPrice?.buy || prevPrice.buy))
+        const minChangeOk = buyChangeSinceBroadcast >= MIN_PRICE_CHANGE
+
+        const shouldWaBroadcast = !alreadyBroadcastThisMinute && minChangeOk &&
+          (timeSinceLastBroadcast >= BROADCAST_COOLDOWN || currentMinuteWa !== lastBroadcastMinute)
+
+        if (shouldWaBroadcast) {
+          const finalPriceChange = {
+            buyChange: currentPrice.buy - (lastBroadcastedPrice?.buy || prevPrice.buy),
+            sellChange: currentPrice.sell - (lastBroadcastedPrice?.sell || prevPrice.sell)
+          }
+          const waData = {
+            data: {
+              buying_rate: currentPrice.buy,
+              selling_rate: currentPrice.sell,
+              updated_at: currentPrice.updated_at
+            }
+          }
+          const waMessage = formatMessage(waData, cachedMarketData.usdIdr?.rate, cachedMarketData.xauUsd, finalPriceChange, cachedMarketData.economicEvents, lowestOnPriceCache, promoLimitCache)
+
+          lastBroadcastTime = nowWa
+          lastBroadcastMinute = currentMinuteWa
+          lastBroadcastedPrice = { buy: currentPrice.buy, sell: currentPrice.sell, fetchedAt: currentPrice.fetchedAt }
+
+          doBroadcastInstant(waMessage)
+
+          // Push notification ke HP
+          const buyDir = finalPriceChange.buyChange > 0 ? '📈' : '📉'
+          const pushTitle = `${buyDir} Harga Emas Update`
+          const pushBody = `Beli: Rp ${currentPrice.buy.toLocaleString('id-ID')} (${finalPriceChange.buyChange > 0 ? '+' : ''}${formatRupiah(finalPriceChange.buyChange)})`
+          sendPushToAll(pushTitle, pushBody, 'price').catch(() => {})
+        }
+      }
     } else {
       lastKnownPrice = currentPrice
     }
@@ -5019,6 +5105,7 @@ app.post('/api/admin/promo-limit', express.json(), async (req, res) => {
     const numLimit = parseInt(limit, 10)
     if (isNaN(numLimit) || numLimit < 0) return res.json({ success: false, error: 'Nilai tidak valid' })
     await redis.set(REDIS_KEYS.PROMO_LIMIT, String(numLimit))
+    promoLimitCache = numLimit
     broadcastSSE({ type: 'promo_limit_update', limit: numLimit })
     res.json({ success: true, limit: numLimit })
   } catch (e) {
@@ -5127,6 +5214,62 @@ app.get('/api/ff-calendar', async (req, res) => {
   }
 })
 
+// ==================== WHATSAPP STATUS & RESET ====================
+
+// Admin: Get WA connection status
+app.get('/api/admin/wa-status', async (req, res) => {
+  const { password } = req.query
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  const phone = sock?.user?.id ? sock.user.id.split(':')[0].split('@')[0] : null
+  res.json({
+    success: true,
+    connected: isReady,
+    hasQr: !!lastQr,
+    phone: phone ? `+${phone}` : null,
+    broadcastGroupId: broadcastGroupId || null,
+    monitoredGroupId: monitoredGroupId || null
+  })
+})
+
+// Admin: Reset WA connection (logout + restart, scan QR ulang)
+app.post('/api/admin/wa-reset', express.json(), async (req, res) => {
+  const { password } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  try {
+    pushLog('WA | Admin requested reset...')
+
+    if (sock) {
+      sock.ev.removeAllListeners()
+      await sock.logout().catch(() => {})
+      sock = null
+    }
+
+    isReady = false
+    lastQr = null
+
+    // Hapus folder auth lokal
+    const fs = await import('fs')
+    const path = await import('path')
+    const authPath = path.join(process.cwd(), 'auth')
+    if (fs.existsSync(authPath)) {
+      fs.rmSync(authPath, { recursive: true, force: true })
+      pushLog('WA | Auth folder deleted')
+    }
+
+    // Restart koneksi setelah 2 detik
+    setTimeout(() => {
+      start().catch(e => pushLog('WA | Restart error: ' + e.message))
+    }, 2000)
+
+    res.json({ success: true, message: 'Reset berhasil. Scan QR baru di halaman QR.' })
+  } catch (e) {
+    pushLog('WA | Reset error: ' + e.message)
+    res.json({ success: false, error: e.message })
+  }
+})
+
 // ==================== WHATSAPP GROUP MANAGEMENT ====================
 
 // Admin: Get list of WhatsApp groups
@@ -5144,10 +5287,11 @@ app.get('/api/admin/wa-groups', async (req, res) => {
       id: g.id,
       name: g.subject,
       participants: g.participants?.length || 0,
-      isMonitored: g.id === monitoredGroupId
+      isMonitored: g.id === monitoredGroupId,
+      isBroadcast: g.id === broadcastGroupId
     }))
 
-    res.json({ success: true, groups: groupList, currentGroupId: monitoredGroupId })
+    res.json({ success: true, groups: groupList, currentGroupId: monitoredGroupId, broadcastGroupId })
   } catch (e) {
     res.json({ success: false, error: e.message })
   }
@@ -5166,6 +5310,27 @@ app.post('/api/admin/wa-groups/set', express.json(), async (req, res) => {
     pushLog('WA | Monitored group set: ' + groupId.substring(0, 20) + '...')
 
     res.json({ success: true, groupId })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
+// Admin: Set broadcast group (untuk kirim harga otomatis ke grup WA)
+app.post('/api/admin/wa-groups/set-broadcast', express.json(), async (req, res) => {
+  const { password, groupId } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+
+  try {
+    if (groupId) {
+      await redis.set(REDIS_KEYS.WA_BROADCAST_GROUP_ID, groupId)
+      broadcastGroupId = groupId
+      pushLog('WA | Broadcast group set: ' + groupId.substring(0, 20) + '...')
+    } else {
+      await redis.del(REDIS_KEYS.WA_BROADCAST_GROUP_ID)
+      broadcastGroupId = null
+      pushLog('WA | Broadcast group cleared')
+    }
+    res.json({ success: true, groupId: broadcastGroupId })
   } catch (e) {
     res.json({ success: false, error: e.message })
   }
@@ -7119,6 +7284,31 @@ ${authScript}
 
       <!-- Section: WhatsApp -->
       <div class="section-content" id="section-whatsapp">
+
+        <!-- WA Connection Status Card -->
+        <div class="card" style="margin-bottom:16px;">
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+            </svg>
+            Status Koneksi WhatsApp
+          </h2>
+          <div class="result-msg" id="waResetResult"></div>
+          <div id="waStatusCard" style="display:flex;align-items:center;gap:16px;padding:16px;background:rgba(255,255,255,0.04);border-radius:12px;margin-bottom:16px;flex-wrap:wrap;">
+            <div id="waStatusDot" style="width:14px;height:14px;border-radius:50%;background:#6b7280;flex-shrink:0;"></div>
+            <div style="flex:1;min-width:180px;">
+              <div id="waStatusText" style="font-weight:600;font-size:0.95em;">Memuat status...</div>
+              <div id="waStatusPhone" style="font-size:0.78em;color:#6b7280;margin-top:2px;"></div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-secondary btn-sm" onclick="loadWaStatus()">🔁 Refresh</button>
+              <a id="waQrLink" href="/qr" target="_blank" class="btn btn-sm" style="background:#f7931a;color:#000;text-decoration:none;">📷 Lihat QR</a>
+              <button class="btn btn-danger btn-sm" onclick="resetWaConnection()">⚠️ Reset / Ganti WA</button>
+            </div>
+          </div>
+          <p style="color:#6b7280;font-size:0.78em;">Reset akan logout dari WA saat ini dan meminta scan QR baru. Cocok untuk ganti nomor WA yang terhubung.</p>
+        </div>
+
         <div class="card">
           <h2>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -7130,17 +7320,36 @@ ${authScript}
           <div class="result-msg" id="syncResult"></div>
           <div class="form-row" style="align-items:flex-end;">
             <div class="form-group" style="flex:2;">
-              <label>Pilih Grup WhatsApp</label>
+              <label>Pilih Grup WhatsApp (Monitor Member)</label>
               <select id="waGroupSelect">
                 <option value="">-- Pilih Grup --</option>
               </select>
             </div>
             <div class="form-group" style="flex:1;">
-              <button class="btn btn-primary" onclick="setWaGroup()" style="width:100%;">Set Grup</button>
+              <button class="btn btn-primary" onclick="setWaGroup()" style="width:100%;">Set Grup Monitor</button>
             </div>
           </div>
           <div id="currentGroup" style="margin-top:8px;font-size:0.82em;color:#6b7280;"></div>
-          <div class="btns-row">
+
+          <!-- Broadcast Group (Kirim Harga Otomatis) -->
+          <div style="margin-top:20px;padding:16px;background:rgba(0,255,136,0.05);border:1px solid rgba(0,255,136,0.2);border-radius:12px;">
+            <label style="color:#00ff88;font-weight:600;display:block;margin-bottom:4px;font-size:0.9em;">📢 Grup Broadcast Harga (Grup Beli)</label>
+            <p style="color:#6b7280;font-size:0.8em;margin-bottom:12px;">Harga emas akan otomatis dikirim ke grup ini setiap kali ada perubahan harga. Pesan akan menyertakan Titik ON ▼ dan Limit beli/bln.</p>
+            <div class="form-row" style="align-items:flex-end;">
+              <div class="form-group" style="flex:2;">
+                <label>Pilih Grup Broadcast</label>
+                <select id="waBroadcastGroupSelect">
+                  <option value="">-- Pilih Grup (Kosongkan untuk nonaktifkan) --</option>
+                </select>
+              </div>
+              <div class="form-group" style="flex:1;">
+                <button class="btn" style="background:#00ff88;color:#000;width:100%;" onclick="setBroadcastGroup()">Set Grup Broadcast</button>
+              </div>
+            </div>
+            <div id="currentBroadcastGroup" style="margin-top:8px;font-size:0.82em;color:#6b7280;"></div>
+          </div>
+
+          <div class="btns-row" style="margin-top:16px;">
             <button class="btn btn-secondary" onclick="loadWaGroups()">Refresh Grup</button>
             <button class="btn btn-danger btn-sm" onclick="clearInvalidUsers()">Hapus Invalid</button>
             <button class="btn btn-sm" style="background:#7f1d1d;color:white;" onclick="clearAllUsers()">Hapus Semua</button>
@@ -7583,6 +7792,14 @@ ${authScript}
       // Refresh broadcast stats saat tab broadcast diklik
       document.querySelectorAll('.section-tab[data-section="broadcast"]').forEach(tab => {
         tab.addEventListener('click', loadBroadcastHistory);
+      });
+
+      // Refresh WA status saat tab whatsapp diklik
+      document.querySelectorAll('.section-tab[data-section="whatsapp"]').forEach(tab => {
+        tab.addEventListener('click', () => {
+          loadWaStatus();
+          loadWaGroups();
+        });
       });
     });
 
@@ -8171,40 +8388,131 @@ ${authScript}
     // Load nominals on page load
     loadNominals();
 
+    // ==================== WhatsApp Status & Reset ====================
+    function loadWaStatus() {
+      adminFetch('/api/admin/wa-status')
+        .then(r => r.json())
+        .then(data => {
+          if (!data.success) return;
+          const dot = document.getElementById('waStatusDot');
+          const text = document.getElementById('waStatusText');
+          const phone = document.getElementById('waStatusPhone');
+          if (data.connected) {
+            dot.style.background = '#00ff88';
+            dot.style.boxShadow = '0 0 8px #00ff88';
+            text.textContent = '✅ Terhubung';
+            text.style.color = '#00ff88';
+            phone.textContent = data.phone ? 'Nomor: ' + data.phone : '';
+          } else if (data.hasQr) {
+            dot.style.background = '#f7931a';
+            dot.style.boxShadow = '0 0 8px #f7931a';
+            text.textContent = '📷 Menunggu scan QR';
+            text.style.color = '#f7931a';
+            phone.textContent = 'Buka halaman QR untuk scan';
+          } else {
+            dot.style.background = '#ef4444';
+            dot.style.boxShadow = 'none';
+            text.textContent = '❌ Tidak terhubung';
+            text.style.color = '#ef4444';
+            phone.textContent = 'Klik "Lihat QR" untuk menghubungkan';
+          }
+        })
+        .catch(() => {});
+    }
+
+    async function resetWaConnection() {
+      const confirmed = await showConfirm(
+        'Ini akan logout dari WhatsApp saat ini dan memerlukan scan QR ulang untuk menghubungkan nomor baru.\n\nLanjutkan?',
+        { title: '⚠️ Reset Koneksi WhatsApp', type: 'warning' }
+      );
+      if (!confirmed) return;
+
+      const result = document.getElementById('waResetResult');
+      result.className = 'result-msg success';
+      result.textContent = 'Mereset koneksi WA...';
+
+      adminFetch('/api/admin/wa-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          result.className = 'result-msg success';
+          result.textContent = '✅ ' + data.message;
+          setTimeout(() => loadWaStatus(), 3000);
+        } else {
+          result.className = 'result-msg error';
+          result.textContent = 'Error: ' + data.error;
+        }
+        setTimeout(() => result.className = 'result-msg', 8000);
+      });
+    }
+
+    // Load WA status saat tab whatsapp dibuka
+    loadWaStatus();
+
     // ==================== WhatsApp Group Functions ====================
     function loadWaGroups() {
       const select = document.getElementById('waGroupSelect');
+      const broadcastSelect = document.getElementById('waBroadcastGroupSelect');
       select.innerHTML = '<option value="">Memuat grup...</option>';
+      broadcastSelect.innerHTML = '<option value="">Memuat grup...</option>';
 
       adminFetch('/api/admin/wa-groups')
         .then(r => r.json())
         .then(data => {
           if (!data.success) {
             select.innerHTML = '<option value="">Error: ' + (data.error || 'Unknown') + '</option>';
+            broadcastSelect.innerHTML = '<option value="">Error: ' + (data.error || 'Unknown') + '</option>';
             return;
           }
 
           select.innerHTML = '<option value="">-- Pilih Grup (' + data.groups.length + ' grup) --</option>';
+          broadcastSelect.innerHTML = '<option value="">-- Kosongkan untuk nonaktifkan --</option>';
+
           data.groups.forEach(g => {
+            // Monitor select
             const opt = document.createElement('option');
             opt.value = g.id;
-            opt.textContent = g.name + ' (' + g.participants + ' member)' + (g.isMonitored ? ' [AKTIF]' : '');
+            opt.textContent = g.name + ' (' + g.participants + ' member)' + (g.isMonitored ? ' [MONITOR]' : '');
             if (g.isMonitored) opt.selected = true;
             select.appendChild(opt);
+
+            // Broadcast select
+            const opt2 = document.createElement('option');
+            opt2.value = g.id;
+            opt2.textContent = g.name + ' (' + g.participants + ' member)' + (g.isBroadcast ? ' [BROADCAST AKTIF]' : '');
+            if (g.isBroadcast) opt2.selected = true;
+            broadcastSelect.appendChild(opt2);
           });
 
-          // Show current group
+          // Show current monitor group
           if (data.currentGroupId) {
             const current = data.groups.find(g => g.id === data.currentGroupId);
             if (current) {
-              document.getElementById('currentGroup').innerHTML = 'Grup aktif: <strong style="color:#00ff88;">' + current.name + '</strong>';
+              document.getElementById('currentGroup').innerHTML = 'Grup monitor aktif: <strong style="color:#00ff88;">' + current.name + '</strong>';
             }
           } else {
-            document.getElementById('currentGroup').textContent = 'Belum ada grup yang dipilih';
+            document.getElementById('currentGroup').textContent = 'Belum ada grup monitor yang dipilih';
+          }
+
+          // Show current broadcast group
+          if (data.broadcastGroupId) {
+            const bcast = data.groups.find(g => g.id === data.broadcastGroupId);
+            if (bcast) {
+              document.getElementById('currentBroadcastGroup').innerHTML = '📢 Broadcast aktif ke: <strong style="color:#00ff88;">' + bcast.name + '</strong>';
+            } else {
+              document.getElementById('currentBroadcastGroup').innerHTML = '📢 Broadcast aktif: <strong style="color:#f7931a;">' + data.broadcastGroupId.substring(0, 20) + '...</strong>';
+            }
+          } else {
+            document.getElementById('currentBroadcastGroup').textContent = 'Broadcast grup belum di-set (tidak ada broadcast ke grup WA)';
           }
         })
         .catch(e => {
           select.innerHTML = '<option value="">Error loading groups</option>';
+          broadcastSelect.innerHTML = '<option value="">Error loading groups</option>';
         });
     }
 
@@ -8226,7 +8534,32 @@ ${authScript}
       .then(data => {
         if (data.success) {
           result.className = 'result-msg success';
-          result.textContent = 'Grup berhasil di-set! Member baru yang masuk akan otomatis terdaftar.';
+          result.textContent = 'Grup monitor berhasil di-set! Member baru yang masuk akan otomatis terdaftar.';
+          loadWaGroups();
+        } else {
+          result.className = 'result-msg error';
+          result.textContent = 'Error: ' + data.error;
+        }
+        setTimeout(() => result.className = 'result-msg', 5000);
+      });
+    }
+
+    function setBroadcastGroup() {
+      const groupId = document.getElementById('waBroadcastGroupSelect').value;
+      const result = document.getElementById('syncResult');
+
+      adminFetch('/api/admin/wa-groups/set-broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupId: groupId || null })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          result.className = 'result-msg success';
+          result.textContent = groupId
+            ? '📢 Grup broadcast berhasil di-set! Harga akan otomatis dikirim ke grup ini.'
+            : '📢 Broadcast grup dinonaktifkan.';
           loadWaGroups();
         } else {
           result.className = 'result-msg error';
@@ -13518,8 +13851,7 @@ app.get('/monitoring', async (_req, res) => {
         sseReconnectCount = 0;
         lastDataTime = Date.now();
 
-        // Show toast
-        showToast('🔄 Koneksi dipulihkan', 'info');
+        // Toast reconnect dihilangkan (terlalu sering muncul saat ganti tab)
       }
     });
 
@@ -13717,6 +14049,8 @@ async function start() {
   // Load data dari Redis saat startup
   await loadFromRedis()
   await loadMonitoredGroup()
+  await loadBroadcastGroup()
+  await loadPromoLimit()
 
   // Use file-based auth (standard Baileys)
   const { state, saveCreds } = await useMultiFileAuthState('./auth')
