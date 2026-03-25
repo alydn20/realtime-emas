@@ -155,6 +155,7 @@ let promoCheckCount = 0 // Counter untuk logging
 let offBroadcastCount = 0 // Counter OFF broadcast (max 5)
 let offStartTime = null // Timestamp kapan status pertama kali OFF
 let lastPromoBroadcastMinute = -1 // Track menit terakhir broadcast
+let lastPromoWaMinute = -1 // Track menit terakhir WA ON/OFF dikirim
 
 // CACHE GLOBAL untuk market data (pre-fetched)
 let cachedMarketData = {
@@ -1703,6 +1704,7 @@ async function doPromoBroadcast() {
     // Detect status change
     const isFirstCheck = lastPromoStatus === null
     const statusChanged = lastPromoStatus !== null && lastPromoStatus !== currentStatus
+    const isOffToOn = statusChanged && currentStatus === 'ON'
 
     if (statusChanged) {
       pushLog(`🎁 Status berubah: ${lastPromoStatus} → ${currentStatus}`)
@@ -1813,6 +1815,39 @@ async function doPromoBroadcast() {
       const promoTitle = currentStatus === 'ON' ? '🎁 PROMO ON' : '❌ PROMO OFF'
       pushLog(`🎁 Status changed! Sending push: ${promoTitle}`)
       sendPushToAll(promoTitle, '', 'promo').catch(() => {})
+    }
+
+    // 📲 WA ON/OFF broadcast
+    // - OFF→ON: langsung kirim (detik berapa saja) + tag semua member grup
+    // - ON/OFF biasa: kirim di detik 50+ (1x per menit), max 5x untuk OFF
+    if (sock && isReady && (broadcastGroupId || subscriptions.size > 0)) {
+      const seconds = new Date(now).getSeconds()
+      const isNewWaMinute = currentMinute !== lastPromoWaMinute
+      const offWaAllowed = currentStatus === 'OFF' && offBroadcastCount <= 5
+      const onWaAllowed = currentStatus === 'ON'
+
+      const shouldWaOnOff = isOffToOn ||
+        (isNewWaMinute && seconds >= 50 && (onWaAllowed || offWaAllowed))
+
+      if (shouldWaOnOff) {
+        lastPromoWaMinute = currentMinute
+        const waMsg = currentStatus === 'ON' ? '✅ ON' : '❌ OFF'
+        const chatIds = [broadcastGroupId, ...Array.from(subscriptions)].filter(Boolean)
+
+        for (const chatId of chatIds) {
+          if (isOffToOn && chatId.endsWith('@g.us')) {
+            let mentions = []
+            try {
+              const gm = await sock.groupMetadata(chatId)
+              mentions = gm.participants.map(p => p.id)
+            } catch (e) { pushLog(`⚠️ Gagal ambil member: ${e.message}`) }
+            sock.sendMessage(chatId, { text: waMsg, mentions }).catch(() => {})
+          } else {
+            sock.sendMessage(chatId, { text: waMsg }).catch(() => {})
+          }
+        }
+        pushLog(`🎁 WA ON/OFF: ${waMsg}${isOffToOn ? ' (OFF→ON + tag)' : ''}`)
+      }
     }
 
   } catch (e) {
@@ -5428,6 +5463,22 @@ app.get('/api/admin/wa-status', async (req, res) => {
     broadcastGroupId: broadcastGroupId || null,
     monitoredGroupId: monitoredGroupId || null
   })
+})
+
+// Admin: Reset Titik ON terendah
+app.post('/api/admin/reset-titik-on', express.json(), async (req, res) => {
+  if (!isAdminCookieValid(req)) return res.json({ success: false, error: 'Unauthorized' })
+  try {
+    await redis.del(REDIS_KEYS.LOWEST_ON_PRICE)
+    await redis.del(REDIS_KEYS.LOWEST_ON_DATE)
+    lowestOnPriceCache = null
+    lowestOnDateWIB = null
+    broadcastSSE({ type: 'lowest_on_price', price: null })
+    pushLog('🏷️ Titik ON terendah direset manual oleh admin')
+    res.json({ success: true })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
 })
 
 // Admin: Reset WA connection (logout + restart, scan QR ulang)
