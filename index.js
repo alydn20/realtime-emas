@@ -1494,7 +1494,19 @@ function formatMessage(treasuryData, usdIdrRate, xauUsdPrice = null, priceChange
       ]
 
   const nominalLines = activeNominals.map(n => {
-    const { totalGrams, profit } = calculateProfit(buy, sell, n.amount)
+    // Gunakan discountRate dari admin settings, fallback ke calculateDiscount jika tidak ada
+    let profit, totalGrams
+    if (n.discountRate) {
+      const discountAmount = Math.round(n.amount * n.discountRate)
+      const discountedPrice = n.amount - discountAmount
+      totalGrams = n.amount / buy
+      const sellValue = totalGrams * sell
+      profit = sellValue - discountedPrice
+    } else {
+      const result = calculateProfit(buy, sell, n.amount)
+      totalGrams = result.totalGrams
+      profit = result.profit
+    }
     const profitRounded = Math.round(profit)
     const icon = profitRounded >= 0 ? '📈' : '📉'
     const sign = profitRounded >= 0 ? '+' : '-'
