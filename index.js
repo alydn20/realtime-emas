@@ -2992,9 +2992,8 @@ app.get('/health', (_req, res) => {
 
 // API: QR status + image (untuk polling dari halaman QR)
 app.get('/api/qr-status', async (req, res) => {
-  // Simple auth check via cookie
-  const adminCookie = req.cookies?.admin_token
-  if (!adminCookie) return res.json({ auth: false })
+  // Auth check via admin_auth cookie (sama dengan isAdminCookieValid)
+  if (!isAdminCookieValid(req)) return res.json({ auth: false })
 
   if (isReady) return res.json({ status: 'connected' })
 
@@ -3060,15 +3059,12 @@ app.get('/qr', rateLimit(30, 60000), async (_req, res) => {
   }
 
   // Render halaman QR dengan auto-polling (update QR tanpa reload halaman)
-  return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Scan QR WhatsApp</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
-  </head><body>
+  return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Scan QR WhatsApp</title></head><body>
     ${authScript}
     <div style="text-align:center;padding:20px;font-family:sans-serif;background:#0f1419;color:#e7e9ea;min-height:100vh;">
       <h2 style="color:#f7931a;" id="title">Scan QR dengan WhatsApp</h2>
       <div id="qrBox" style="background:white;padding:15px;border-radius:15px;display:inline-block;margin:20px 0;">
         <img id="qrImg" src="" style="max-width:280px;display:block;"/>
-        <div id="qrCanvas" style="display:none;"></div>
       </div>
       <div id="statusBox" style="display:none;margin:20px auto;padding:20px;background:#1a1f26;border-radius:12px;max-width:320px;">
         <p id="statusText" style="color:#ffaa00;font-size:1em;"></p>
@@ -3090,31 +3086,6 @@ app.get('/qr', rateLimit(30, 60000), async (_req, res) => {
       let pollInterval;
       let countdown = 60;
       let countdownTimer;
-      let lastRawQr = null;
-      let qrInstance = null;
-
-      function showQR(dataUrl, rawQr) {
-        document.getElementById('qrBox').style.display = 'inline-block';
-        document.getElementById('statusBox').style.display = 'none';
-
-        if (dataUrl) {
-          // Gunakan server-side image
-          document.getElementById('qrImg').src = dataUrl;
-          document.getElementById('qrImg').style.display = 'block';
-          document.getElementById('qrCanvas').style.display = 'none';
-        } else if (rawQr && rawQr !== lastRawQr) {
-          // Fallback: generate QR di client-side
-          document.getElementById('qrImg').style.display = 'none';
-          const canvas = document.getElementById('qrCanvas');
-          canvas.style.display = 'block';
-          canvas.innerHTML = '';
-          try {
-            qrInstance = new QRCode(canvas, { text: rawQr, width: 280, height: 280, correctLevel: QRCode.CorrectLevel.L });
-          } catch(e) {}
-          lastRawQr = rawQr;
-        }
-        startCountdown();
-      }
 
       function startCountdown() {
         clearInterval(countdownTimer);
@@ -3141,12 +3112,15 @@ app.get('/qr', rateLimit(30, 60000), async (_req, res) => {
             document.getElementById('statusText').textContent = 'Bot aktif dan siap digunakan.';
             document.getElementById('timerText').textContent = '';
             setTimeout(() => window.location.href = '/admin/users', 3000);
-          } else if (data.status === 'qr' && (data.dataUrl || data.rawQr)) {
-            showQR(data.dataUrl, data.rawQr);
+          } else if (data.status === 'qr' && data.dataUrl) {
+            document.getElementById('qrImg').src = data.dataUrl;
+            document.getElementById('qrBox').style.display = 'inline-block';
+            document.getElementById('statusBox').style.display = 'none';
+            startCountdown();
           } else {
             document.getElementById('qrBox').style.display = 'none';
             document.getElementById('statusBox').style.display = 'block';
-            document.getElementById('statusText').textContent = '⏳ Menunggu QR dari WhatsApp server...';
+            document.getElementById('statusText').textContent = data.auth === false ? '🔒 Silakan login admin terlebih dahulu.' : '⏳ Menunggu QR dari WhatsApp server...';
             document.getElementById('timerText').textContent = 'Polling tiap 3 detik...';
           }
         } catch(e) {
