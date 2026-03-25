@@ -1831,7 +1831,9 @@ async function doPromoBroadcast() {
 
       if (shouldWaOnOff) {
         lastPromoWaMinute = currentMinute
-        const waMsg = currentStatus === 'ON' ? '✅ ON' : '❌ OFF'
+        const waMsg = isOffToOn
+          ? `✅ ON\n\n🌐 Via website: https://ts.muhamadaliyudin.my.id`
+          : currentStatus === 'ON' ? '✅ ON' : '❌ OFF'
         const chatIds = [broadcastGroupId, ...Array.from(subscriptions)].filter(Boolean)
 
         for (const chatId of chatIds) {
