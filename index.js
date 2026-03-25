@@ -124,6 +124,7 @@ const STALE_PRICE_THRESHOLD = 5 * 60 * 1000  // 5 menit
 let reconnectAttempts = 0
 const MAX_RECONNECT_ATTEMPTS = 10
 const BASE_RECONNECT_DELAY = 5000
+let consecutive428 = 0 // Track consecutive 428 (connectionClosed) untuk deteksi sesi expired
 
 // ------ STATE ------
 let lastQr = null
@@ -214,6 +215,9 @@ let broadcastGroupId = null
 
 // Cache promo limit dari Redis
 let promoLimitCache = null
+
+// Cache nominal settings dari Redis (untuk WA message)
+let nominalSettingsCache = null
 
 // ==================== REDIS AUTH STATE (Persistent WA Session) ====================
 async function useRedisAuthState() {
@@ -336,6 +340,20 @@ async function loadPromoLimit() {
   try {
     const val = await redis.get(REDIS_KEYS.PROMO_LIMIT)
     promoLimitCache = val !== null ? parseInt(val, 10) : null
+  } catch (e) {
+    // silent
+  }
+}
+
+// Load nominal settings dari Redis
+async function loadNominalSettings() {
+  try {
+    const settings = await redis.get(REDIS_KEYS.NOMINAL_SETTINGS)
+    if (settings) {
+      let config = typeof settings === 'string' ? JSON.parse(settings) : settings
+      if (Array.isArray(config)) config = { nominals: config }
+      nominalSettingsCache = config.nominals.filter(n => n.active && n.amount >= 1000000)
+    }
   } catch (e) {
     // silent
   }
@@ -630,7 +648,7 @@ function pushLog(s) {
   const time = now.toTimeString().substring(0, 8)
   const logMsg = `[${time}] ${s}`
   logs.push(logMsg)
-  if (logs.length > 30) logs.shift()
+  if (logs.length > 200) logs.shift()
   console.log(logMsg)
 }
 
@@ -1405,32 +1423,12 @@ function formatMessage(treasuryData, usdIdrRate, xauUsdPrice = null, priceChange
     }
   }
 
-  // Analisis status harga dengan rumus user
-  let statusSection = ''
-  if (xauUsdPrice && usdIdrRate) {
-    const priceStatus = analyzePriceStatus(buy, sell, xauUsdPrice, usdIdrRate)
-    statusSection = `\n${priceStatus.message}`
-  }
-
   let marketSection = `💱 USD Rp${formatRupiah(Math.round(usdIdrRate))}`
-
   if (xauUsdPrice) {
     marketSection += ` | XAU $${xauUsdPrice.toFixed(2)}`
   }
 
   const calendarSection = formatEconomicCalendar(economicEvents)
-
-  const grams20M = calculateProfit(buy, sell, 20000000).totalGrams
-  const profit20M = calculateProfit(buy, sell, 20000000).profit
-  const grams30M = calculateProfit(buy, sell, 30000000).totalGrams
-  const profit30M = calculateProfit(buy, sell, 30000000).profit
-  const grams40M = calculateProfit(buy, sell, 40000000).totalGrams
-  const profit40M = calculateProfit(buy, sell, 40000000).profit
-  const grams50M = calculateProfit(buy, sell, 50000000).totalGrams
-  const profit50M = calculateProfit(buy, sell, 50000000).profit
-
-  // Format gram dengan 4 digit desimal
-  const formatGrams = (g) => g.toFixed(4)
 
   // Titik ON + Limit section
   let promoInfoSection = ''
@@ -1441,18 +1439,33 @@ function formatMessage(treasuryData, usdIdrRate, xauUsdPrice = null, priceChange
     }
   }
 
-  return `${headerSection}${timeSection}${statusSection}
+  // Gunakan nominal dari settings jika ada, fallback ke default
+  const formatGrams = (g) => g.toFixed(4)
+  const activeNominals = (nominalSettingsCache && nominalSettingsCache.length > 0)
+    ? nominalSettingsCache
+    : [
+        { label: '20jt', amount: 20000000 },
+        { label: '30jt', amount: 30000000 },
+        { label: '40jt', amount: 40000000 },
+        { label: '50jt', amount: 50000000 }
+      ]
+
+  const nominalLines = activeNominals.map(n => {
+    const { totalGrams, profit } = calculateProfit(buy, sell, n.amount)
+    const profitRounded = Math.round(profit)
+    const icon = profitRounded >= 0 ? '📈' : '📉'
+    const sign = profitRounded >= 0 ? '+' : '-'
+    return `• ${n.label}→${formatGrams(totalGrams)}gr (${icon} ${sign}Rp${formatRupiah(Math.abs(profitRounded))})`
+  }).join('\n')
+
+  return `${headerSection}${timeSection}
 
 💰 Beli ${buyFormatted} | Jual ${sellFormatted} (${spreadPercent > 0 ? '-' : ''}${spreadPercent}%)
 ${marketSection}${promoInfoSection}
 
-🎁 20jt→${formatGrams(grams20M)}gr (+Rp${formatRupiah(Math.round(profit20M))})
-🎁 30jt→${formatGrams(grams30M)}gr (+Rp${formatRupiah(Math.round(profit30M))})
-🎁 40jt→${formatGrams(grams40M)}gr (+Rp${formatRupiah(Math.round(profit40M))})
-🎁 50jt→${formatGrams(grams50M)}gr (+Rp${formatRupiah(Math.round(profit50M))})
+${nominalLines}
 ${calendarSection}
-📊 Lihat Chart & Riwayat Lengkap:
-🔗 https://ts.muhamadaliyudin.xyz`
+🌐 Via website: https://ts.muhamadaliyudin.my.id`
 }
 async function fetchTreasury() {
   const res = await fetch(TREASURY_URL, {
@@ -2923,6 +2936,26 @@ app.get('/health', (_req, res) => {
   })
 })
 
+// API: QR status + image (untuk polling dari halaman QR)
+app.get('/api/qr-status', async (req, res) => {
+  // Simple auth check via cookie
+  const adminCookie = req.cookies?.admin_token
+  if (!adminCookie) return res.json({ auth: false })
+
+  if (isReady) return res.json({ status: 'connected' })
+
+  if (!lastQr) return res.json({ status: 'waiting' })
+
+  try {
+    const mod = await import('qrcode').catch(() => null)
+    if (mod?.toDataURL) {
+      const dataUrl = await mod.toDataURL(lastQr, { margin: 1 })
+      return res.json({ status: 'qr', dataUrl })
+    }
+  } catch (_) {}
+  res.json({ status: 'waiting' })
+})
+
 app.get('/qr', rateLimit(30, 60000), async (_req, res) => {
   // Auth check akan di-inject di halaman
   const authScript = getAuthCheckScript('/qr')
@@ -2968,35 +3001,80 @@ app.get('/qr', rateLimit(30, 60000), async (_req, res) => {
   </body></html>`)
   }
 
-  try {
-    const mod = await import('qrcode').catch(() => null)
-    if (mod?.toDataURL) {
-      const dataUrl = await mod.toDataURL(lastQr, { margin: 1 })
-      return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Scan QR WhatsApp</title></head><body>
-        ${authScript}
-        <div style="text-align:center;padding:20px;font-family:sans-serif;background:#0f1419;color:#e7e9ea;min-height:100vh;">
-          <h2 style="color:#f7931a;">Scan QR dengan WhatsApp</h2>
-          <div style="background:white;padding:15px;border-radius:15px;display:inline-block;margin:20px 0;">
-            <img src="${dataUrl}" style="max-width:280px;display:block;"/>
-          </div>
-          <div style="margin:20px 0;padding:15px;background:#1a1f26;border-radius:10px;max-width:350px;margin-left:auto;margin-right:auto;">
-            <p style="color:#f7931a;font-weight:bold;margin-bottom:10px;">Cara Scan:</p>
-            <p style="color:#71767b;font-size:0.9em;line-height:1.6;">
-              1. Buka WhatsApp di HP<br>
-              2. Tap ⋮ atau Settings<br>
-              3. Pilih "Linked Devices"<br>
-              4. Tap "Link a Device"<br>
-              5. Arahkan kamera ke QR di atas
-            </p>
-          </div>
-          <p style="margin-top:20px;"><a href="/qr" style="color:#f7931a;">Refresh QR</a></p>
-          <p style="margin-top:10px;color:#555;font-size:0.8em;">QR expires dalam 60 detik, refresh jika perlu</p>
-          <script>setTimeout(() => window.location.reload(), 30000);</script>
-        </div>
-      </body></html>`)
-    }
-  } catch (_) {}
-  res.send(lastQr)
+  // Render halaman QR dengan auto-polling (update QR tanpa reload halaman)
+  return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Scan QR WhatsApp</title></head><body>
+    ${authScript}
+    <div style="text-align:center;padding:20px;font-family:sans-serif;background:#0f1419;color:#e7e9ea;min-height:100vh;">
+      <h2 style="color:#f7931a;" id="title">Scan QR dengan WhatsApp</h2>
+      <div id="qrBox" style="background:white;padding:15px;border-radius:15px;display:inline-block;margin:20px 0;">
+        <img id="qrImg" src="" style="max-width:280px;display:block;"/>
+      </div>
+      <div id="statusBox" style="display:none;margin:20px auto;padding:20px;background:#1a1f26;border-radius:12px;max-width:320px;">
+        <p id="statusText" style="color:#ffaa00;font-size:1em;"></p>
+      </div>
+      <div style="margin:10px auto;padding:15px;background:#1a1f26;border-radius:10px;max-width:350px;">
+        <p style="color:#f7931a;font-weight:bold;margin-bottom:8px;">Cara Scan:</p>
+        <p style="color:#71767b;font-size:0.9em;line-height:1.6;">
+          1. Buka WhatsApp di HP<br>
+          2. Tap ⋮ atau Settings<br>
+          3. Pilih "Linked Devices"<br>
+          4. Tap "Link a Device"<br>
+          5. Arahkan kamera ke QR di atas
+        </p>
+      </div>
+      <p id="timerText" style="margin-top:10px;color:#555;font-size:0.8em;">Mengambil QR...</p>
+      <a href="/qr-reset?confirm=yes" style="display:inline-block;margin-top:12px;padding:10px 20px;background:#ff4444;color:white;text-decoration:none;border-radius:8px;font-size:0.85em;">Reset / Ganti WA</a>
+    </div>
+    <script>
+      let pollInterval;
+      let countdown = 60;
+      let countdownTimer;
+
+      function startCountdown() {
+        clearInterval(countdownTimer);
+        countdown = 60;
+        countdownTimer = setInterval(() => {
+          countdown--;
+          document.getElementById('timerText').textContent = 'QR diperbarui otomatis, expires dalam ' + countdown + 's';
+          if (countdown <= 0) clearInterval(countdownTimer);
+        }, 1000);
+      }
+
+      async function pollQR() {
+        try {
+          const r = await fetch('/api/qr-status');
+          const data = await r.json();
+          if (data.status === 'connected') {
+            clearInterval(pollInterval);
+            clearInterval(countdownTimer);
+            document.getElementById('qrBox').style.display = 'none';
+            document.getElementById('title').textContent = '✅ WhatsApp Terhubung!';
+            document.getElementById('title').style.color = '#00ff88';
+            document.getElementById('statusBox').style.display = 'block';
+            document.getElementById('statusText').style.color = '#00ff88';
+            document.getElementById('statusText').textContent = 'Bot aktif dan siap digunakan.';
+            document.getElementById('timerText').textContent = '';
+            setTimeout(() => window.location.href = '/admin/users', 3000);
+          } else if (data.status === 'qr' && data.dataUrl) {
+            document.getElementById('qrImg').src = data.dataUrl;
+            document.getElementById('qrBox').style.display = 'inline-block';
+            document.getElementById('statusBox').style.display = 'none';
+            startCountdown();
+          } else {
+            document.getElementById('qrBox').style.display = 'none';
+            document.getElementById('statusBox').style.display = 'block';
+            document.getElementById('statusText').textContent = '⏳ Menunggu QR dari WhatsApp server...';
+            document.getElementById('timerText').textContent = 'Polling tiap 3 detik...';
+          }
+        } catch(e) {
+          document.getElementById('timerText').textContent = 'Error polling, coba lagi...';
+        }
+      }
+
+      pollQR();
+      pollInterval = setInterval(pollQR, 3000);
+    </script>
+  </body></html>`)
 })
 
 // Reset QR - Hapus session dan restart koneksi WA
@@ -3063,6 +3141,14 @@ app.get('/qr-reset', async (req, res) => {
       </div>
     `)
   }
+})
+
+// Admin: Get full system logs
+app.get('/api/admin/logs', async (req, res) => {
+  const { password } = req.query
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+  const limit = Math.min(parseInt(req.query.limit) || 100, 200)
+  res.json({ success: true, logs: logs.slice(-limit), total: logs.length })
 })
 
 app.get('/stats', (_req, res) => {
@@ -5062,6 +5148,8 @@ app.post('/api/admin/nominal-settings', express.json(), async (req, res) => {
 
   try {
     await redis.set(REDIS_KEYS.NOMINAL_SETTINGS, JSON.stringify(config))
+    // Update cache untuk WA message
+    nominalSettingsCache = config.nominals.filter(n => n.active && n.amount >= 1000000)
     // Broadcast to all clients to update their nominals
     const activeNominals = config.nominals.filter(n => n.active)
     broadcastSSE({ type: 'nominal_update', defaultVisible: config.defaultVisible, nominals: activeNominals })
@@ -7131,6 +7219,7 @@ ${authScript}
         <div class="section-tab" data-section="nominal">Nominal</div>
         <div class="section-tab" data-section="broadcast">Broadcast</div>
         <div class="section-tab" data-section="settings">Pengaturan</div>
+        <div class="section-tab" data-section="logs">📋 Logs</div>
       </div>
 
       <!-- Section: Daftar User -->
@@ -7589,6 +7678,20 @@ ${authScript}
         </div>
       </div>
 
+      <!-- Section: Logs -->
+      <div class="section-content" id="section-logs">
+        <div class="card">
+          <h2>📋 System Logs</h2>
+          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="loadAdminLogs()">🔁 Refresh</button>
+            <label style="display:flex;align-items:center;gap:6px;font-size:0.82em;color:#6b7280;">
+              <input type="checkbox" id="logsAutoRefresh" onchange="toggleLogsAutoRefresh()"> Auto-refresh 5s
+            </label>
+          </div>
+          <div id="logsContainer" style="background:#0a0e13;border-radius:10px;padding:12px;max-height:520px;overflow-y:auto;font-family:monospace;font-size:0.78em;line-height:1.6;"></div>
+        </div>
+      </div>
+
       <!-- Section: Broadcast Notifications -->
       <div class="section-content" id="section-broadcast">
         <div class="card">
@@ -7800,6 +7903,11 @@ ${authScript}
           loadWaStatus();
           loadWaGroups();
         });
+      });
+
+      // Load logs saat tab logs diklik
+      document.querySelectorAll('.section-tab[data-section="logs"]').forEach(tab => {
+        tab.addEventListener('click', loadAdminLogs);
       });
     });
 
@@ -8387,6 +8495,38 @@ ${authScript}
 
     // Load nominals on page load
     loadNominals();
+
+    // ==================== Admin Logs ====================
+    let logsAutoRefreshTimer = null;
+
+    function loadAdminLogs() {
+      adminFetch('/api/admin/logs?limit=100')
+        .then(r => r.json())
+        .then(data => {
+          if (!data.success) return;
+          const container = document.getElementById('logsContainer');
+          const wasAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 40;
+          container.innerHTML = data.logs.slice().reverse().map(line => {
+            let color = '#9ca3af';
+            if (line.includes('ERROR') || line.includes('❌') || line.includes('Failed') || line.includes('error')) color = '#ef4444';
+            else if (line.includes('✅') || line.includes('Connected') || line.includes('ready') || line.includes('OK')) color = '#00ff88';
+            else if (line.includes('⚠️') || line.includes('WARN') || line.includes('Reconnect')) color = '#f7931a';
+            else if (line.includes('SEND |') || line.includes('Broadcast')) color = '#60a5fa';
+            else if (line.includes('WA |')) color = '#a78bfa';
+            return '<div style="color:' + color + ';padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' + line.replace(/</g, '&lt;') + '</div>';
+          }).join('');
+          if (wasAtBottom) container.scrollTop = container.scrollHeight;
+        })
+        .catch(() => {});
+    }
+
+    function toggleLogsAutoRefresh() {
+      const enabled = document.getElementById('logsAutoRefresh').checked;
+      clearInterval(logsAutoRefreshTimer);
+      if (enabled) {
+        logsAutoRefreshTimer = setInterval(loadAdminLogs, 5000);
+      }
+    }
 
     // ==================== WhatsApp Status & Reset ====================
     function loadWaStatus() {
@@ -14051,6 +14191,7 @@ async function start() {
   await loadMonitoredGroup()
   await loadBroadcastGroup()
   await loadPromoLimit()
+  await loadNominalSettings()
 
   // Use file-based auth (standard Baileys)
   const { state, saveCreds } = await useMultiFileAuthState('./auth')
@@ -14061,7 +14202,6 @@ async function start() {
   sock = makeWASocket({
     version,
     logger: pino({ level: 'silent' }),
-    printQRInTerminal: true,
     auth: {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
@@ -14091,16 +14231,37 @@ async function start() {
       const reason = lastDisconnect?.error?.output?.statusCode
       pushLog(`WA | Disconnected (${reason})`)
 
-      if (reason === DisconnectReason.loggedOut) {
-        pushLog('WA | LOGGED OUT - Please scan QR again')
-        // Delete auth folder
+      const clearAuthAndRestart = async (msg) => {
+        pushLog(`WA | ${msg} - menghapus auth dan minta QR baru...`)
+        if (sock) { sock.ev.removeAllListeners(); sock = null }
+        isReady = false
+        lastQr = null
         const fs = await import('fs')
         if (fs.existsSync('./auth')) {
           fs.rmSync('./auth', { recursive: true, force: true })
           pushLog('WA | Auth folder deleted')
         }
+        consecutive428 = 0
+        reconnectAttempts = 0
         setTimeout(() => start(), 3000)
+      }
+
+      if (reason === DisconnectReason.loggedOut) {
+        await clearAuthAndRestart('LOGGED OUT')
         return
+      }
+
+      // 428 = connectionClosed - sering terjadi saat sesi expired
+      // Setelah 2 kali berturut-turut, paksa QR baru
+      if (reason === 428) {
+        consecutive428++
+        pushLog(`WA | connectionClosed (428) count: ${consecutive428}`)
+        if (consecutive428 >= 2) {
+          await clearAuthAndRestart('Sesi expired (428 berulang)')
+          return
+        }
+      } else {
+        consecutive428 = 0
       }
 
       if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
@@ -14109,12 +14270,13 @@ async function start() {
         pushLog(`WA | Reconnect ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} in ${Math.round(delay/1000)}s`)
         setTimeout(() => start(), delay)
       } else {
-        pushLog('WA | Max reconnect reached')
+        pushLog('WA | Max reconnect reached - reset manual diperlukan')
       }
 
     } else if (connection === 'open') {
       lastQr = null
       reconnectAttempts = 0
+      consecutive428 = 0
       pushLog('WA | Connected')
       pushLog('WA | Warming up 15s...')
 
