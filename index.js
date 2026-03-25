@@ -879,16 +879,22 @@ function analyzeGoldImpact(event) {
   return null
 }
 
-function getGoldDirection(title) {
-  const t = (title || '').toLowerCase()
-  if (t.includes('pmi') || t.includes('purchasing managers')) return '🚀'
-  if (t.includes('cpi') || t.includes('consumer price')) return '🔻'
-  if (t.includes('non-farm') || t.includes('nonfarm') || t.includes('nfp') || t.includes('payroll')) return '🔻'
-  if (t.includes('unemployment') || t.includes('jobless') || t.includes('claims')) return '🔻'
-  if (t.includes('gdp') || t.includes('gross domestic')) return '🔻'
-  if (t.includes('retail sales')) return '🔻'
-  if (t.includes('interest rate') || t.includes('fed rate') || t.includes('fomc')) return '🔻'
-  if (t.includes('ism') || t.includes('services')) return '🚀'
+function getGoldDirection(event) {
+  const t = (event.title || '').toLowerCase()
+  const f = event.forecast ? parseFloat(String(event.forecast).replace(/[^0-9.-]/g, '')) : NaN
+  const p = event.previous ? parseFloat(String(event.previous).replace(/[^0-9.-]/g, '')) : NaN
+  if (isNaN(f) || isNaN(p) || f === p) return null
+  const bullUSD = t.includes('interest rate') || t.includes('fed') || t.includes('fomc') ||
+    t.includes('non-farm') || t.includes('nfp') || t.includes('payroll') ||
+    t.includes('gdp') || t.includes('retail sales') || t.includes('pmi') ||
+    t.includes('ism') || t.includes('consumer confidence') || t.includes('average hourly') ||
+    t.includes('core retail') || t.includes('business inventories')
+  const bearUSD = t.includes('unemployment') || t.includes('jobless') || t.includes('claims') ||
+    t.includes('unit labor costs')
+  const inflation = t.includes('cpi') || t.includes('inflation') || t.includes('pce') ||
+    t.includes('import prices')
+  if (bearUSD || inflation) return f > p ? '🚀' : '🔻'
+  if (bullUSD) return f > p ? '🔻' : '🚀'
   return null
 }
 
@@ -964,7 +970,7 @@ function formatEconomicCalendar(events) {
 
     // Build event text
     const isPast = timeSinceEvent > 0  // waktu event sudah lewat
-    const direction = getGoldDirection(title)
+    const direction = getGoldDirection(event)
     let eventText = shortTitle
     if (isPast) {
       // Event sudah lewat — hilangkan prediksi arah, tampilkan actual jika ada
