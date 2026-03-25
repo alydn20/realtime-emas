@@ -620,10 +620,6 @@ setInterval(async () => {
       isUsdIdrFetching = true
       try {
         usdIdr = await fetchUSDIDRFromGoogle();
-        // Track perubahan USD/IDR
-        if (cachedMarketData.usdIdr?.rate && usdIdr?.rate && usdIdr.rate !== cachedMarketData.usdIdr.rate) {
-          prevUsdIdrRate = cachedMarketData.usdIdr.rate
-        }
         cachedMarketData.lastUsdIdrFetch = now
       } catch (e) {
         // Keep old USD/IDR if fetch fails
@@ -2503,7 +2499,7 @@ async function fastPoll() {
           lastBroadcastTime = nowWa
           lastBroadcastMinute = currentMinuteWa
           lastBroadcastedPrice = { buy: currentPrice.buy, sell: currentPrice.sell, fetchedAt: currentPrice.fetchedAt }
-          prevUsdIdrRate = null  // Reset agar perubahan USD/IDR tidak repeat di broadcast berikutnya
+          prevUsdIdrRate = cachedMarketData.usdIdr?.rate || null  // Simpan rate yang dibroadcast untuk perbandingan berikutnya
 
           doBroadcastInstant(waMessage)
 
