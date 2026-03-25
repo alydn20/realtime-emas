@@ -142,8 +142,10 @@ const subscriptions = new Set()
 let treasuryToken = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzY29wZXMiOlsiKiJdLCJhdWQiOiIzIiwiZXhwIjoxNzY3NzA3ODcwLCJqdGkiOiJyWmc2RTdLeU16YUtVZzB0Q3dPeUc5dGQxMlNROHh3YUxLT2IyZGZiMElCZjM0anJYMW5PSXVZZDNMOUxTUHR0eXd3eVRYN1RXN0RJbFpUdDdkbUhjRVJiWnJWbmVUSjJZWkl0IiwiaWF0IjoxNzY2NDExODcwLCJuYmYiOjE3NjY0MTE4NzAsInN1YiI6IjE2ODg3Nzk0In0.FDb_1WLhjE4pJ5zfhuAkAX4-mhIylcXAZmNbyWA2o-E9N8bzxrKqkiL0RRPaISggDOBz2m31eYtM_3-hNwsDIkhejhBnDDDYmD8xurKe1275zYE3OJE2XGw8QhXwlop1K_IA0PzVzXqnPJm5DQyKCU6Ya_QRVMmidVpOji3Q4bbR-aHL9U0l1CsubwvI7laj66qCjw2XT7ftKf0bFW1mm5yDz-l0zuJVzpNlvsFBqroI_RR6nVHeu4wG3QYhvoATKUyRntjWMLuPRB9wu2WA7-DJuQtACvfMPdqoNhfT-sgSYxR1WXuI4micZe3_tOKbabiK2FJUoLHkHtPnPwEuAxnxDwzlvqOoQrTpbtBRUbRprjjdJ6CD0J2TR7qkkhX284BJHBVub8kYTNYpYIhim9Zzvgh_1TdBnX-nBFNvK0fFiaA4VbqAnl5jcFTs2HEglj_Vh3RT0XHa7b8DSjHfRlnsWxr6jJexT7-6svnXHQFUBnRG-qa5RXYyp9mDxqIWsURcS19OuxSSwlHVTRsLq_4AMfupWwKLSRFIERHwYgrbYozDlROb-x8FDLuOlON8wiMSSlSaVCXW0ZboV7h6ROte_mrRoTjRsn2QVA1pyGZbSn6NfEudvqcLcHXBz1cc9rdJMJ6lvRBInUHg2JjZxzTJRGiVa69ICmm0D4bQK3Y'
 let lastPromoStatus = null // 'ON' atau 'OFF'
 let lowestOnPriceCache = undefined // undefined = belum diload, null = belum ada nilai
+let lowestOnDateWIB = null        // Tanggal WIB (YYYY-MM-DD) saat lowestOnPriceCache dicatat
 let lowestOnPendingTimeout = null // Timeout 10 detik sebelum update titik ON terendah
-let lowestOnPendingPrice = null // Harga kandidat yang sedang menunggu konfirmasi
+let lowestOnPendingPrice = null   // Harga kandidat yang sedang menunggu konfirmasi
+let prevUsdIdrRate = null         // USD/IDR rate sebelumnya untuk tampilkan perubahan
 let cachedPromoSuggestions = [] // Cache active promotion suggestions
 let promoTriggerTimeout = null // Timeout 5 detik setelah harga berubah
 let promoCheckInterval = null // Interval cek promo setiap 1 detik
@@ -192,7 +194,8 @@ const REDIS_KEYS = {
   NOMINAL_SETTINGS: 'gold:nominal_settings', // JSON: nominal investment settings
   NOTIF_HISTORY: 'gold:notif_history', // JSON array: broadcast notification history
   PROMO_LIMIT: 'gold:promo_limit',     // Number: monthly promo buy limit (set by admin)
-  LOWEST_ON_PRICE: 'gold:lowest_on_price' // Number: lowest buy price recorded at OFF→ON transitions
+  LOWEST_ON_PRICE: 'gold:lowest_on_price', // Number: lowest buy price recorded at OFF→ON transitions
+  LOWEST_ON_DATE: 'gold:lowest_on_date'   // String: WIB date (YYYY-MM-DD) when lowest ON price was recorded
 }
 
 // Admin password untuk akses admin panel
@@ -617,6 +620,10 @@ setInterval(async () => {
       isUsdIdrFetching = true
       try {
         usdIdr = await fetchUSDIDRFromGoogle();
+        // Track perubahan USD/IDR
+        if (cachedMarketData.usdIdr?.rate && usdIdr?.rate && usdIdr.rate !== cachedMarketData.usdIdr.rate) {
+          prevUsdIdrRate = cachedMarketData.usdIdr.rate
+        }
         cachedMarketData.lastUsdIdrFetch = now
       } catch (e) {
         // Keep old USD/IDR if fetch fails
@@ -1400,7 +1407,7 @@ function analyzePriceStatus(treasuryBuy, treasurySell, xauUsdPrice, usdIdrRate) 
   }
 }
 
-function formatMessage(treasuryData, usdIdrRate, xauUsdPrice = null, priceChange = null, economicEvents = null, lowestOnPrice = null, promoLimit = null) {
+function formatMessage(treasuryData, usdIdrRate, xauUsdPrice = null, priceChange = null, economicEvents = null, lowestOnPrice = null, promoLimit = null, usdIdrChange = null) {
   const buy = treasuryData?.data?.buying_rate || 0
   const sell = treasuryData?.data?.selling_rate || 0
 
@@ -1415,11 +1422,15 @@ function formatMessage(treasuryData, usdIdrRate, xauUsdPrice = null, priceChange
   if (updatedAt) {
     const date = new Date(updatedAt)
     const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
+    const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des']
     const dayName = days[date.getDay()]
+    const dateNum = date.getDate()
+    const monthName = months[date.getMonth()]
+    const year = date.getFullYear()
     const hours = date.getHours().toString().padStart(2, '0')
     const minutes = date.getMinutes().toString().padStart(2, '0')
     const seconds = date.getSeconds().toString().padStart(2, '0')
-    timeSection = `${dayName} ${hours}:${minutes}:${seconds} WIB`
+    timeSection = `${dayName}, ${dateNum} ${monthName} ${year} ${hours}:${minutes}:${seconds} WIB`
   }
 
   let headerSection = ''
@@ -1433,8 +1444,13 @@ function formatMessage(treasuryData, usdIdrRate, xauUsdPrice = null, priceChange
     }
   }
 
+  let usdChangeStr = ''
+  if (usdIdrChange !== null && usdIdrChange !== 0) {
+    usdChangeStr = usdIdrChange > 0 ? ` (▲${formatRupiah(Math.round(usdIdrChange))})` : ` (▼${formatRupiah(Math.round(Math.abs(usdIdrChange)))})`
+  }
+
   let marketSection = usdIdrRate
-    ? `💱 USD Rp${formatRupiah(Math.round(usdIdrRate))}`
+    ? `💱 USD Rp${formatRupiah(Math.round(usdIdrRate))}${usdChangeStr}`
     : `💱 USD -`
 
   if (xauUsdPrice) {
@@ -1667,6 +1683,8 @@ async function doPromoBroadcast() {
     if (lowestOnPriceCache === undefined) {
       const storedVal = await redis.get(REDIS_KEYS.LOWEST_ON_PRICE)
       lowestOnPriceCache = storedVal !== null ? parseInt(storedVal, 10) : null
+      const storedDate = await redis.get(REDIS_KEYS.LOWEST_ON_DATE)
+      lowestOnDateWIB = storedDate || null
     }
 
     if (currentStatus === 'ON' && lastKnownPrice?.buy) {
@@ -1682,7 +1700,10 @@ async function doPromoBroadcast() {
           if (lastPromoStatus !== 'ON') return
           if (lowestOnPriceCache !== null && lowestOnPendingPrice >= lowestOnPriceCache) return
           lowestOnPriceCache = lowestOnPendingPrice
+          const todayWIB = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10)
+          lowestOnDateWIB = todayWIB
           await redis.set(REDIS_KEYS.LOWEST_ON_PRICE, String(lowestOnPendingPrice))
+          await redis.set(REDIS_KEYS.LOWEST_ON_DATE, todayWIB)
           broadcastSSE({ type: 'lowest_on_price', price: lowestOnPendingPrice })
           pushLog(`🏷️ Titik ON terendah: ${formatRupiah(lowestOnPendingPrice)} (konfirmasi 10 detik)`)
           lowestOnPendingPrice = null
@@ -1731,13 +1752,17 @@ async function doPromoBroadcast() {
           if (!offStartTime) offStartTime = Date.now()
           offBroadcastCount++
           pushLog(`🎁 OFF count: ${offBroadcastCount}/5`)
-          // Reset titik ON terendah setelah 3 jam OFF
-          const offDurationMs = Date.now() - offStartTime
-          if (lowestOnPriceCache !== null && offDurationMs >= 3 * 60 * 60 * 1000) {
-            await redis.del(REDIS_KEYS.LOWEST_ON_PRICE)
-            lowestOnPriceCache = null
-            broadcastSSE({ type: 'lowest_on_price', price: null })
-            pushLog(`🏷️ Titik ON terendah direset (OFF 3 jam)`)
+          // Reset titik ON terendah jika hari sudah berganti (WIB)
+          if (lowestOnPriceCache !== null && lowestOnDateWIB) {
+            const todayWIB = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10)
+            if (lowestOnDateWIB !== todayWIB) {
+              await redis.del(REDIS_KEYS.LOWEST_ON_PRICE)
+              await redis.del(REDIS_KEYS.LOWEST_ON_DATE)
+              lowestOnPriceCache = null
+              lowestOnDateWIB = null
+              broadcastSSE({ type: 'lowest_on_price', price: null })
+              pushLog(`🏷️ Titik ON terendah direset (ganti hari)`)
+            }
           }
         } else {
           // Sudah 5x, tidak broadcast tapi tetap update lastPromoBroadcastMinute
@@ -1746,12 +1771,17 @@ async function doPromoBroadcast() {
           if (currentMinute % 5 === 0) {
             pushLog(`🎁 OFF sudah 5x, menunggu ON... (tetap cek)`)
           }
-          // Tetap cek 3 jam reset meski sudah lewat 5x broadcast
-          if (offStartTime && lowestOnPriceCache !== null && Date.now() - offStartTime >= 3 * 60 * 60 * 1000) {
-            await redis.del(REDIS_KEYS.LOWEST_ON_PRICE)
-            lowestOnPriceCache = null
-            broadcastSSE({ type: 'lowest_on_price', price: null })
-            pushLog(`🏷️ Titik ON terendah direset (OFF 3 jam)`)
+          // Tetap cek ganti hari meski sudah lewat 5x broadcast
+          if (lowestOnPriceCache !== null && lowestOnDateWIB) {
+            const todayWIB = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10)
+            if (lowestOnDateWIB !== todayWIB) {
+              await redis.del(REDIS_KEYS.LOWEST_ON_PRICE)
+              await redis.del(REDIS_KEYS.LOWEST_ON_DATE)
+              lowestOnPriceCache = null
+              lowestOnDateWIB = null
+              broadcastSSE({ type: 'lowest_on_price', price: null })
+              pushLog(`🏷️ Titik ON terendah direset (ganti hari)`)
+            }
           }
         }
       }
@@ -2255,7 +2285,8 @@ async function checkPriceUpdate() {
         updated_at: currentPrice.updated_at
       }
     }
-    const message = formatMessage(broadcastData, cachedMarketData.usdIdr.rate, cachedMarketData.xauUsd, finalPriceChange, cachedMarketData.economicEvents, lowestOnPriceCache, promoLimitCache)
+    const usdIdrChangeVal = prevUsdIdrRate && cachedMarketData.usdIdr?.rate ? cachedMarketData.usdIdr.rate - prevUsdIdrRate : null
+    const message = formatMessage(broadcastData, cachedMarketData.usdIdr.rate, cachedMarketData.xauUsd, finalPriceChange, cachedMarketData.economicEvents, lowestOnPriceCache, promoLimitCache, usdIdrChangeVal)
 
     // 🚀 INSTANT BROADCAST - Langsung kirim tanpa delay
     doBroadcastInstant(message)
@@ -2401,7 +2432,8 @@ async function fastPoll() {
               updated_at: currentPrice.updated_at
             }
           }
-          const waMessage = formatMessage(waData, cachedMarketData.usdIdr?.rate, cachedMarketData.xauUsd, finalPriceChange, cachedMarketData.economicEvents, lowestOnPriceCache, promoLimitCache)
+          const waUsdIdrChange = prevUsdIdrRate && cachedMarketData.usdIdr?.rate ? cachedMarketData.usdIdr.rate - prevUsdIdrRate : null
+          const waMessage = formatMessage(waData, cachedMarketData.usdIdr?.rate, cachedMarketData.xauUsd, finalPriceChange, cachedMarketData.economicEvents, lowestOnPriceCache, promoLimitCache, waUsdIdrChange)
 
           lastBroadcastTime = nowWa
           lastBroadcastMinute = currentMinuteWa
