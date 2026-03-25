@@ -1906,6 +1906,28 @@ async function fetchPromoSuggestions() {
   }
 }
 
+function formatPromoWaMessage(promos) {
+  const now = new Date(Date.now() + 7 * 60 * 60 * 1000)
+  const days = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu']
+  const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des']
+  const dayName = days[now.getUTCDay()]
+  const dateNum = now.getUTCDate()
+  const monthName = months[now.getUTCMonth()]
+  const year = now.getUTCFullYear()
+  const hh = String(now.getUTCHours()).padStart(2, '0')
+  const mm = String(now.getUTCMinutes()).padStart(2, '0')
+  const ss = String(now.getUTCSeconds()).padStart(2, '0')
+  const timestamp = `${dayName}, ${dateNum} ${monthName} ${year} ${hh}:${mm}:${ss} WIB`
+
+  let msg = `*PROMO AKTIF (${timestamp})*\n\n`
+  promos.forEach((p, i) => {
+    msg += `${i + 1}. *${p.code}* – ${p.name}\n`
+    if (p.short_desc && p.short_desc !== '-') msg += `   ${p.short_desc}\n`
+  })
+  msg += `\n🌐 Via website: https://ts.muhamadaliyudin.my.id`
+  return msg
+}
+
 async function pollPromoSuggestions() {
   const active = await fetchPromoSuggestions()
   if (active === null) return // error, skip
@@ -1913,6 +1935,30 @@ async function pollPromoSuggestions() {
   const newIds = active.map(p => p.code).sort().join(',')
   if (prevIds !== newIds) {
     pushLog(`🎟️ Promo suggestions updated: ${active.length} active`)
+    // Kirim pesan WA terpisah jika ada perubahan promo
+    if (sock && isReady && (broadcastGroupId || subscriptions.size > 0)) {
+      const promoMsg = formatPromoWaMessage(active)
+      // Kirim ke broadcast group dengan tag semua member
+      if (broadcastGroupId) {
+        let mentions = []
+        try {
+          const groupMetadata = await sock.groupMetadata(broadcastGroupId)
+          mentions = groupMetadata.participants.map(p => p.id)
+        } catch (e) {
+          pushLog(`⚠️ Gagal ambil member grup promo: ${e.message}`)
+        }
+        sock.sendMessage(broadcastGroupId, { text: promoMsg, mentions }).catch(() => {})
+        pushLog(`🎟️ Promo WA broadcast group sent (${active.length} promo, ${mentions.length} tagged)`)
+      }
+      // Kirim ke semua subscriber individu
+      if (subscriptions.size > 0) {
+        const chatIds = Array.from(subscriptions)
+        for (const chatId of chatIds) {
+          sock.sendMessage(chatId, { text: promoMsg }).catch(() => {})
+        }
+        pushLog(`🎟️ Promo WA broadcast sent to ${subscriptions.size} subscribers`)
+      }
+    }
   }
   cachedPromoSuggestions = active
   // Selalu broadcast setiap menit agar timestamp di client terupdate
