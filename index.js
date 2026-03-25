@@ -805,8 +805,11 @@ async function fetchEconomicCalendar() {
     // Limit to 10 events
     const limitedEvents = filteredEvents.slice(0, 10)
     
-    // Calendar loaded silently
-    
+    // Log struktur event pertama untuk debug
+    if (limitedEvents.length > 0) {
+      pushLog(`📰 Calendar event sample: ${JSON.stringify(limitedEvents[0])}`)
+    }
+
     cachedEconomicEvents = limitedEvents
     lastEconomicFetch = now
     
@@ -960,23 +963,28 @@ function formatEconomicCalendar(events) {
     else if (title.includes('Jobless')) shortTitle = 'Jobless'
 
     // Build event text
-    const isPast = actual !== '-' && actual !== ''
+    const isPast = timeSinceEvent > 0  // waktu event sudah lewat
     const direction = getGoldDirection(title)
     let eventText = shortTitle
     if (isPast) {
-      const goldImpact = analyzeGoldImpact(event)
-      eventText += ` ${actual}>${forecast}`
-      if (goldImpact === 'BAGUS') {
-        eventText += ` 🟢 BAGUS`
-      } else if (goldImpact === 'JELEK') {
-        eventText += ` 🔴 JELEK`
+      // Event sudah lewat — hilangkan prediksi arah, tampilkan actual jika ada
+      if (actual !== '-' && actual !== '') {
+        const goldImpact = analyzeGoldImpact(event)
+        eventText += ` ${actual}>${forecast}`
+        if (goldImpact === 'BAGUS') {
+          eventText += ` 🟢 BAGUS`
+        } else if (goldImpact === 'JELEK') {
+          eventText += ` 🔴 JELEK`
+        }
+      } else if (forecast !== '-') {
+        eventText += ` F:${forecast}`
       }
-      // Arah emas hilang setelah event terlewat
-    } else if (forecast !== '-') {
-      eventText += ` F:${forecast}`
+    } else {
+      // Event belum terjadi — tampilkan forecast + arah emas
+      if (forecast !== '-') {
+        eventText += ` F:${forecast}`
+      }
       if (direction) eventText += ` ${direction}`
-    } else if (direction) {
-      eventText += ` ${direction}`
     }
 
     // Group by day+time
