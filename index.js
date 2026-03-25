@@ -5988,7 +5988,10 @@ app.get('/api/admin-phones', (req, res) => {
 })
 
 // Update admin phones
-app.post('/api/admin-phones', (req, res) => {
+app.post('/api/admin-phones', express.json(), (req, res) => {
+  if (!isAdminCookieValid(req) && req.headers['x-admin-password'] !== ADMIN_PASSWORD) {
+    return res.status(403).json({ error: 'Unauthorized' })
+  }
   try {
     const { phones } = req.body
     if (!Array.isArray(phones) || phones.length === 0) {
