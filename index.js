@@ -1659,6 +1659,19 @@ async function doPromoBroadcast() {
   promoCheckCount++
 
   try {
+    // Cek ganti hari WIB — reset titik ON terendah (terlepas dari status ON/OFF)
+    if (lowestOnPriceCache !== null && lowestOnDateWIB) {
+      const todayWIB = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      if (lowestOnDateWIB !== todayWIB) {
+        await redis.del(REDIS_KEYS.LOWEST_ON_PRICE)
+        await redis.del(REDIS_KEYS.LOWEST_ON_DATE)
+        lowestOnPriceCache = null
+        lowestOnDateWIB = null
+        broadcastSSE({ type: 'lowest_on_price', price: null })
+        pushLog(`🏷️ Titik ON terendah direset (ganti hari)`)
+      }
+    }
+
     // Fetch nominal promo data dari Treasury API
     const nominalData = await fetchNominalPromo().catch(() => null)
 
@@ -1767,36 +1780,12 @@ async function doPromoBroadcast() {
           if (!offStartTime) offStartTime = Date.now()
           offBroadcastCount++
           pushLog(`🎁 OFF count: ${offBroadcastCount}/5`)
-          // Reset titik ON terendah jika hari sudah berganti (WIB)
-          if (lowestOnPriceCache !== null && lowestOnDateWIB) {
-            const todayWIB = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10)
-            if (lowestOnDateWIB !== todayWIB) {
-              await redis.del(REDIS_KEYS.LOWEST_ON_PRICE)
-              await redis.del(REDIS_KEYS.LOWEST_ON_DATE)
-              lowestOnPriceCache = null
-              lowestOnDateWIB = null
-              broadcastSSE({ type: 'lowest_on_price', price: null })
-              pushLog(`🏷️ Titik ON terendah direset (ganti hari)`)
-            }
-          }
         } else {
           // Sudah 5x, tidak broadcast tapi tetap update lastPromoBroadcastMinute
           lastPromoBroadcastMinute = currentMinute
           // Log sesekali saja (setiap 5 menit)
           if (currentMinute % 5 === 0) {
             pushLog(`🎁 OFF sudah 5x, menunggu ON... (tetap cek)`)
-          }
-          // Tetap cek ganti hari meski sudah lewat 5x broadcast
-          if (lowestOnPriceCache !== null && lowestOnDateWIB) {
-            const todayWIB = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10)
-            if (lowestOnDateWIB !== todayWIB) {
-              await redis.del(REDIS_KEYS.LOWEST_ON_PRICE)
-              await redis.del(REDIS_KEYS.LOWEST_ON_DATE)
-              lowestOnPriceCache = null
-              lowestOnDateWIB = null
-              broadcastSSE({ type: 'lowest_on_price', price: null })
-              pushLog(`🏷️ Titik ON terendah direset (ganti hari)`)
-            }
           }
         }
       }
