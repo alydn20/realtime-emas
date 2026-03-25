@@ -8422,7 +8422,7 @@ ${authScript}
 
     async function resetWaConnection() {
       const confirmed = await showConfirm(
-        'Ini akan logout dari WhatsApp saat ini dan memerlukan scan QR ulang untuk menghubungkan nomor baru.\n\nLanjutkan?',
+        'Ini akan logout dari WhatsApp saat ini dan memerlukan scan QR ulang untuk menghubungkan nomor baru.\\n\\nLanjutkan?',
         { title: '⚠️ Reset Koneksi WhatsApp', type: 'warning' }
       );
       if (!confirmed) return;
