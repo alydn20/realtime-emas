@@ -657,6 +657,11 @@ function pushLog(s) {
   logs.push(logMsg)
   if (logs.length > 200) logs.shift()
   console.log(logMsg)
+  // Push realtime ke admin panel via SSE
+  const logSse = `data: ${JSON.stringify({ type: 'log', entry: logMsg })}\n\n`
+  adminSseClients.forEach(client => {
+    try { client.write(logSse) } catch (e) { adminSseClients.delete(client) }
+  })
 }
 
 setInterval(() => {
@@ -7744,10 +7749,8 @@ ${authScript}
         <div class="card">
           <h2>📋 System Logs</h2>
           <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
-            <button class="btn btn-secondary btn-sm" onclick="loadAdminLogs()">🔁 Refresh</button>
-            <label style="display:flex;align-items:center;gap:6px;font-size:0.82em;color:#6b7280;">
-              <input type="checkbox" id="logsAutoRefresh" onchange="toggleLogsAutoRefresh()"> Auto-refresh 5s
-            </label>
+            <button class="btn btn-secondary btn-sm" onclick="loadAdminLogs()">🔁 Reload</button>
+            <span style="font-size:0.82em;color:#00ff88;">⚡ Realtime via SSE</span>
           </div>
           <div id="logsContainer" style="background:#0a0e13;border-radius:10px;padding:12px;max-height:520px;overflow-y:auto;font-family:monospace;font-size:0.78em;line-height:1.6;"></div>
         </div>
@@ -7986,6 +7989,8 @@ ${authScript}
           const data = JSON.parse(event.data);
           if (data.type === 'online_users') {
             updateOnlineUsers(data.users, data.count);
+          } else if (data.type === 'log') {
+            appendLog(data.entry);
           }
         } catch (e) {}
       };
@@ -8560,23 +8565,37 @@ ${authScript}
     // ==================== Admin Logs ====================
     let logsAutoRefreshTimer = null;
 
+    function logLineColor(line) {
+      if (line.includes('ERROR') || line.includes('❌') || line.includes('Failed') || line.includes('error')) return '#ef4444';
+      if (line.includes('✅') || line.includes('Connected') || line.includes('ready') || line.includes('OK')) return '#00ff88';
+      if (line.includes('⚠️') || line.includes('WARN') || line.includes('Reconnect')) return '#f7931a';
+      if (line.includes('SEND |') || line.includes('Broadcast')) return '#60a5fa';
+      if (line.includes('WA |')) return '#a78bfa';
+      return '#9ca3af';
+    }
+
+    function appendLog(line) {
+      const container = document.getElementById('logsContainer');
+      if (!container) return;
+      const wasAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 40;
+      const div = document.createElement('div');
+      div.style.cssText = 'color:' + logLineColor(line) + ';padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.04);';
+      div.textContent = line;
+      container.insertBefore(div, container.firstChild);
+      // Batas 200 entri
+      while (container.children.length > 200) container.removeChild(container.lastChild);
+      if (wasAtBottom) container.scrollTop = 0;
+    }
+
     function loadAdminLogs() {
       adminFetch('/api/admin/logs?limit=100')
         .then(r => r.json())
         .then(data => {
           if (!data.success) return;
           const container = document.getElementById('logsContainer');
-          const wasAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 40;
           container.innerHTML = data.logs.slice().reverse().map(line => {
-            let color = '#9ca3af';
-            if (line.includes('ERROR') || line.includes('❌') || line.includes('Failed') || line.includes('error')) color = '#ef4444';
-            else if (line.includes('✅') || line.includes('Connected') || line.includes('ready') || line.includes('OK')) color = '#00ff88';
-            else if (line.includes('⚠️') || line.includes('WARN') || line.includes('Reconnect')) color = '#f7931a';
-            else if (line.includes('SEND |') || line.includes('Broadcast')) color = '#60a5fa';
-            else if (line.includes('WA |')) color = '#a78bfa';
-            return '<div style="color:' + color + ';padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' + line.replace(/</g, '&lt;') + '</div>';
+            return '<div style="color:' + logLineColor(line) + ';padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.04);">' + line.replace(/</g, '&lt;') + '</div>';
           }).join('');
-          if (wasAtBottom) container.scrollTop = container.scrollHeight;
         })
         .catch(() => {});
     }
