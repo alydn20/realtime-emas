@@ -1340,10 +1340,10 @@ function analyzePriceStatus(treasuryBuy, treasurySell, xauUsdPrice, usdIdrRate) 
     }
   }
 
-  // Range NORMAL: margin 0.97% - 1.25%
+  // Range NORMAL: margin 0.7% - 2%
   const TROY_OZ_TO_GRAM_EXACT = 31.1035
-  const MIN_MARGIN = 1.0097  // 0.97%
-  const MAX_MARGIN = 1.0125  // 1.25%
+  const MIN_MARGIN = 1.007   // 0.7%
+  const MAX_MARGIN = 1.02    // 2%
 
   // Hitung harga dasar internasional
   const basePrice = (xauUsdPrice * usdIdrRate) / TROY_OZ_TO_GRAM_EXACT
@@ -1359,13 +1359,13 @@ function analyzePriceStatus(treasuryBuy, treasurySell, xauUsdPrice, usdIdrRate) 
   let message = '✅ NORMAL'
 
   if (treasurySell < lowerBound) {
-    // Di bawah range NORMAL (margin < 1.2%)
+    // Di bawah range NORMAL (margin < 0.7%)
     difference = treasurySell - lowerBound  // akan negatif
     status = 'ABNORMAL'
     emoji = '⚠️'
     message = `⚠️ TIDAK NORMAL (${difference > 0 ? '+' : ''}${formatRupiah(Math.round(difference))})`
   } else if (treasurySell > upperBound) {
-    // Di atas range NORMAL (margin > 1.35%)
+    // Di atas range NORMAL (margin > 2%)
     difference = treasurySell - upperBound  // akan positif
     status = 'ABNORMAL'
     emoji = '⚠️'
