@@ -2946,14 +2946,18 @@ app.get('/api/qr-status', async (req, res) => {
 
   if (!lastQr) return res.json({ status: 'waiting' })
 
+  // Selalu return rawQr agar client bisa generate sendiri jika server-side gagal
+  const response = { status: 'qr', rawQr: lastQr }
+
   try {
     const mod = await import('qrcode').catch(() => null)
     if (mod?.toDataURL) {
-      const dataUrl = await mod.toDataURL(lastQr, { margin: 1 })
-      return res.json({ status: 'qr', dataUrl })
+      const dataUrl = await mod.toDataURL(lastQr, { width: 280, margin: 1 })
+      response.dataUrl = dataUrl
     }
   } catch (_) {}
-  res.json({ status: 'waiting' })
+
+  res.json(response)
 })
 
 app.get('/qr', rateLimit(30, 60000), async (_req, res) => {
@@ -3002,12 +3006,15 @@ app.get('/qr', rateLimit(30, 60000), async (_req, res) => {
   }
 
   // Render halaman QR dengan auto-polling (update QR tanpa reload halaman)
-  return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Scan QR WhatsApp</title></head><body>
+  return res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Scan QR WhatsApp</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
+  </head><body>
     ${authScript}
     <div style="text-align:center;padding:20px;font-family:sans-serif;background:#0f1419;color:#e7e9ea;min-height:100vh;">
       <h2 style="color:#f7931a;" id="title">Scan QR dengan WhatsApp</h2>
       <div id="qrBox" style="background:white;padding:15px;border-radius:15px;display:inline-block;margin:20px 0;">
         <img id="qrImg" src="" style="max-width:280px;display:block;"/>
+        <div id="qrCanvas" style="display:none;"></div>
       </div>
       <div id="statusBox" style="display:none;margin:20px auto;padding:20px;background:#1a1f26;border-radius:12px;max-width:320px;">
         <p id="statusText" style="color:#ffaa00;font-size:1em;"></p>
@@ -3029,6 +3036,31 @@ app.get('/qr', rateLimit(30, 60000), async (_req, res) => {
       let pollInterval;
       let countdown = 60;
       let countdownTimer;
+      let lastRawQr = null;
+      let qrInstance = null;
+
+      function showQR(dataUrl, rawQr) {
+        document.getElementById('qrBox').style.display = 'inline-block';
+        document.getElementById('statusBox').style.display = 'none';
+
+        if (dataUrl) {
+          // Gunakan server-side image
+          document.getElementById('qrImg').src = dataUrl;
+          document.getElementById('qrImg').style.display = 'block';
+          document.getElementById('qrCanvas').style.display = 'none';
+        } else if (rawQr && rawQr !== lastRawQr) {
+          // Fallback: generate QR di client-side
+          document.getElementById('qrImg').style.display = 'none';
+          const canvas = document.getElementById('qrCanvas');
+          canvas.style.display = 'block';
+          canvas.innerHTML = '';
+          try {
+            qrInstance = new QRCode(canvas, { text: rawQr, width: 280, height: 280, correctLevel: QRCode.CorrectLevel.L });
+          } catch(e) {}
+          lastRawQr = rawQr;
+        }
+        startCountdown();
+      }
 
       function startCountdown() {
         clearInterval(countdownTimer);
@@ -3055,11 +3087,8 @@ app.get('/qr', rateLimit(30, 60000), async (_req, res) => {
             document.getElementById('statusText').textContent = 'Bot aktif dan siap digunakan.';
             document.getElementById('timerText').textContent = '';
             setTimeout(() => window.location.href = '/admin/users', 3000);
-          } else if (data.status === 'qr' && data.dataUrl) {
-            document.getElementById('qrImg').src = data.dataUrl;
-            document.getElementById('qrBox').style.display = 'inline-block';
-            document.getElementById('statusBox').style.display = 'none';
-            startCountdown();
+          } else if (data.status === 'qr' && (data.dataUrl || data.rawQr)) {
+            showQR(data.dataUrl, data.rawQr);
           } else {
             document.getElementById('qrBox').style.display = 'none';
             document.getElementById('statusBox').style.display = 'block';
@@ -3073,7 +3102,7 @@ app.get('/qr', rateLimit(30, 60000), async (_req, res) => {
 
       pollQR();
       pollInterval = setInterval(pollQR, 3000);
-    </script>
+    <\/script>
   </body></html>`)
 })
 
@@ -5345,6 +5374,10 @@ app.post('/api/admin/wa-reset', express.json(), async (req, res) => {
       fs.rmSync(authPath, { recursive: true, force: true })
       pushLog('WA | Auth folder deleted')
     }
+
+    // Reset semua counter agar reconnect berjalan normal
+    reconnectAttempts = 0
+    consecutive428 = 0
 
     // Restart koneksi setelah 2 detik
     setTimeout(() => {
@@ -14225,6 +14258,7 @@ async function start() {
     
     if (qr) {
       lastQr = qr
+      pushLog('WA | QR diterima - silakan scan dengan WhatsApp')
     }
 
     if (connection === 'close') {
@@ -14248,6 +14282,22 @@ async function start() {
 
       if (reason === DisconnectReason.loggedOut) {
         await clearAuthAndRestart('LOGGED OUT')
+        return
+      }
+
+      // 408 = timedOut/connectionLost - QR expired atau koneksi timeout, restart tanpa hitung counter
+      if (reason === 408) {
+        pushLog('WA | Timeout/QR expired - restart ulang...')
+        consecutive428 = 0
+        setTimeout(() => start(), 3000)
+        return
+      }
+
+      // 515 = restartRequired - Baileys minta restart
+      if (reason === 515) {
+        pushLog('WA | Restart required - restarting...')
+        consecutive428 = 0
+        setTimeout(() => start(), 2000)
         return
       }
 
