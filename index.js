@@ -125,6 +125,7 @@ let reconnectAttempts = 0
 const MAX_RECONNECT_ATTEMPTS = 10
 const BASE_RECONNECT_DELAY = 5000
 let consecutive428 = 0 // Track consecutive 428 (connectionClosed) untuk deteksi sesi expired
+let isStarting = false // Guard agar start() tidak dipanggil bersamaan
 
 // ------ STATE ------
 let lastQr = null
@@ -5549,6 +5550,7 @@ app.post('/api/admin/wa-reset', express.json(), async (req, res) => {
     // Reset semua counter agar reconnect berjalan normal
     reconnectAttempts = 0
     consecutive428 = 0
+    isStarting = false
 
     // Restart koneksi setelah 2 detik
     setTimeout(() => {
@@ -14407,6 +14409,12 @@ setTimeout(async () => {
 }, 30000)
 
 async function start() {
+  if (isStarting) {
+    pushLog('WA | start() sudah berjalan, skip')
+    return
+  }
+  isStarting = true
+  try {
   // Load data dari Redis saat startup
   await loadFromRedis()
   await loadMonitoredGroup()
@@ -15077,6 +15085,9 @@ ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`
       }
     }
   })
+  } finally {
+    isStarting = false
+  }
 }
 
 start().catch(e => {
