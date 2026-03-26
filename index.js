@@ -169,8 +169,10 @@ const promoSubscriptions = new Set()
 let cekonLastOnBroadcastTime = 0
 let cekonLastOffBroadcastTime = 0
 let cekonOffStartTime = 0
-const CEKON_ON_INTERVAL = 60000   // Broadcast ON tiap 1 menit
-const CEKON_OFF_DURATION = 300000 // OFF broadcast max 5 menit
+let cekonNtfyOnLastTime = 0
+const CEKON_ON_INTERVAL = 60000    // Broadcast ON tiap 1 menit
+const CEKON_OFF_DURATION = 300000  // OFF broadcast max 5 menit
+const CEKON_NTFY_ON_INTERVAL = 600000 // Ntfy ON tiap 10 menit
 
 // CACHE GLOBAL untuk market data (pre-fetched)
 let cachedMarketData = {
@@ -2016,6 +2018,7 @@ async function doPromoBroadcast() {
             }
           }
           cekonLastOnBroadcastTime = now
+          cekonNtfyOnLastTime = now // reset timer, ntfy 10 menit dimulai setelah trigger OFF→ON
         } else {
           // ON normal atau OFF: kirim 1 pesan, tag hanya saat ON
           for (const chatId of promoSubscriptions) {
@@ -2036,7 +2039,19 @@ async function doPromoBroadcast() {
               pushLog(`❌ CEKON send error: ${e.message}`)
             }
           }
-          if (currentStatus === 'ON') cekonLastOnBroadcastTime = now
+          if (currentStatus === 'ON') {
+            cekonLastOnBroadcastTime = now
+            // ntfy.sh: kirim 1x tiap 10 menit selama masih ON
+            if (now - cekonNtfyOnLastTime >= CEKON_NTFY_ON_INTERVAL) {
+              cekonNtfyOnLastTime = now
+              fetch('https://ntfy.sh/cekonts', {
+                method: 'POST',
+                headers: { 'Title': 'PROMO MASIH ON', 'Priority': 'urgent', 'Tags': 'rotating_light' },
+                body: 'ON ON ON'
+              }).catch(e => pushLog(`⚠️ NTFY 10min error: ${e.message}`))
+              pushLog('🔔 NTFY: ON reminder dikirim (10 menit)')
+            }
+          }
         }
       }
     }
