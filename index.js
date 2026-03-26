@@ -241,8 +241,10 @@ async function useRedisAuthState() {
     try {
       const data = await redis.hget(REDIS_KEYS.WA_AUTH, key)
       if (!data) return null
-      const parsed = typeof data === 'string' ? JSON.parse(data, BufferJSON.reviver) : data
-      return parsed
+      // Upstash auto-parse JSON saat hget, sehingga data bisa jadi object bukan string.
+      // Re-serialize dulu agar BufferJSON.reviver bisa mengonversi {type:"Buffer"} ke Buffer asli.
+      const str = typeof data === 'string' ? data : JSON.stringify(data)
+      return JSON.parse(str, BufferJSON.reviver)
     } catch (e) {
       console.error('Redis auth read error:', e.message)
       return null
