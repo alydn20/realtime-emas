@@ -3286,6 +3286,13 @@ app.get('/qr-reset', async (req, res) => {
 
     isReady = false
     lastQr = null
+    reconnectAttempts = 0
+    consecutive428 = 0
+    isStarting = false
+
+    // Hapus Redis auth
+    await redis.del(REDIS_KEYS.WA_AUTH)
+    pushLog('WA | Redis auth cleared')
 
     // Delete local auth folder
     const fs = await import('fs')
