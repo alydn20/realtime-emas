@@ -126,6 +126,7 @@ const MAX_RECONNECT_ATTEMPTS = 10
 const BASE_RECONNECT_DELAY = 5000
 let consecutive428 = 0 // Track consecutive 428 (connectionClosed) untuk deteksi sesi expired
 let isStarting = false // Guard agar start() tidak dipanggil bersamaan
+let reconnectTimer = null // Timer reconnect aktif - cancel dulu sebelum set baru
 
 // ------ STATE ------
 let lastQr = null
@@ -3289,6 +3290,7 @@ app.get('/qr-reset', async (req, res) => {
     reconnectAttempts = 0
     consecutive428 = 0
     isStarting = false
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
 
     // Hapus Redis auth
     await redis.del(REDIS_KEYS.WA_AUTH)
@@ -3306,9 +3308,7 @@ app.get('/qr-reset', async (req, res) => {
 
     // Restart connection
     pushLog('WA | Restarting connection...')
-    setTimeout(() => {
-      start().catch(e => pushLog('WA | Restart error: ' + e.message))
-    }, 2000)
+    scheduleReconnect(2000)
 
     res.send(`
       <div style="text-align:center;padding:40px;font-family:sans-serif;background:#0f1419;color:#e7e9ea;min-height:100vh;">
@@ -5558,11 +5558,10 @@ app.post('/api/admin/wa-reset', express.json(), async (req, res) => {
     reconnectAttempts = 0
     consecutive428 = 0
     isStarting = false
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
 
     // Restart koneksi setelah 2 detik
-    setTimeout(() => {
-      start().catch(e => pushLog('WA | Restart error: ' + e.message))
-    }, 2000)
+    scheduleReconnect(2000)
 
     res.json({ success: true, message: 'Reset berhasil. Scan QR baru di halaman QR.' })
   } catch (e) {
@@ -14415,6 +14414,19 @@ setTimeout(async () => {
   }
 }, 30000)
 
+function scheduleReconnect(delay) {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+    pushLog('WA | Timer reconnect sebelumnya dibatalkan')
+  }
+  isStarting = false // Buka gate agar start() berikutnya bisa jalan
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null
+    start().catch(e => pushLog('WA | start() error: ' + e.message))
+  }, delay)
+}
+
 async function start() {
   if (isStarting) {
     pushLog('WA | start() sudah berjalan, skip')
@@ -14480,7 +14492,7 @@ async function start() {
         }
         consecutive428 = 0
         reconnectAttempts = 0
-        setTimeout(() => start(), 3000)
+        scheduleReconnect(3000)
       }
 
       if (reason === DisconnectReason.loggedOut) {
@@ -14492,7 +14504,7 @@ async function start() {
       if (reason === 408) {
         pushLog('WA | Timeout/QR expired - restart ulang...')
         consecutive428 = 0
-        setTimeout(() => start(), 3000)
+        scheduleReconnect(3000)
         return
       }
 
@@ -14500,7 +14512,7 @@ async function start() {
       if (reason === 515) {
         pushLog('WA | Restart required - restarting...')
         consecutive428 = 0
-        setTimeout(() => start(), 2000)
+        scheduleReconnect(2000)
         return
       }
 
@@ -14521,15 +14533,17 @@ async function start() {
         const delay = BASE_RECONNECT_DELAY * Math.pow(1.5, reconnectAttempts)
         reconnectAttempts++
         pushLog(`WA | Reconnect ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} in ${Math.round(delay/1000)}s`)
-        setTimeout(() => start(), delay)
+        scheduleReconnect(delay)
       } else {
         pushLog('WA | Max reconnect reached - reset manual diperlukan')
+        isStarting = false // Buka gate agar wa-reset bisa trigger start() baru
       }
 
     } else if (connection === 'open') {
       lastQr = null
       reconnectAttempts = 0
       consecutive428 = 0
+      isStarting = false // Koneksi berhasil, buka gate untuk reconnect berikutnya jika perlu
       pushLog('WA | Connected')
       pushLog('WA | Warming up 15s...')
 
@@ -15092,8 +15106,9 @@ ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`
       }
     }
   })
-  } finally {
-    isStarting = false
+  } catch (e) {
+    pushLog('WA | start() fatal error: ' + e.message)
+    isStarting = false // Error saat init, buka gate agar bisa retry
   }
 }
 
