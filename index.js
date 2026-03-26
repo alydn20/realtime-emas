@@ -15353,12 +15353,7 @@ ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`
           await new Promise(r => setTimeout(r, 500))
           try { await sock.sendPresenceUpdate('paused', sendTarget) } catch (_) {}
 
-          let mentions = []
-          if (isGroup) {
-            try { const gm = await sock.groupMetadata(sendTarget); mentions = gm.participants.map(p => p.id) } catch (_) {}
-          }
-
-          await sock.sendMessage(sendTarget, { text: replyText, mentions }, { quoted: msg })
+          await sock.sendMessage(sendTarget, { text: replyText }, { quoted: msg })
 
           lastReplyAtPerChat.set(sendTarget, now)
           lastGlobalReplyAt = now
