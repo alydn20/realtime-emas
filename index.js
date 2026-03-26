@@ -160,6 +160,14 @@ let offStartTime = null // Timestamp kapan status pertama kali OFF
 let lastPromoBroadcastMinute = -1 // Track menit terakhir broadcast
 let lastPromoWaMinute = -1 // Track menit terakhir WA ON/OFF dikirim
 
+// CEKON subscribers (command cekon - logic tscek-main)
+const promoSubscriptions = new Set()
+let cekonLastOnBroadcastTime = 0
+let cekonLastOffBroadcastTime = 0
+let cekonOffStartTime = 0
+const CEKON_ON_INTERVAL = 60000   // Broadcast ON tiap 1 menit
+const CEKON_OFF_DURATION = 300000 // OFF broadcast max 5 menit
+
 // CACHE GLOBAL untuk market data (pre-fetched)
 let cachedMarketData = {
   usdIdr: null, // Will be populated from realtime API
@@ -1887,6 +1895,97 @@ async function doPromoBroadcast() {
           }
         }
         pushLog(`🎁 WA ON/OFF: ${waMsg}${isOffToOn ? ' (OFF→ON + tag)' : ''}`)
+      }
+    }
+
+    // 📲 CEKON broadcast (promoSubscriptions) - logic tscek-main
+    // OFF→ON: 10x alert + tag → lalu ✅ ON + tag
+    // ON normal tiap 1 menit: ✅ ON + tag semua
+    // OFF tiap 1 menit max 5 menit: ❌ OFF tanpa tag
+    if (sock && isReady && promoSubscriptions.size > 0) {
+      const statusChangedToOff = statusChanged && currentStatus === 'OFF'
+
+      let cekonShouldBroadcast = false
+      let cekonReason = ''
+
+      if (isOffToOn) {
+        cekonShouldBroadcast = true
+        cekonReason = 'OFF→ON'
+        cekonOffStartTime = 0
+      } else if (statusChangedToOff) {
+        cekonShouldBroadcast = true
+        cekonReason = 'ON→OFF'
+        cekonLastOffBroadcastTime = now
+        cekonOffStartTime = now
+      } else if (isFirstCheck) {
+        cekonShouldBroadcast = true
+        cekonReason = currentStatus === 'ON' ? 'ON (initial)' : 'OFF (initial)'
+        if (currentStatus === 'OFF') { cekonLastOffBroadcastTime = now; cekonOffStartTime = now }
+        if (currentStatus === 'ON') cekonLastOnBroadcastTime = now
+      } else if (currentStatus === 'ON') {
+        if (now - cekonLastOnBroadcastTime >= CEKON_ON_INTERVAL) {
+          cekonShouldBroadcast = true
+          cekonReason = 'ON (1 menit)'
+        }
+      } else if (currentStatus === 'OFF' && cekonOffStartTime > 0) {
+        const timeSinceOff = now - cekonOffStartTime
+        if (timeSinceOff <= CEKON_OFF_DURATION && now - cekonLastOffBroadcastTime >= CEKON_ON_INTERVAL) {
+          cekonShouldBroadcast = true
+          cekonReason = `OFF (menit ${Math.ceil(timeSinceOff / 60000)}/5)`
+          cekonLastOffBroadcastTime = now
+        }
+      }
+
+      if (cekonShouldBroadcast) {
+        pushLog(`🔔 CEKON: ${cekonReason} → ${promoSubscriptions.size} subscriber`)
+
+        if (isOffToOn) {
+          // OFF→ON: 10x alert + tag, lalu ✅ ON + tag
+          for (const chatId of promoSubscriptions) {
+            try {
+              const isGroupChat = chatId.endsWith('@g.us')
+              let mentions = []
+              if (isGroupChat) {
+                try {
+                  const gm = await sock.groupMetadata(chatId)
+                  mentions = gm.participants.map(p => p.id)
+                } catch (_) {}
+                for (let i = 0; i < 10; i++) {
+                  try {
+                    await sock.sendMessage(chatId, { text: '🚨🚨🚨 PROMO ON! 🚨🚨🚨', mentions })
+                    await new Promise(r => setTimeout(r, 500))
+                  } catch (_) {}
+                }
+                await new Promise(r => setTimeout(r, 1000))
+              }
+              await sock.sendMessage(chatId, { text: '✅ ON', mentions })
+            } catch (e) {
+              pushLog(`❌ CEKON OFF→ON error: ${e.message}`)
+            }
+          }
+          cekonLastOnBroadcastTime = now
+        } else {
+          // ON normal atau OFF: kirim 1 pesan, tag hanya saat ON
+          for (const chatId of promoSubscriptions) {
+            try {
+              const isGroupChat = chatId.endsWith('@g.us')
+              let mentions = []
+              if (isGroupChat && currentStatus === 'ON') {
+                try {
+                  const gm = await sock.groupMetadata(chatId)
+                  mentions = gm.participants.map(p => p.id)
+                } catch (_) {}
+              }
+              await sock.sendMessage(chatId, {
+                text: currentStatus === 'ON' ? '✅ ON' : '❌ OFF',
+                mentions
+              })
+            } catch (e) {
+              pushLog(`❌ CEKON send error: ${e.message}`)
+            }
+          }
+          if (currentStatus === 'ON') cekonLastOnBroadcastTime = now
+        }
       }
     }
 
@@ -14430,6 +14529,17 @@ function scheduleReconnect(delay) {
   }, delay)
 }
 
+// ------ GROUP ADMIN CHECK ------
+async function isGroupAdmin(sock, groupJid, participantJid) {
+  try {
+    const metadata = await sock.groupMetadata(groupJid)
+    const participant = metadata.participants.find(p => p.id === participantJid)
+    return participant && (participant.admin === 'admin' || participant.admin === 'superadmin')
+  } catch (e) {
+    return false
+  }
+}
+
 async function start() {
   if (isStarting) {
     pushLog('WA | start() sudah berjalan, skip')
@@ -15112,6 +15222,121 @@ ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`
       }
     }
   })
+
+  // ==================== USER COMMANDS (cekon, emas) ====================
+  // cekon  : subscribe broadcast promo ON/OFF + harga (admin grup atau owner DM)
+  // emas   : cek harga real-time (semua anggota grup bisa, DM hanya owner)
+  sock.ev.on('messages.upsert', async (ev) => {
+    if (!isReady || ev.type !== 'notify') return
+
+    for (const msg of ev.messages) {
+      try {
+        if (shouldIgnoreMessage(msg)) continue
+
+        const stanzaId = msg.key.id
+        if (processedMsgIds.has(stanzaId)) continue
+
+        const text = normalizeText(extractText(msg))
+        if (!text) continue
+
+        const sendTarget = msg.key.remoteJid
+        const isGroup = sendTarget.endsWith('@g.us')
+        const senderJid = msg.key.participant || msg.key.remoteJid
+
+        // Daftar command yang dikenali
+        const isUserCommand = /\b(cekon|cekonnonaktif|emas)\b/.test(text)
+        if (!isUserCommand) continue
+
+        const OWNER_JIDS = ADMIN_PHONES.map(p => `${p}@s.whatsapp.net`)
+        const normalizedSender = senderJid.replace(/:[0-9]+@/, '@')
+        const isOwner = OWNER_JIDS.includes(normalizedSender) || ADMIN_PHONES.some(p => normalizedSender.includes(p))
+        const isEmasCommand = /\bemas\b/.test(text)
+
+        if (isGroup) {
+          // emas: semua anggota grup boleh pakai
+          // cekon/cekonnonaktif: hanya admin grup
+          if (!isEmasCommand) {
+            const senderIsAdmin = await isGroupAdmin(sock, sendTarget, senderJid)
+            if (!senderIsAdmin) continue
+          }
+        } else {
+          // Di DM: hanya owner
+          if (!isOwner) continue
+        }
+
+        // Command: cekon (subscribe broadcast promo ON/OFF - logic tscek-main)
+        if (/\bcekon\b/.test(text)) {
+          if (promoSubscriptions.has(sendTarget)) {
+            await sock.sendMessage(sendTarget, {
+              text: '🎉 Broadcast Promo Aktif!'
+            }, { quoted: msg })
+          } else {
+            promoSubscriptions.add(sendTarget)
+            pushLog(`SUB | ➕ cekon: ${sendTarget.substring(0, 20)} (total: ${promoSubscriptions.size})`)
+            await sock.sendMessage(sendTarget, {
+              text: '🎉 Mulai'
+            }, { quoted: msg })
+          }
+          continue
+        }
+
+        // Command: cekonnonaktif (unsubscribe promo broadcast)
+        if (/\bcekonnonaktif\b/.test(text)) {
+          if (promoSubscriptions.has(sendTarget)) {
+            promoSubscriptions.delete(sendTarget)
+            pushLog(`SUB | ➖ cekonnonaktif: ${sendTarget.substring(0, 20)} (total: ${promoSubscriptions.size})`)
+            await sock.sendMessage(sendTarget, { text: '🎉 Broadcast Promo OFF!' }, { quoted: msg })
+          } else {
+            await sock.sendMessage(sendTarget, { text: '🎉 Broadcast Promo OFF!' }, { quoted: msg })
+          }
+          continue
+        }
+
+        // Command: emas (cek harga real-time)
+        if (/\bemas\b/.test(text)) {
+          const now = Date.now()
+          const lastReply = lastReplyAtPerChat.get(sendTarget) || 0
+          if (now - lastReply < COOLDOWN_PER_CHAT) continue
+          if (now - lastGlobalReplyAt < GLOBAL_THROTTLE) continue
+
+          try { await sock.sendPresenceUpdate('composing', sendTarget) } catch (_) {}
+          await new Promise(r => setTimeout(r, TYPING_DURATION))
+
+          let replyText
+          try {
+            const [treasury, usdIdr, xauUsd, economicEvents] = await Promise.all([
+              fetchTreasury(),
+              fetchUSDIDRFromGoogle(),
+              fetchXAUUSDCached(),
+              fetchEconomicCalendar()
+            ])
+            replyText = formatMessage(treasury, usdIdr.rate, xauUsd, null, economicEvents, lowestOnPriceCache, promoLimitCache)
+          } catch (e) {
+            replyText = '❌ Gagal mengambil data harga.'
+          }
+
+          await new Promise(r => setTimeout(r, 500))
+          try { await sock.sendPresenceUpdate('paused', sendTarget) } catch (_) {}
+
+          let mentions = []
+          if (isGroup) {
+            try { const gm = await sock.groupMetadata(sendTarget); mentions = gm.participants.map(p => p.id) } catch (_) {}
+          }
+
+          await sock.sendMessage(sendTarget, { text: replyText, mentions }, { quoted: msg })
+
+          lastReplyAtPerChat.set(sendTarget, now)
+          lastGlobalReplyAt = now
+          pushLog(`CMD | emas dari ${sendTarget.substring(0, 20)}`)
+          continue
+        }
+
+      } catch (e) {
+        pushLog('WA | User cmd error: ' + e.message)
+      }
+    }
+  })
+
   } catch (e) {
     pushLog('WA | start() fatal error: ' + e.message)
     isStarting = false // Error saat init, buka gate agar bisa retry
