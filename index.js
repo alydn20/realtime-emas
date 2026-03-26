@@ -127,6 +127,7 @@ const BASE_RECONNECT_DELAY = 5000
 let consecutive428 = 0 // Track consecutive 428 (connectionClosed) untuk deteksi sesi expired
 let isStarting = false // Guard agar start() tidak dipanggil bersamaan
 let reconnectTimer = null // Timer reconnect aktif - cancel dulu sebelum set baru
+let pingInterval = null  // Interval ping WS - clear dulu sebelum buat baru
 
 // ------ STATE ------
 let lastQr = null
@@ -14464,7 +14465,8 @@ async function start() {
     getMessage: async () => ({ conversation: '' })
   })
 
-  setInterval(() => {
+  if (pingInterval) clearInterval(pingInterval)
+  pingInterval = setInterval(() => {
     if (sock?.ws?.readyState === 1) sock.ws.ping()
   }, 30000)
 
@@ -14477,8 +14479,10 @@ async function start() {
     }
 
     if (connection === 'close') {
-      const reason = lastDisconnect?.error?.output?.statusCode
-      pushLog(`WA | Disconnected (${reason})`)
+      const error = lastDisconnect?.error
+      const reason = error?.output?.statusCode
+      const errMsg = error?.message || error?.toString?.() || 'no message'
+      pushLog(`WA | Disconnected (${reason}) - ${errMsg}`)
 
       const clearAuthAndRestart = async (msg) => {
         pushLog(`WA | ${msg} - menghapus auth dan minta QR baru...`)
