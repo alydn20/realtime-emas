@@ -14410,11 +14410,11 @@ async function start() {
   await loadPromoLimit()
   await loadNominalSettings()
 
-  // Use file-based auth (standard Baileys)
-  const { state, saveCreds } = await useMultiFileAuthState('./auth')
+  // Use Redis-based auth agar session persist saat restart di Koyeb
+  const { state, saveCreds } = await useRedisAuthState()
   const { version } = await fetchLatestBaileysVersion()
 
-  pushLog('WA | Using file-based auth')
+  pushLog('WA | Using Redis-based auth')
 
   sock = makeWASocket({
     version,
