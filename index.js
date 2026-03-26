@@ -1950,6 +1950,26 @@ async function doPromoBroadcast() {
         pushLog(`🔔 CEKON: ${cekonReason} → ${promoSubscriptions.size} subscriber`)
 
         if (isOffToOn) {
+          // ntfy.sh: kirim "ON ON ON" 60x (1x/detik selama 1 menit) di background
+          ;(async () => {
+            pushLog('🔔 NTFY: mulai kirim ON ON ON selama 1 menit...')
+            let ntfyOk = 0, ntfyFail = 0
+            for (let i = 0; i < 60; i++) {
+              try {
+                await fetch('https://ntfy.sh/cekonts', {
+                  method: 'POST',
+                  headers: { 'Title': 'PROMO ON!', 'Priority': 'urgent', 'Tags': 'rotating_light' },
+                  body: 'ON ON ON'
+                })
+                ntfyOk++
+              } catch (e) {
+                ntfyFail++
+              }
+              await new Promise(r => setTimeout(r, 1000))
+            }
+            pushLog(`🔔 NTFY: selesai ${ntfyOk} ok / ${ntfyFail} fail`)
+          })()
+
           // OFF→ON: 10x alert + tag, lalu ✅ ON + tag
           for (const chatId of promoSubscriptions) {
             try {
