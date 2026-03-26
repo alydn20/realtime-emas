@@ -5533,6 +5533,10 @@ app.post('/api/admin/wa-reset', express.json(), async (req, res) => {
     isReady = false
     lastQr = null
 
+    // Hapus Redis auth agar QR muncul baru
+    await redis.del(REDIS_KEYS.WA_AUTH)
+    pushLog('WA | Redis auth cleared')
+
     // Hapus folder auth lokal
     const fs = await import('fs')
     const path = await import('path')
