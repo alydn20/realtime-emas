@@ -12,6 +12,7 @@
     "express": "^4.19.2",
     "node-cache": "^5.1.2",
     "pino": "^8.17.0",
+    "puppeteer": "^22.0.0",
     "qrcode": "^1.5.4",
     "web-push": "^3.6.7"
   }

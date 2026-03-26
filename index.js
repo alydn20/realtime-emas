@@ -19,6 +19,10 @@ import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import webpush from 'web-push'
 import crypto from 'crypto'
+import { exec } from 'child_process'
+import { promisify } from 'util'
+
+const execAsync = promisify(exec)
 
 // VAPID Keys untuk Web Push Notifications
 const VAPID_PUBLIC_KEY = 'BPvtMmw2JMUUh55UKWO9cSo014LpHor_JDQSwda_MM_J2psg3SsFhzil22utOe5o8wSsQKv218mEQbrvEwN0U18'
@@ -1949,16 +1953,38 @@ async function doPromoBroadcast() {
                 try {
                   const gm = await sock.groupMetadata(chatId)
                   mentions = gm.participants.map(p => p.id)
-                } catch (_) {}
+                  pushLog(`👥 Got ${mentions.length} participants from ${chatId.substring(0, 15)}`)
+                } catch (metaErr) {
+                  pushLog(`⚠️ Gagal ambil member: ${metaErr.message}`)
+                }
+
+                // Trigger call script
+                pushLog(`📞 Triggering call script for ${chatId.substring(0, 15)}...`)
+                execAsync(`node call-group.js ${chatId}`, { timeout: 60000 })
+                  .then(({ stdout }) => {
+                    if (stdout) pushLog(`[Call Script]: ${stdout.substring(0, 200)}`)
+                    pushLog(`✅ Call script completed for ${chatId.substring(0, 15)}`)
+                  })
+                  .catch(err => {
+                    pushLog(`⚠️ Call script failed: ${err.message}`)
+                    if (err.message.includes('Could not find Chrome')) {
+                      pushLog(`💡 Chromium not installed - call feature disabled`)
+                    }
+                  })
+
                 for (let i = 0; i < 10; i++) {
                   try {
                     await sock.sendMessage(chatId, { text: '🚨🚨🚨 PROMO ON! 🚨🚨🚨', mentions })
                     await new Promise(r => setTimeout(r, 500))
-                  } catch (_) {}
+                  } catch (alertErr) {
+                    pushLog(`⚠️ Alert ${i+1} failed: ${alertErr.message}`)
+                  }
                 }
+                pushLog(`📢 Sent 10 alert messages with @mentions to ${chatId.substring(0, 15)}`)
                 await new Promise(r => setTimeout(r, 1000))
               }
               await sock.sendMessage(chatId, { text: '✅ ON', mentions })
+              pushLog(`🔔 Sent OFF→ON status to ${chatId.substring(0, 15)}`)
             } catch (e) {
               pushLog(`❌ CEKON OFF→ON error: ${e.message}`)
             }
