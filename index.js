@@ -1907,6 +1907,12 @@ async function doPromoBroadcast() {
     // ON normal tiap 1 menit: ✅ ON + tag semua
     // OFF tiap 1 menit max 5 menit: ❌ OFF tanpa tag
     if (sock && isReady && promoSubscriptions.size > 0) {
+      // Auto-init OFF cycle jika subscriber baru join saat status sudah OFF
+      if (currentStatus === 'OFF' && cekonOffStartTime === 0) {
+        cekonOffStartTime = now
+        cekonLastOffBroadcastTime = 0
+      }
+
       const statusChangedToOff = statusChanged && currentStatus === 'OFF'
 
       let cekonShouldBroadcast = false
