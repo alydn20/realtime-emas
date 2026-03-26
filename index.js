@@ -15257,11 +15257,6 @@ ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`
 
     for (const msg of ev.messages) {
       try {
-        const rawText = normalizeText(extractText(msg))
-        if (/\b(cekon|cekonnonaktif|emas)\b/.test(rawText)) {
-          pushLog(`USER CMD | Received: "${rawText}" from ${(msg.key.participant || msg.key.remoteJid || '').substring(0, 20)} | fromMe:${msg.key.fromMe} | ignored:${shouldIgnoreMessage(msg)}`)
-        }
-
         if (shouldIgnoreMessage(msg)) continue
 
         const stanzaId = msg.key.id
@@ -15283,19 +15278,15 @@ ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`
         const isOwner = OWNER_JIDS.includes(normalizedSender) || ADMIN_PHONES.some(p => normalizedSender.includes(p))
         const isEmasCommand = /\bemas\b/.test(text)
 
-        pushLog(`USER CMD | text="${text}" isGroup:${isGroup} isEmas:${isEmasCommand} sender:${normalizedSender} isOwner:${isOwner}`)
-
         if (isGroup) {
           // emas: semua anggota grup boleh pakai
           // cekon/cekonnonaktif: hanya admin grup
           if (!isEmasCommand) {
             const senderIsAdmin = await isGroupAdmin(sock, sendTarget, senderJid)
-            pushLog(`USER CMD | isGroupAdmin:${senderIsAdmin}`)
             if (!senderIsAdmin) continue
           }
         } else {
           // Di DM: hanya owner
-          pushLog(`USER CMD | DM check: isOwner:${isOwner}`)
           if (!isOwner) continue
         }
 
@@ -15331,18 +15322,15 @@ ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`
         if (/\bemas\b/.test(text)) {
           const now = Date.now()
           const lastReply = lastReplyAtPerChat.get(sendTarget) || 0
-          pushLog(`USER CMD | emas: cooldown=${now - lastReply}ms (limit ${COOLDOWN_PER_CHAT}ms) globalThrottle=${now - lastGlobalReplyAt}ms`)
-          if (now - lastReply < COOLDOWN_PER_CHAT) { pushLog('USER CMD | emas: SKIPPED cooldown'); continue }
-          if (now - lastGlobalReplyAt < GLOBAL_THROTTLE) { pushLog('USER CMD | emas: SKIPPED globalThrottle'); continue }
+          if (now - lastReply < COOLDOWN_PER_CHAT) continue
+          if (now - lastGlobalReplyAt < GLOBAL_THROTTLE) continue
 
-          pushLog('USER CMD | emas: fetching treasury...')
           try { await sock.sendPresenceUpdate('composing', sendTarget) } catch (_) {}
           await new Promise(r => setTimeout(r, TYPING_DURATION))
 
           let replyText
           try {
             const treasury = await fetchTreasury()
-            pushLog(`USER CMD | emas: treasury buy=${treasury?.data?.buying_rate} sell=${treasury?.data?.selling_rate}`)
             const buy = treasury?.data?.buying_rate || 0
             const sell = treasury?.data?.selling_rate || 0
             const spread = sell - buy
@@ -15365,7 +15353,6 @@ ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`
           await new Promise(r => setTimeout(r, 500))
           try { await sock.sendPresenceUpdate('paused', sendTarget) } catch (_) {}
 
-          pushLog(`USER CMD | emas: sending reply="${replyText?.substring(0, 40)}"`)
           await sock.sendMessage(sendTarget, { text: replyText }, { quoted: msg })
 
           lastReplyAtPerChat.set(sendTarget, now)
