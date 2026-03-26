@@ -15257,6 +15257,11 @@ ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`
 
     for (const msg of ev.messages) {
       try {
+        const rawText = normalizeText(extractText(msg))
+        if (/\b(cekon|cekonnonaktif|emas)\b/.test(rawText)) {
+          pushLog(`USER CMD | Received: "${rawText}" from ${(msg.key.participant || msg.key.remoteJid || '').substring(0, 20)} | fromMe:${msg.key.fromMe} | ignored:${shouldIgnoreMessage(msg)}`)
+        }
+
         if (shouldIgnoreMessage(msg)) continue
 
         const stanzaId = msg.key.id
@@ -15278,15 +15283,19 @@ ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`
         const isOwner = OWNER_JIDS.includes(normalizedSender) || ADMIN_PHONES.some(p => normalizedSender.includes(p))
         const isEmasCommand = /\bemas\b/.test(text)
 
+        pushLog(`USER CMD | text="${text}" isGroup:${isGroup} isEmas:${isEmasCommand} sender:${normalizedSender} isOwner:${isOwner}`)
+
         if (isGroup) {
           // emas: semua anggota grup boleh pakai
           // cekon/cekonnonaktif: hanya admin grup
           if (!isEmasCommand) {
             const senderIsAdmin = await isGroupAdmin(sock, sendTarget, senderJid)
+            pushLog(`USER CMD | isGroupAdmin:${senderIsAdmin}`)
             if (!senderIsAdmin) continue
           }
         } else {
           // Di DM: hanya owner
+          pushLog(`USER CMD | DM check: isOwner:${isOwner}`)
           if (!isOwner) continue
         }
 
