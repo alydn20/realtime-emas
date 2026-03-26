@@ -15330,13 +15330,22 @@ ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`
 
           let replyText
           try {
-            const [treasury, usdIdr, xauUsd, economicEvents] = await Promise.all([
-              fetchTreasury(),
-              fetchUSDIDRFromGoogle(),
-              fetchXAUUSDCached(),
-              fetchEconomicCalendar()
-            ])
-            replyText = formatMessage(treasury, usdIdr.rate, xauUsd, null, economicEvents, lowestOnPriceCache, promoLimitCache)
+            const treasury = await fetchTreasury()
+            const buy = treasury?.data?.buying_rate || 0
+            const sell = treasury?.data?.selling_rate || 0
+            const spread = sell - buy
+            const spreadPercent = ((spread / buy) * 100).toFixed(2)
+            const updatedAt = treasury?.data?.updated_at
+            let timeSection = ''
+            if (updatedAt) {
+              const date = new Date(updatedAt)
+              const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
+              const hours = date.getHours().toString().padStart(2, '0')
+              const minutes = date.getMinutes().toString().padStart(2, '0')
+              const seconds = date.getSeconds().toString().padStart(2, '0')
+              timeSection = `${days[date.getDay()]} ${hours}:${minutes}:${seconds} WIB`
+            }
+            replyText = `${timeSection}\nBeli Rp${formatRupiah(buy)}/gr | Jual Rp${formatRupiah(sell)}/gr (${spreadPercent > 0 ? '-' : ''}${spreadPercent}%)`
           } catch (e) {
             replyText = '❌ Gagal mengambil data harga.'
           }
