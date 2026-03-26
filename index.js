@@ -15331,15 +15331,18 @@ ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`
         if (/\bemas\b/.test(text)) {
           const now = Date.now()
           const lastReply = lastReplyAtPerChat.get(sendTarget) || 0
-          if (now - lastReply < COOLDOWN_PER_CHAT) continue
-          if (now - lastGlobalReplyAt < GLOBAL_THROTTLE) continue
+          pushLog(`USER CMD | emas: cooldown=${now - lastReply}ms (limit ${COOLDOWN_PER_CHAT}ms) globalThrottle=${now - lastGlobalReplyAt}ms`)
+          if (now - lastReply < COOLDOWN_PER_CHAT) { pushLog('USER CMD | emas: SKIPPED cooldown'); continue }
+          if (now - lastGlobalReplyAt < GLOBAL_THROTTLE) { pushLog('USER CMD | emas: SKIPPED globalThrottle'); continue }
 
+          pushLog('USER CMD | emas: fetching treasury...')
           try { await sock.sendPresenceUpdate('composing', sendTarget) } catch (_) {}
           await new Promise(r => setTimeout(r, TYPING_DURATION))
 
           let replyText
           try {
             const treasury = await fetchTreasury()
+            pushLog(`USER CMD | emas: treasury buy=${treasury?.data?.buying_rate} sell=${treasury?.data?.selling_rate}`)
             const buy = treasury?.data?.buying_rate || 0
             const sell = treasury?.data?.selling_rate || 0
             const spread = sell - buy
@@ -15362,6 +15365,7 @@ ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`
           await new Promise(r => setTimeout(r, 500))
           try { await sock.sendPresenceUpdate('paused', sendTarget) } catch (_) {}
 
+          pushLog(`USER CMD | emas: sending reply="${replyText?.substring(0, 40)}"`)
           await sock.sendMessage(sendTarget, { text: replyText }, { quoted: msg })
 
           lastReplyAtPerChat.set(sendTarget, now)
