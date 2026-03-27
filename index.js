@@ -2035,6 +2035,7 @@ async function doPromoBroadcast() {
                 text: currentStatus === 'ON' ? '✅ ON' : '❌ OFF',
                 mentions
               })
+              pushLog(`🔔 CEKON sent: ${currentStatus === 'ON' ? '✅ ON' : '❌ OFF'} → ${chatId.substring(0, 15)}`)
             } catch (e) {
               pushLog(`❌ CEKON send error: ${e.message}`)
             }
