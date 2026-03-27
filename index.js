@@ -170,9 +170,10 @@ let cekonLastOnBroadcastTime = 0
 let cekonLastOffBroadcastTime = 0
 let cekonOffStartTime = 0
 let cekonNtfyOnLastTime = 0
+let ntfyReminderIntervalMs = 600000 // default 10 menit, bisa diubah admin
 const CEKON_ON_INTERVAL = 60000    // Broadcast ON tiap 1 menit
 const CEKON_OFF_DURATION = 300000  // OFF broadcast max 5 menit
-const CEKON_NTFY_ON_INTERVAL = 600000 // Ntfy ON tiap 10 menit
+const CEKON_NTFY_ON_INTERVAL = 600000 // Ntfy ON default tiap 10 menit
 
 // CACHE GLOBAL untuk market data (pre-fetched)
 let cachedMarketData = {
@@ -213,7 +214,8 @@ const REDIS_KEYS = {
   NOTIF_HISTORY: 'gold:notif_history', // JSON array: broadcast notification history
   PROMO_LIMIT: 'gold:promo_limit',     // Number: monthly promo buy limit (set by admin)
   LOWEST_ON_PRICE: 'gold:lowest_on_price', // Number: lowest buy price recorded at OFF→ON transitions
-  LOWEST_ON_DATE: 'gold:lowest_on_date'   // String: WIB date (YYYY-MM-DD) when lowest ON price was recorded
+  LOWEST_ON_DATE: 'gold:lowest_on_date',  // String: WIB date (YYYY-MM-DD) when lowest ON price was recorded
+  NTFY_SETTINGS: 'gold:ntfy_settings'     // JSON: ntfy.sh notification settings
 }
 
 // Admin password untuk akses admin panel
@@ -1828,9 +1830,10 @@ async function doPromoBroadcast() {
       }
     } else {
       // OFF: Max 5x broadcast, tapi tetap cek terus
-      if (currentMinute !== lastPromoBroadcastMinute || isFirstCheck || statusChanged) {
-        if (offBroadcastCount < 5) {
-          // Masih boleh broadcast OFF
+      // isFirstCheck diabaikan untuk OFF — hanya broadcast jika dari ON (statusChanged)
+      if (currentMinute !== lastPromoBroadcastMinute || statusChanged) {
+        if (offBroadcastCount < 5 && (statusChanged || offBroadcastCount > 0)) {
+          // Masih boleh broadcast OFF (hanya jika dari ON atau sudah dalam siklus OFF)
           shouldBroadcast = true
           lastPromoBroadcastMinute = currentMinute
           if (!offStartTime) offStartTime = Date.now()
@@ -1856,7 +1859,7 @@ async function doPromoBroadcast() {
     if (sock && isReady && (broadcastGroupId || subscriptions.size > 0)) {
       const seconds = new Date(now).getSeconds()
       const isNewWaMinute = currentMinute !== lastPromoWaMinute
-      const offWaAllowed = currentStatus === 'OFF' && offBroadcastCount <= 5
+      const offWaAllowed = currentStatus === 'OFF' && offBroadcastCount > 0 && offBroadcastCount <= 5
       const onWaAllowed = currentStatus === 'ON'
 
       const shouldWaOnOff = isOffToOn ||
@@ -1911,7 +1914,8 @@ async function doPromoBroadcast() {
     // OFF tiap 1 menit max 5 menit: ❌ OFF tanpa tag
     if (sock && isReady && promoSubscriptions.size > 0) {
       // Auto-init OFF cycle jika subscriber baru join saat status sudah OFF
-      if (currentStatus === 'OFF' && cekonOffStartTime === 0) {
+      // (hanya jika bukan isFirstCheck — agar tidak spam OFF saat restart)
+      if (currentStatus === 'OFF' && cekonOffStartTime === 0 && !isFirstCheck) {
         cekonOffStartTime = now
         cekonLastOffBroadcastTime = 0
       }
@@ -1930,11 +1934,11 @@ async function doPromoBroadcast() {
         cekonReason = 'ON→OFF'
         cekonLastOffBroadcastTime = now
         cekonOffStartTime = now
-      } else if (isFirstCheck) {
+      } else if (isFirstCheck && currentStatus === 'ON') {
+        // isFirstCheck OFF diabaikan — tidak spam OFF saat restart
         cekonShouldBroadcast = true
-        cekonReason = currentStatus === 'ON' ? 'ON (initial)' : 'OFF (initial)'
-        if (currentStatus === 'OFF') { cekonLastOffBroadcastTime = now; cekonOffStartTime = now }
-        if (currentStatus === 'ON') cekonLastOnBroadcastTime = now
+        cekonReason = 'ON (initial)'
+        cekonLastOnBroadcastTime = now
       } else if (currentStatus === 'ON') {
         if (now - cekonLastOnBroadcastTime >= CEKON_ON_INTERVAL) {
           cekonShouldBroadcast = true
@@ -1953,24 +1957,43 @@ async function doPromoBroadcast() {
         pushLog(`🔔 CEKON: ${cekonReason} → ${promoSubscriptions.size} subscriber`)
 
         if (isOffToOn) {
-          // ntfy.sh: kirim "ON ON ON" 60x (1x/detik selama 1 menit) di background
+          // ntfy.sh: baca settings dari Redis lalu kirim di background
           ;(async () => {
-            pushLog('🔔 NTFY: mulai kirim ON ON ON selama 1 menit...')
-            let ntfyOk = 0, ntfyFail = 0
-            for (let i = 0; i < 60; i++) {
-              try {
-                await fetch('https://ntfy.sh/cekonts', {
-                  method: 'POST',
-                  headers: { 'Title': 'PROMO ON!', 'Priority': 'urgent', 'Tags': 'rotating_light' },
-                  body: 'ON ON ON'
-                })
-                ntfyOk++
-              } catch (e) {
-                ntfyFail++
+            try {
+              const ntfyRaw = await redis.get(REDIS_KEYS.NTFY_SETTINGS)
+              const ntfyCfg = ntfyRaw ? (typeof ntfyRaw === 'string' ? JSON.parse(ntfyRaw) : ntfyRaw) : {}
+              const ntfyEnabled = ntfyCfg.enabled !== false // default: aktif
+              const ntfyCount = Math.max(1, Math.min(600, parseInt(ntfyCfg.count) || 60))
+              const ntfyReminderMin = Math.max(1, Math.min(60, parseInt(ntfyCfg.reminderMinutes) || 10))
+
+              if (!ntfyEnabled) {
+                pushLog('🔔 NTFY: dinonaktifkan oleh admin')
+                return
               }
-              await new Promise(r => setTimeout(r, 1000))
+
+              pushLog(`🔔 NTFY: mulai kirim ON ON ON ${ntfyCount}x (reminder tiap ${ntfyReminderMin} menit)`)
+              // Update CEKON_NTFY_ON_INTERVAL dinamis
+              cekonNtfyOnLastTime = now // reset timer
+              ntfyReminderIntervalMs = ntfyReminderMin * 60000
+
+              let ntfyOk = 0, ntfyFail = 0
+              for (let i = 0; i < ntfyCount; i++) {
+                try {
+                  await fetch('https://ntfy.sh/cekonts', {
+                    method: 'POST',
+                    headers: { 'Title': 'PROMO ON!', 'Priority': 'urgent', 'Tags': 'rotating_light' },
+                    body: 'ON ON ON'
+                  })
+                  ntfyOk++
+                } catch (e) {
+                  ntfyFail++
+                }
+                await new Promise(r => setTimeout(r, 1000))
+              }
+              pushLog(`🔔 NTFY: selesai ${ntfyOk} ok / ${ntfyFail} fail`)
+            } catch (e) {
+              pushLog(`⚠️ NTFY OFF→ON error: ${e.message}`)
             }
-            pushLog(`🔔 NTFY: selesai ${ntfyOk} ok / ${ntfyFail} fail`)
           })()
 
           // OFF→ON: 10x alert + tag, lalu ✅ ON + tag
@@ -2043,16 +2066,22 @@ async function doPromoBroadcast() {
           }
           if (currentStatus === 'ON') {
             cekonLastOnBroadcastTime = now
-            // ntfy.sh: kirim 1x tiap 10 menit selama masih ON
-            if (now - cekonNtfyOnLastTime >= CEKON_NTFY_ON_INTERVAL) {
-              cekonNtfyOnLastTime = now
-              fetch('https://ntfy.sh/cekonts', {
-                method: 'POST',
-                headers: { 'Title': 'PROMO MASIH ON', 'Priority': 'urgent', 'Tags': 'rotating_light' },
-                body: 'ON ON ON'
-              }).catch(e => pushLog(`⚠️ NTFY 10min error: ${e.message}`))
-              pushLog('🔔 NTFY: ON reminder dikirim (10 menit)')
-            }
+            // ntfy.sh: reminder tiap N menit selama masih ON
+            const reminderMs = ntfyReminderIntervalMs || CEKON_NTFY_ON_INTERVAL
+            if (now - cekonNtfyOnLastTime >= reminderMs) {
+              // Cek enabled dari Redis
+              redis.get(REDIS_KEYS.NTFY_SETTINGS).then(raw => {
+                const cfg = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {}
+                if (cfg.enabled === false) return
+                cekonNtfyOnLastTime = now
+                const remMin = Math.max(1, Math.min(60, parseInt(cfg.reminderMinutes) || 10))
+                fetch('https://ntfy.sh/cekonts', {
+                  method: 'POST',
+                  headers: { 'Title': 'PROMO MASIH ON', 'Priority': 'urgent', 'Tags': 'rotating_light' },
+                  body: 'ON ON ON'
+                }).catch(e => pushLog(`⚠️ NTFY reminder error: ${e.message}`))
+                pushLog(`🔔 NTFY: ON reminder dikirim (tiap ${remMin} menit)`)
+              }).catch(() => {})
           }
         }
       }
@@ -5513,6 +5542,42 @@ app.post('/api/admin/nominal-settings', express.json(), async (req, res) => {
     const activeNominals = config.nominals.filter(n => n.active)
     broadcastSSE({ type: 'nominal_update', defaultVisible: config.defaultVisible, nominals: activeNominals })
     res.json({ success: true, config })
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
+// Admin: Get ntfy settings
+app.get('/api/admin/ntfy-settings', async (req, res) => {
+  const { password } = req.query
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+  try {
+    const raw = await redis.get(REDIS_KEYS.NTFY_SETTINGS)
+    const cfg = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : {}
+    res.json({ success: true, settings: {
+      enabled: cfg.enabled !== false,
+      count: cfg.count || 60,
+      reminderMinutes: cfg.reminderMinutes || 10
+    }})
+  } catch (e) {
+    res.json({ success: false, error: e.message })
+  }
+})
+
+// Admin: Update ntfy settings
+app.post('/api/admin/ntfy-settings', express.json(), async (req, res) => {
+  const { password, enabled, count, reminderMinutes } = req.body
+  if (password !== ADMIN_PASSWORD) return res.json({ success: false, error: 'Unauthorized' })
+  try {
+    const cfg = {
+      enabled: enabled !== false,
+      count: Math.max(1, Math.min(600, parseInt(count) || 60)),
+      reminderMinutes: Math.max(1, Math.min(60, parseInt(reminderMinutes) || 10))
+    }
+    await redis.set(REDIS_KEYS.NTFY_SETTINGS, JSON.stringify(cfg))
+    ntfyReminderIntervalMs = cfg.reminderMinutes * 60000
+    pushLog(`🔔 NTFY settings updated: enabled=${cfg.enabled} count=${cfg.count} reminderMin=${cfg.reminderMinutes}`)
+    res.json({ success: true, settings: cfg })
   } catch (e) {
     res.json({ success: false, error: e.message })
   }
