@@ -1849,27 +1849,8 @@ async function doPromoBroadcast() {
 
     lastPromoStatus = currentStatus
 
-    if (!shouldBroadcast) return
-
-    // Broadcast via SSE ke semua clients
-    const message = currentStatus === 'ON' ? '✅ ON' : '❌ OFF'
-    pushLog(`🎁 Broadcasting: ${currentStatus} (OFF count: ${offBroadcastCount}/5)`)
-
-    broadcastSSE({
-      type: 'promo_status',
-      status: currentStatus,
-      message: message,
-      time: new Date().toISOString()
-    })
-
-    // 📱 PUSH NOTIFICATION untuk promo - HANYA saat status BERUBAH
-    if (statusChanged) {
-      const promoTitle = currentStatus === 'ON' ? '🎁 PROMO ON' : '❌ PROMO OFF'
-      pushLog(`🎁 Status changed! Sending push: ${promoTitle}`)
-      sendPushToAll(promoTitle, '', 'promo').catch(() => {})
-    }
-
-    // 📲 WA ON/OFF broadcast
+    // 📲 WA ON/OFF broadcast — dijalankan SEBELUM shouldBroadcast gate
+    // agar seconds >= 50 bisa tercapai (shouldBroadcast hanya true di detik :00-:03)
     // - OFF→ON: langsung kirim (detik berapa saja) + tag semua member grup
     // - ON/OFF biasa: kirim di detik 50+ (1x per menit), max 5x untuk OFF
     if (sock && isReady && (broadcastGroupId || subscriptions.size > 0)) {
@@ -1902,6 +1883,26 @@ async function doPromoBroadcast() {
         }
         pushLog(`🎁 WA ON/OFF: ${waMsg}${isOffToOn ? ' (OFF→ON + tag)' : ''}`)
       }
+    }
+
+    if (!shouldBroadcast) return
+
+    // Broadcast via SSE ke semua clients
+    const message = currentStatus === 'ON' ? '✅ ON' : '❌ OFF'
+    pushLog(`🎁 Broadcasting: ${currentStatus} (OFF count: ${offBroadcastCount}/5)`)
+
+    broadcastSSE({
+      type: 'promo_status',
+      status: currentStatus,
+      message: message,
+      time: new Date().toISOString()
+    })
+
+    // 📱 PUSH NOTIFICATION untuk promo - HANYA saat status BERUBAH
+    if (statusChanged) {
+      const promoTitle = currentStatus === 'ON' ? '🎁 PROMO ON' : '❌ PROMO OFF'
+      pushLog(`🎁 Status changed! Sending push: ${promoTitle}`)
+      sendPushToAll(promoTitle, '', 'promo').catch(() => {})
     }
 
     // 📲 CEKON broadcast (promoSubscriptions) - logic tscek-main
