@@ -24,6 +24,14 @@ import { promisify } from 'util'
 
 const execAsync = promisify(exec)
 
+// Global error handlers — cegah crash saat Redis limit/network error
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason?.message || reason)
+})
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err?.message || err)
+})
+
 // VAPID Keys untuk Web Push Notifications
 const VAPID_PUBLIC_KEY = 'BPvtMmw2JMUUh55UKWO9cSo014LpHor_JDQSwda_MM_J2psg3SsFhzil22utOe5o8wSsQKv218mEQbrvEwN0U18'
 const VAPID_PRIVATE_KEY = 'KMp0F8Q9gzNWpRP1nBwr6xWbc__wG7LcDE17WNAuiHw'
@@ -4838,19 +4846,24 @@ app.get('/api/check-pin-status', async (req, res) => {
 
 // API: Verify session
 app.get('/api/verify-session', async (req, res) => {
-  const sessionId = req.query.session
-  if (!sessionId) return res.json({ valid: false })
+  try {
+    const sessionId = req.query.session
+    if (!sessionId) return res.json({ valid: false })
 
-  const phone = await redis.hget(REDIS_KEYS.SESSIONS, sessionId)
-  if (!phone) return res.json({ valid: false })
+    const phone = await redis.hget(REDIS_KEYS.SESSIONS, sessionId)
+    if (!phone) return res.json({ valid: false })
 
-  const check = await isUserValid(phone)
-  if (!check.valid) return res.json({ valid: false, reason: check.reason })
+    const check = await isUserValid(phone)
+    if (!check.valid) return res.json({ valid: false, reason: check.reason })
 
-  // Check if user is admin
-  const isAdmin = ADMIN_PHONES.includes(phone)
+    // Check if user is admin
+    const isAdmin = ADMIN_PHONES.includes(phone)
 
-  res.json({ valid: true, user: check.user, phone, isAdmin })
+    res.json({ valid: true, user: check.user, phone, isAdmin })
+  } catch (e) {
+    console.error('[verify-session error]', e?.message)
+    res.json({ valid: false })
+  }
 })
 
 // API: Logout
