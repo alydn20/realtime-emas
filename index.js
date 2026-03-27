@@ -1854,22 +1854,22 @@ async function doPromoBroadcast() {
 
     // 📲 WA ON/OFF broadcast — dijalankan SEBELUM shouldBroadcast gate
     // agar seconds >= 50 bisa tercapai (shouldBroadcast hanya true di detik :00-:03)
-    // - OFF→ON: langsung kirim (detik berapa saja) + tag semua member grup
-    // - ON/OFF biasa: kirim di detik 50+ (1x per menit), max 5x untuk OFF
+    // - OFF→ON: langsung kirim (detik berapa saja) + tag semua member grup (1x)
+    // - OFF biasa: kirim di detik 50+ (1x per menit), max 5x
+    // - ON biasa: TIDAK kirim ulang tiap menit (ON sudah dikirim saat isOffToOn)
     if (sock && isReady && (broadcastGroupId || subscriptions.size > 0)) {
       const seconds = new Date(now).getSeconds()
       const isNewWaMinute = currentMinute !== lastPromoWaMinute
       const offWaAllowed = currentStatus === 'OFF' && offBroadcastCount > 0 && offBroadcastCount <= 5
-      const onWaAllowed = currentStatus === 'ON'
 
       const shouldWaOnOff = isOffToOn ||
-        (isNewWaMinute && seconds >= 50 && (onWaAllowed || offWaAllowed))
+        (isNewWaMinute && seconds >= 50 && offWaAllowed)
 
       if (shouldWaOnOff) {
         lastPromoWaMinute = currentMinute
         const waMsg = isOffToOn
           ? `✅ ON\n\n🌐 Via website: https://ts.muhamadaliyudin.my.id`
-          : currentStatus === 'ON' ? '✅ ON' : '❌ OFF'
+          : '❌ OFF'
         const chatIds = [broadcastGroupId, ...Array.from(subscriptions)].filter(Boolean)
 
         for (const chatId of chatIds) {
