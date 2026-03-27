@@ -8128,6 +8128,36 @@ ${authScript}
           </div>
           <button class="btn btn-primary" onclick="saveAdminPhones()">Simpan Nomor Admin</button>
         </div>
+
+        <!-- Notifikasi ntfy.sh -->
+        <div class="card">
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            Notifikasi ntfy.sh
+          </h2>
+          <p style="color:#6b7280;font-size:0.82em;margin-bottom:14px;">Pengaturan notifikasi push via ntfy.sh/cekonts saat promo ON.</p>
+          <div class="result-msg" id="ntfySettingsResult"></div>
+          <div class="form-group" style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+            <label style="margin-bottom:0;">Aktifkan Notifikasi ntfy</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="checkbox" id="ntfyEnabled" style="width:18px;height:18px;cursor:pointer;">
+              <span style="font-size:0.85em;color:#6b7280;" id="ntfyEnabledLabel">Aktif</span>
+            </label>
+          </div>
+          <div class="form-group">
+            <label>Jumlah kirim saat OFF→ON (1–600)</label>
+            <input type="number" id="ntfyCount" min="1" max="600" placeholder="60" style="width:100%;">
+            <p style="color:#6b7280;font-size:0.78em;margin-top:4px;">Default: 60x (1 per detik = 1 menit)</p>
+          </div>
+          <div class="form-group">
+            <label>Interval reminder saat ON (menit, 1–60)</label>
+            <input type="number" id="ntfyReminderMinutes" min="1" max="60" placeholder="10" style="width:100%;">
+            <p style="color:#6b7280;font-size:0.78em;margin-top:4px;">Default: 10 menit</p>
+          </div>
+          <button class="btn btn-primary" onclick="saveNtfySettings()">Simpan Pengaturan ntfy</button>
+        </div>
       </div>
 
       <!-- Section: Logs -->
@@ -8337,6 +8367,7 @@ ${authScript}
       loadPendingRegistrations();
       loadWaGroups();
       loadAdminPhones();
+      loadNtfySettings();
       loadSoundSettings();
       loadPromoLimit();
       loadBroadcastHistory();
@@ -8764,6 +8795,64 @@ ${authScript}
           result.className = 'result-msg error';
           result.textContent = data.message || 'Gagal menyimpan';
         }
+      });
+    }
+
+    // ==================== ntfy Settings Functions ====================
+    function loadNtfySettings() {
+      adminFetch('/api/admin/ntfy-settings')
+        .then(r => r.json())
+        .then(data => {
+          if (data.success && data.settings) {
+            const s = data.settings;
+            document.getElementById('ntfyEnabled').checked = s.enabled;
+            document.getElementById('ntfyEnabledLabel').textContent = s.enabled ? 'Aktif' : 'Nonaktif';
+            document.getElementById('ntfyCount').value = s.count;
+            document.getElementById('ntfyReminderMinutes').value = s.reminderMinutes;
+          }
+        }).catch(() => {});
+      document.getElementById('ntfyEnabled').addEventListener('change', function() {
+        document.getElementById('ntfyEnabledLabel').textContent = this.checked ? 'Aktif' : 'Nonaktif';
+      });
+    }
+
+    function saveNtfySettings() {
+      const result = document.getElementById('ntfySettingsResult');
+      const enabled = document.getElementById('ntfyEnabled').checked;
+      const count = parseInt(document.getElementById('ntfyCount').value, 10);
+      const reminderMinutes = parseInt(document.getElementById('ntfyReminderMinutes').value, 10);
+      if (isNaN(count) || count < 1 || count > 600) {
+        result.className = 'result-msg error';
+        result.textContent = 'Jumlah kirim harus antara 1–600';
+        return;
+      }
+      if (isNaN(reminderMinutes) || reminderMinutes < 1 || reminderMinutes > 60) {
+        result.className = 'result-msg error';
+        result.textContent = 'Interval reminder harus antara 1–60 menit';
+        return;
+      }
+      result.className = 'result-msg success';
+      result.textContent = 'Menyimpan...';
+      adminFetch('/api/admin/ntfy-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled, count, reminderMinutes })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          result.className = 'result-msg success';
+          result.textContent = 'Pengaturan ntfy berhasil disimpan!';
+        } else {
+          result.className = 'result-msg error';
+          result.textContent = data.error || 'Gagal menyimpan';
+        }
+        setTimeout(() => { result.textContent = ''; }, 3000);
+      })
+      .catch(() => {
+        result.className = 'result-msg error';
+        result.textContent = 'Gagal menghubungi server';
+        setTimeout(() => { result.textContent = ''; }, 3000);
       });
     }
 
