@@ -13,7 +13,6 @@ import pino from 'pino'
 import express from 'express'
 import http from 'http'
 import https from 'https'
-import { Redis } from '@upstash/redis'
 import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
@@ -45,11 +44,57 @@ webpush.setVapidDetails(
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
-// Redis untuk persistent storage
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || 'https://robust-mole-31555.upstash.io',
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || 'AXtDAAIncDIxOWMyMWMzYjQ0MjI0MzJlYWQwNTRkMzM0MjgxYWIxNXAyMzE1NTU'
-})
+// In-memory storage (menggantikan Redis — data hilang saat restart)
+const _store = new Map()
+const redis = {
+  async get(key) {
+    const v = _store.get(key)
+    return (v !== undefined && v !== null && typeof v === 'object' && v.__type === 'string') ? v.val : null
+  },
+  async set(key, val) {
+    _store.set(key, { __type: 'string', val: String(val) })
+    return 'OK'
+  },
+  async del(key) {
+    _store.delete(key)
+    return 1
+  },
+  async hget(key, field) {
+    const h = _store.get(key)
+    if (!h || h.__type !== 'hash') return null
+    return h.data[field] !== undefined ? h.data[field] : null
+  },
+  async hset(key, fields) {
+    let h = _store.get(key)
+    if (!h || h.__type !== 'hash') { h = { __type: 'hash', data: {} }; _store.set(key, h) }
+    Object.assign(h.data, fields)
+    return Object.keys(fields).length
+  },
+  async hdel(key, field) {
+    const h = _store.get(key)
+    if (!h || h.__type !== 'hash') return 0
+    if (field in h.data) { delete h.data[field]; return 1 }
+    return 0
+  },
+  async hgetall(key) {
+    const h = _store.get(key)
+    if (!h || h.__type !== 'hash') return null
+    return { ...h.data }
+  },
+  async rpush(key, val) {
+    let l = _store.get(key)
+    if (!l || l.__type !== 'list') { l = { __type: 'list', data: [] }; _store.set(key, l) }
+    l.data.push(val)
+    return l.data.length
+  },
+  async lrange(key, start, stop) {
+    const l = _store.get(key)
+    if (!l || l.__type !== 'list') return []
+    const arr = l.data
+    const end = stop === -1 ? arr.length : stop + 1
+    return arr.slice(start, end)
+  }
+}
 
 // HTTP Keep-Alive agents untuk koneksi lebih cepat
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 10 })
