@@ -14792,11 +14792,11 @@ async function start() {
   await loadPromoLimit()
   await loadNominalSettings()
 
-  // Use Redis-based auth agar session persist saat restart di Koyeb
-  const { state, saveCreds } = await useRedisAuthState()
+  // Use file-based auth (tmp folder, tidak persist saat restart)
+  const { state, saveCreds } = await useMultiFileAuthState('/tmp/wa_auth')
   const { version } = await fetchLatestBaileysVersion()
 
-  pushLog('WA | Using Redis-based auth')
+  pushLog('WA | Using file-based auth (/tmp/wa_auth)')
 
   sock = makeWASocket({
     version,
