@@ -2082,6 +2082,7 @@ async function doPromoBroadcast() {
                 }).catch(e => pushLog(`⚠️ NTFY reminder error: ${e.message}`))
                 pushLog(`🔔 NTFY: ON reminder dikirim (tiap ${remMin} menit)`)
               }).catch(() => {})
+            }
           }
         }
       }
